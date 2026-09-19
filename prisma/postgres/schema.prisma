@@ -1,0 +1,155 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Sex {
+  MALE
+  FEMALE
+}
+
+enum Goal {
+  LOSE_WEIGHT
+  MAINTAIN_WEIGHT
+  GAIN_WEIGHT
+}
+
+enum ActivityLevel {
+  SEDENTARY
+  LIGHT
+  MODERATE
+  ACTIVE
+  VERY_ACTIVE
+}
+
+enum OnboardingState {
+  NOT_STARTED
+  WAITING_SEX
+  WAITING_AGE
+  WAITING_HEIGHT
+  WAITING_CURRENT_WEIGHT
+  WAITING_TARGET_WEIGHT
+  WAITING_ACTIVITY
+  WAITING_GOAL
+  WAITING_CONFIRMATION
+  COMPLETED
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+  UNKNOWN
+}
+
+model User {
+  id                   String               @id @default(cuid())
+  lineUserId           String?              @unique
+  displayName          String?
+  pictureUrl           String?
+  onboardingState      OnboardingState      @default(NOT_STARTED)
+  draftSex             Sex?
+  draftAge             Int?
+  draftHeightCm        Float?
+  draftCurrentWeightKg Float?
+  draftTargetWeightKg  Float?
+  draftActivityLevel   ActivityLevel?
+  draftGoal            Goal?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  nutritionProfile     NutritionProfile?
+  foodLogs             FoodLog[]
+  weightLogs           WeightLog[]
+  pendingFoodAnalysis  PendingFoodAnalysis?
+}
+
+model WeightLog {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weightKg   Float
+  recordedAt DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([userId, recordedAt])
+}
+
+model NutritionProfile {
+  id              String        @id @default(cuid())
+  userId          String        @unique
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sex             Sex
+  age             Int
+  heightCm        Float
+  currentWeightKg Float
+  targetWeightKg  Float
+  activityLevel   ActivityLevel
+  goal            Goal
+  dailyCalories   Int
+  dailyProteinG   Float
+  dailyCarbsG     Float
+  dailyFatG       Float
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model FoodLog {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eatenAt      DateTime
+  mealType     MealType @default(UNKNOWN)
+  foodName     String
+  calories     Float
+  proteinG     Float
+  carbsG       Float
+  fatG         Float
+  imageUrl     String?
+  aiConfidence Float?
+  notes        String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId, eatenAt])
+}
+
+model PendingFoodAnalysis {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  foodName           String
+  calories           Float
+  proteinG           Float
+  carbsG             Float
+  fatG               Float
+  confidence         Float
+  assumptions        String
+  imageUrl           String?
+  originalQuantity   Float?
+  quantityUnit       String?
+  consumedQuantity   Float?
+  originalCalories   Float?
+  originalProteinG   Float?
+  originalCarbsG     Float?
+  originalFatG       Float?
+  expiresAt          DateTime
+  createdAt          DateTime @default(now())
+
+  // Expiry cleanup / TTL sweeps (ownership already unique on userId).
+  @@index([expiresAt])
+}
+
+model LineEvent {
+  id          String   @id @default(cuid())
+  // LINE webhookEventId — unique claim key for idempotency
+  lineEventId String   @unique
+  eventType   String
+  processedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([processedAt])
+}

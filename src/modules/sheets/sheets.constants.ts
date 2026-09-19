@@ -1,0 +1,66 @@
+/** Sheet tab names inside the reporting spreadsheet. */
+export const SHEET_TABS = {
+  USERS: 'Users',
+  NUTRITION_PROFILES: 'NutritionProfiles',
+  FOOD_LOGS: 'FoodLogs',
+  WEIGHT_LOGS: 'WeightLogs',
+  DAILY_SUMMARY: 'DailySummary',
+} as const;
+
+export const SHEET_HEADERS = {
+  Users: [
+    'id',
+    'lineUserId',
+    'displayName',
+    'onboardingState',
+    'createdAt',
+    'updatedAt',
+  ],
+  NutritionProfiles: [
+    'id',
+    'userId',
+    'sex',
+    'age',
+    'heightCm',
+    'currentWeightKg',
+    'targetWeightKg',
+    'activityLevel',
+    'goal',
+    'dailyCalories',
+    'dailyProteinG',
+    'dailyCarbsG',
+    'dailyFatG',
+    'updatedAt',
+  ],
+  FoodLogs: [
+    'id',
+    'userId',
+    'eatenAt',
+    'mealType',
+    'foodName',
+    'calories',
+    'proteinG',
+    'carbsG',
+    'fatG',
+    'aiConfidence',
+    'notes',
+    'createdAt',
+  ],
+  WeightLogs: ['id', 'userId', 'weightKg', 'recordedAt', 'createdAt'],
+  DailySummary: [
+    'id',
+    'userId',
+    'date',
+    'caloriesConsumed',
+    'calorieTarget',
+    'proteinConsumed',
+    'proteinTarget',
+    'carbsConsumed',
+    'carbsTarget',
+    'fatConsumed',
+    'fatTarget',
+    'updatedAt',
+  ],
+} as const;
+
+export type SheetTabName = (typeof SHEET_TABS)[keyof typeof SHEET_TABS];
