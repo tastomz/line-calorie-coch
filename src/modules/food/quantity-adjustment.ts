@@ -199,6 +199,8 @@ export function quantityUnitLabelTh(unit: string): string {
       return 'ถ้วย';
     case 'serving':
       return 'ส่วน';
+    case 'item':
+      return 'ชิ้น';
     default:
       return 'หน่วย';
   }
