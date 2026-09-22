@@ -5,13 +5,27 @@ import {
 } from '@nestjs/common';
 import { FoodLog, PendingFoodAnalysis } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { FoodAnalysisResult } from './food-analysis.types';
+import {
+  FOOD_QUANTITY_UNITS,
+  FoodAnalysisResult,
+  FoodQuantityUnit,
+} from './food-analysis.types';
+import { normalizeQuantityUnit } from './food-analysis.validator';
 import {
   applyProportionalNutrition,
   NutritionValues,
 } from './quantity-adjustment';
 
 const PENDING_TTL_MS = 30 * 60 * 1000;
+
+function resolvePendingQuantityUnit(
+  raw: string | null | undefined,
+): FoodQuantityUnit {
+  const normalized = normalizeQuantityUnit(raw ?? 'serving');
+  return (FOOD_QUANTITY_UNITS as readonly string[]).includes(normalized)
+    ? (normalized as FoodQuantityUnit)
+    : 'serving';
+}
 
 export class PendingFoodConfirmError extends Error {
   constructor(
@@ -303,7 +317,7 @@ export class PendingFoodService {
       assumptions,
       estimatedQuantity:
         pending.consumedQuantity ?? pending.originalQuantity ?? 1,
-      quantityUnit: pending.quantityUnit ?? 'serving',
+      quantityUnit: resolvePendingQuantityUnit(pending.quantityUnit),
     };
   }
 

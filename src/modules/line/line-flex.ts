@@ -309,11 +309,11 @@ export function truncate(text: string, max = 80): string {
 
 export function flexMessage(
   altText: string,
-  bubble: FlexBubble,
+  contents: FlexBubble | FlexCarousel,
 ): FlexMessagePayload {
   return {
     type: 'flex',
     altText: altText.slice(0, 400),
-    contents: bubble,
+    contents,
   };
 }
