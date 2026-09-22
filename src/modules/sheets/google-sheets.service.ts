@@ -68,6 +68,22 @@ export class GoogleSheetsService {
     );
   }
 
+  /**
+   * Delete the row whose column A equals `id`.
+   * No-op if the row is already missing (idempotent).
+   */
+  async deleteRowById(tab: SheetTabName, id: string): Promise<void> {
+    if (!this.isEnabled() || !this.sheets) {
+      return;
+    }
+
+    await withTimeout(
+      this.removeRowById(tab, id),
+      SHEETS_CALL_TIMEOUT_MS,
+      'google_sheets_delete',
+    );
+  }
+
   private async writeRow(
     tab: SheetTabName,
     id: string,
@@ -96,6 +112,57 @@ export class GoogleSheetsService {
       valueInputOption: 'USER_ENTERED',
       requestBody: { values },
     });
+  }
+
+  private async removeRowById(tab: SheetTabName, id: string): Promise<void> {
+    if (!this.sheets) {
+      return;
+    }
+    await this.ensureTabWithHeaders(tab);
+    const rowIndex = await this.findRowIndexById(tab, id);
+    if (rowIndex == null || rowIndex <= 1) {
+      // Missing, or would delete the header row — treat as done.
+      return;
+    }
+
+    const sheetId = await this.resolveSheetId(tab);
+    if (sheetId == null) {
+      return;
+    }
+
+    await this.sheets.spreadsheets.batchUpdate({
+      spreadsheetId: this.spreadsheetId,
+      requestBody: {
+        requests: [
+          {
+            deleteDimension: {
+              range: {
+                sheetId,
+                dimension: 'ROWS',
+                startIndex: rowIndex - 1,
+                endIndex: rowIndex,
+              },
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  private async resolveSheetId(tab: SheetTabName): Promise<number | null> {
+    if (!this.sheets) {
+      return null;
+    }
+    const meta = await this.sheets.spreadsheets.get({
+      spreadsheetId: this.spreadsheetId,
+      fields: 'sheets.properties(sheetId,title)',
+    });
+    for (const sheet of meta.data.sheets ?? []) {
+      if (sheet.properties?.title === tab) {
+        return sheet.properties.sheetId ?? null;
+      }
+    }
+    return null;
   }
 
   private async findRowIndexById(
