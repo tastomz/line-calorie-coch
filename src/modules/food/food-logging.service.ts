@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { OnboardingState, User } from '@prisma/client';
 import OpenAI from 'openai';
 import { aiRateLimiter } from '../../common/ai-rate-limiter';
@@ -76,7 +76,16 @@ import {
   FOOD_ANALYSIS_FAILED_TEXT,
   FOOD_CANCELLED_TEXT,
   FOOD_CONFIRM_CHOICES,
+  FOOD_EDIT_CANCELLED_TEXT,
+  FOOD_EDIT_DELETED_TEXT,
   FOOD_EDIT_HELP_TEXT,
+  FOOD_EDIT_NAME_PROMPT_TEXT,
+  FOOD_EDIT_NOT_FOUND_TEXT,
+  FOOD_EDIT_NUT_INVALID_TEXT,
+  FOOD_EDIT_NUT_PROMPT_TEXT,
+  FOOD_EDIT_QTY_INVALID_TEXT,
+  FOOD_EDIT_QTY_PROMPT_TEXT,
+  FOOD_EDIT_UPDATED_TEXT,
   FOOD_INVALID_CONFIRM_TEXT,
   FOOD_QUANTITY_CLARIFY_TEXT,
   FOOD_RATE_LIMITED_TEXT,
@@ -90,6 +99,17 @@ import {
 } from './food.messages';
 import { parseFoodEdit } from './food-edit';
 import {
+  parseFoodEditCommand,
+  FOOD_EDIT_CANCEL_TEXT,
+} from './food-edit.commands';
+import {
+  buildFoodDeleteConfirmFlex,
+  buildFoodEditMenuFlex,
+  buildTodayFoodEditListFlex,
+} from './food-edit.flex';
+import { parseNutritionEdit } from './food-edit.nutrition-parse';
+import { foodEditSessionBuffer } from './food-edit.session';
+import {
   MessageClassifyError,
   MessageClassifyService,
 } from './message-classify.service';
@@ -99,6 +119,7 @@ import {
 } from './pending-food.service';
 import { pendingReplaceBuffer } from './pending-replace.buffer';
 import {
+  applyProportionalNutrition,
   parseQuantityAdjustment,
   resolveConsumedQuantity,
 } from './quantity-adjustment';
@@ -157,6 +178,30 @@ export class FoodLoggingService {
     text: string,
   ): Promise<'handled' | 'not_command'> {
     const normalized = text.trim();
+
+    // Today's FoodLog edit/delete — exact foodeedit:* commands first.
+    const editCmd = parseFoodEditCommand(normalized);
+    if (editCmd) {
+      await this.handleFoodEditCommand(user, replyToken, editCmd);
+      return 'handled';
+    }
+
+    // Active edit-session free-text (qty / name / nutrition) before other AI.
+    const editSession = foodEditSessionBuffer.get(user.id);
+    if (
+      editSession &&
+      (editSession.kind === 'await_quantity' ||
+        editSession.kind === 'await_name' ||
+        editSession.kind === 'await_nutrition')
+    ) {
+      if (this.isCancel(normalized) || normalized === FOOD_EDIT_CANCEL_TEXT) {
+        foodEditSessionBuffer.clear(user.id);
+        await this.lineService.replyText(replyToken, FOOD_EDIT_CANCELLED_TEXT);
+        return 'handled';
+      }
+      await this.handleFoodEditSessionInput(user, replyToken, normalized);
+      return 'handled';
+    }
 
     if (normalized === FOOD_COMMANDS.REPLACE_OLD) {
       await this.handleReplacePendingConfirm(user, replyToken);
@@ -746,13 +791,360 @@ export class FoodLoggingService {
   ): Promise<void> {
     try {
       const logs = await this.foodLogService.listForUserOnDate(userId);
-      await this.lineService.replyText(replyToken, buildHistoryMessage(logs));
+      const flex = buildTodayFoodEditListFlex(logs);
+      try {
+        await this.lineService.replyFlex(replyToken, flex);
+      } catch {
+        await this.lineService.replyText(replyToken, buildHistoryMessage(logs));
+      }
     } catch (error) {
       this.logger.error(
         `History failed: ${error instanceof Error ? error.message : 'unknown error'}`,
       );
       await this.lineService.replyText(replyToken, DAILY_SUMMARY_ERROR_TEXT);
     }
+  }
+
+  private async replyTodayFoodList(
+    userId: string,
+    replyToken: string,
+    preface?: string,
+  ): Promise<void> {
+    const logs = await this.foodLogService.listForUserOnDate(userId);
+    const flex = buildTodayFoodEditListFlex(logs);
+    try {
+      await this.lineService.replyFlex(replyToken, flex);
+    } catch {
+      const body = buildHistoryMessage(logs);
+      await this.lineService.replyText(
+        replyToken,
+        preface ? `${preface}\n\n${body}` : body,
+      );
+    }
+  }
+
+  private async handleFoodEditCommand(
+    user: User,
+    replyToken: string,
+    cmd: NonNullable<ReturnType<typeof parseFoodEditCommand>>,
+  ): Promise<void> {
+    if (cmd.type === 'cancel') {
+      foodEditSessionBuffer.clear(user.id);
+      await this.pendingFoodService.clearForUser(user.id);
+      await this.lineService.replyText(replyToken, FOOD_EDIT_CANCELLED_TEXT);
+      return;
+    }
+
+    const log = await this.foodLogService.findTodayByIdForUser(
+      user.id,
+      cmd.foodLogId,
+    );
+    if (!log) {
+      foodEditSessionBuffer.clear(user.id);
+      await this.lineService.replyText(replyToken, FOOD_EDIT_NOT_FOUND_TEXT);
+      return;
+    }
+
+    switch (cmd.type) {
+      case 'menu':
+        foodEditSessionBuffer.clear(user.id);
+        try {
+          await this.lineService.replyFlex(
+            replyToken,
+            buildFoodEditMenuFlex(log),
+          );
+        } catch {
+          await this.lineService.replyButtons(
+            replyToken,
+            `✏️ แก้ไข ${log.foodName}`,
+            [
+              { label: 'ปริมาณ', text: `foodedit:qty:${log.id}` },
+              { label: 'ชื่ออาหาร', text: `foodedit:name:${log.id}` },
+              { label: 'สารอาหาร', text: `foodedit:nut:${log.id}` },
+              { label: 'ยกเลิก', text: FOOD_EDIT_CANCEL_TEXT },
+            ],
+          );
+        }
+        return;
+      case 'qty':
+        foodEditSessionBuffer.set(user.id, {
+          kind: 'await_quantity',
+          foodLogId: log.id,
+        });
+        await this.lineService.replyText(replyToken, FOOD_EDIT_QTY_PROMPT_TEXT);
+        return;
+      case 'name':
+        foodEditSessionBuffer.set(user.id, {
+          kind: 'await_name',
+          foodLogId: log.id,
+        });
+        await this.lineService.replyText(
+          replyToken,
+          FOOD_EDIT_NAME_PROMPT_TEXT,
+        );
+        return;
+      case 'nut':
+        foodEditSessionBuffer.set(user.id, {
+          kind: 'await_nutrition',
+          foodLogId: log.id,
+        });
+        await this.lineService.replyText(replyToken, FOOD_EDIT_NUT_PROMPT_TEXT);
+        return;
+      case 'del':
+        try {
+          await this.lineService.replyFlex(
+            replyToken,
+            buildFoodDeleteConfirmFlex(log),
+          );
+        } catch {
+          await this.lineService.replyButtons(
+            replyToken,
+            `ต้องการลบ ${log.foodName} · ${Math.round(log.calories)} kcal ใช่ไหม?`,
+            [
+              { label: 'ยืนยันลบ', text: `foodedit:delok:${log.id}` },
+              { label: 'ยกเลิก', text: FOOD_EDIT_CANCEL_TEXT },
+            ],
+          );
+        }
+        return;
+      case 'delok':
+        await this.deleteTodayFoodLog(user.id, replyToken, log.id);
+        return;
+      default:
+        return;
+    }
+  }
+
+  private async handleFoodEditSessionInput(
+    user: User,
+    replyToken: string,
+    text: string,
+  ): Promise<void> {
+    const session = foodEditSessionBuffer.get(user.id);
+    if (!session) {
+      return;
+    }
+
+    if (session.kind === 'await_quantity') {
+      await this.applyTodayQuantityEdit(
+        user.id,
+        replyToken,
+        session.foodLogId,
+        text,
+      );
+      return;
+    }
+    if (session.kind === 'await_nutrition') {
+      await this.applyTodayNutritionEdit(
+        user.id,
+        replyToken,
+        session.foodLogId,
+        text,
+      );
+      return;
+    }
+    if (session.kind === 'await_name') {
+      await this.startTodayNameReplacement(
+        user,
+        replyToken,
+        session.foodLogId,
+        text,
+      );
+    }
+  }
+
+  private async applyTodayQuantityEdit(
+    userId: string,
+    replyToken: string,
+    foodLogId: string,
+    text: string,
+  ): Promise<void> {
+    const log = await this.foodLogService.findTodayByIdForUser(
+      userId,
+      foodLogId,
+    );
+    if (!log) {
+      foodEditSessionBuffer.clear(userId);
+      await this.lineService.replyText(replyToken, FOOD_EDIT_NOT_FOUND_TEXT);
+      return;
+    }
+
+    // Saved logs have no stored quantity — treat current row as 1.0 baseline.
+    const adjustment = parseQuantityAdjustment(text, { allowBareNumber: true });
+    if (
+      adjustment.kind === 'none' ||
+      adjustment.kind === 'ambiguous' ||
+      adjustment.kind === 'composition'
+    ) {
+      await this.lineService.replyText(replyToken, FOOD_EDIT_QTY_INVALID_TEXT);
+      return;
+    }
+
+    const baselineQty = 1;
+    const consumed = resolveConsumedQuantity(adjustment, baselineQty);
+    if (consumed == null || consumed <= 0) {
+      await this.lineService.replyText(replyToken, FOOD_EDIT_QTY_INVALID_TEXT);
+      return;
+    }
+
+    const ratio = consumed / baselineQty;
+    const scaled = applyProportionalNutrition(
+      {
+        calories: log.calories,
+        proteinG: log.proteinG,
+        carbsG: log.carbsG,
+        fatG: log.fatG,
+      },
+      ratio,
+    );
+
+    try {
+      const updated = await this.foodLogService.updateNutritionForUserToday(
+        userId,
+        foodLogId,
+        scaled,
+      );
+      foodEditSessionBuffer.clear(userId);
+      this.enqueueDailySummaryRefresh(userId, updated.eatenAt);
+      await this.replyTodayFoodList(
+        userId,
+        replyToken,
+        FOOD_EDIT_UPDATED_TEXT(updated.foodName),
+      );
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        foodEditSessionBuffer.clear(userId);
+        await this.lineService.replyText(replyToken, FOOD_EDIT_NOT_FOUND_TEXT);
+        return;
+      }
+      throw error;
+    }
+  }
+
+  private async applyTodayNutritionEdit(
+    userId: string,
+    replyToken: string,
+    foodLogId: string,
+    text: string,
+  ): Promise<void> {
+    const parsed = parseNutritionEdit(text);
+    if (!parsed.ok) {
+      await this.lineService.replyText(replyToken, FOOD_EDIT_NUT_INVALID_TEXT);
+      return;
+    }
+
+    try {
+      const updated = await this.foodLogService.updateNutritionForUserToday(
+        userId,
+        foodLogId,
+        parsed.nutrition,
+      );
+      foodEditSessionBuffer.clear(userId);
+      this.enqueueDailySummaryRefresh(userId, updated.eatenAt);
+      await this.replyTodayFoodList(
+        userId,
+        replyToken,
+        FOOD_EDIT_UPDATED_TEXT(updated.foodName),
+      );
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        foodEditSessionBuffer.clear(userId);
+        await this.lineService.replyText(replyToken, FOOD_EDIT_NOT_FOUND_TEXT);
+        return;
+      }
+      throw error;
+    }
+  }
+
+  private async startTodayNameReplacement(
+    user: User,
+    replyToken: string,
+    foodLogId: string,
+    foodNameText: string,
+  ): Promise<void> {
+    const log = await this.foodLogService.findTodayByIdForUser(
+      user.id,
+      foodLogId,
+    );
+    if (!log) {
+      foodEditSessionBuffer.clear(user.id);
+      await this.lineService.replyText(replyToken, FOOD_EDIT_NOT_FOUND_TEXT);
+      return;
+    }
+
+    const lineUserId = user.lineUserId ?? user.id;
+    if (!aiRateLimiter.tryConsume(lineUserId, 'food_text')) {
+      await this.lineService.replyText(replyToken, FOOD_RATE_LIMITED_TEXT);
+      return;
+    }
+
+    try {
+      const analysis = await this.aiGateway.run(user.id, 'FOOD_TEXT', () =>
+        this.foodAnalysisService.analyzeText(foodNameText),
+      );
+      const pending = await this.pendingFoodService.upsertPending(
+        user.id,
+        analysis,
+      );
+      foodEditSessionBuffer.set(user.id, {
+        kind: 'name_replace_pending',
+        foodLogId,
+      });
+      await this.lineService.replyButtonsOrPush(
+        replyToken,
+        lineUserId,
+        `✏️ แทนที่ "${log.foodName}" ด้วยรายการใหม่\n\n${buildFoodEstimateMessage(analysis, pending)}`,
+        FOOD_CONFIRM_CHOICES,
+      );
+    } catch (error) {
+      foodEditSessionBuffer.set(user.id, {
+        kind: 'await_name',
+        foodLogId,
+      });
+      if (error instanceof AiQuotaExceededError) {
+        await this.lineService.replyText(
+          replyToken,
+          buildQuotaExceededMessage(error),
+        );
+        return;
+      }
+      this.logger.error(
+        `Name replace analysis failed: ${error instanceof Error ? error.message : 'unknown'}`,
+      );
+      await this.lineService.replyText(replyToken, FOOD_ANALYSIS_FAILED_TEXT);
+    }
+  }
+
+  private async deleteTodayFoodLog(
+    userId: string,
+    replyToken: string,
+    foodLogId: string,
+  ): Promise<void> {
+    try {
+      const deleted = await this.foodLogService.deleteForUserToday(
+        userId,
+        foodLogId,
+      );
+      foodEditSessionBuffer.clear(userId);
+      this.enqueueDailySummaryRefresh(userId, deleted.eatenAt);
+      await this.replyTodayFoodList(
+        userId,
+        replyToken,
+        FOOD_EDIT_DELETED_TEXT(deleted.foodName),
+      );
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        await this.lineService.replyText(replyToken, FOOD_EDIT_NOT_FOUND_TEXT);
+        return;
+      }
+      throw error;
+    }
+  }
+
+  private enqueueDailySummaryRefresh(userId: string, day: Date): void {
+    this.sheetsSync.enqueue('updateDailySummary', async () => {
+      await this.sheetsSync.updateDailySummary(userId, day);
+    });
   }
 
   private async handleCoachIntent(
@@ -1106,6 +1498,12 @@ export class FoodLoggingService {
       | { kind: 'image'; imageBytes: Buffer; imageUrl?: string },
     lineUserId?: string,
   ): Promise<void> {
+    // New meal analysis is not a name-replace of an existing FoodLog.
+    const edit = foodEditSessionBuffer.get(userId);
+    if (edit?.kind === 'name_replace_pending') {
+      foodEditSessionBuffer.clear(userId);
+    }
+
     const rateKey = lineUserId ?? userId;
     const bucket = input.kind === 'image' ? 'food_image' : 'food_text';
     if (!aiRateLimiter.tryConsume(rateKey, bucket)) {
@@ -1167,6 +1565,17 @@ export class FoodLoggingService {
     replyToken: string,
     lineUserId?: string,
   ): Promise<void> {
+    const editSession = foodEditSessionBuffer.get(userId);
+    if (editSession?.kind === 'name_replace_pending') {
+      await this.confirmNameReplacement(
+        userId,
+        replyToken,
+        editSession.foodLogId,
+        lineUserId,
+      );
+      return;
+    }
+
     let confirmed: Awaited<
       ReturnType<PendingFoodService['confirmPendingAtomic']>
     > | null = null;
@@ -1220,14 +1629,61 @@ export class FoodLoggingService {
     }
   }
 
+  private async confirmNameReplacement(
+    userId: string,
+    replyToken: string,
+    foodLogId: string,
+    lineUserId?: string,
+  ): Promise<void> {
+    const pending = await this.pendingFoodService.getActiveForUser(userId);
+    if (!pending) {
+      foodEditSessionBuffer.clear(userId);
+      await this.lineService.replyText(replyToken, NO_PENDING_FOOD_TEXT);
+      return;
+    }
+
+    const analysis = this.pendingFoodService.toAnalysisResult(pending);
+    try {
+      const updated = await this.foodLogService.replaceFromAnalysisForUserToday(
+        userId,
+        foodLogId,
+        analysis,
+      );
+      await this.pendingFoodService.clearForUser(userId);
+      foodEditSessionBuffer.clear(userId);
+      this.enqueueDailySummaryRefresh(userId, updated.eatenAt);
+
+      const summary = await this.dailyTotalsService.getSummaryForUser(userId);
+      const message = `${FOOD_EDIT_UPDATED_TEXT(updated.foodName)}\n\n${buildFoodSavedMessage(analysis, summary)}`;
+      if (lineUserId) {
+        await this.lineService.replyTextOrPush(replyToken, lineUserId, message);
+      } else {
+        await this.lineService.replyText(replyToken, message);
+      }
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        foodEditSessionBuffer.clear(userId);
+        await this.pendingFoodService.clearForUser(userId);
+        await this.lineService.replyText(replyToken, FOOD_EDIT_NOT_FOUND_TEXT);
+        return;
+      }
+      throw error;
+    }
+  }
+
   private async cancelPending(
     userId: string,
     replyToken: string,
   ): Promise<void> {
     pendingReplaceBuffer.clear(userId);
+    const nameReplace = foodEditSessionBuffer.get(userId);
+    foodEditSessionBuffer.clear(userId);
     const pending = await this.pendingFoodService.getActiveForUser(userId);
     if (!pending) {
-      await this.lineService.replyText(replyToken, NO_PENDING_FOOD_TEXT);
+      await this.lineService.replyText(
+        replyToken,
+        nameReplace ? FOOD_EDIT_CANCELLED_TEXT : NO_PENDING_FOOD_TEXT,
+      );
       return;
     }
     await this.pendingFoodService.clearForUser(userId);

@@ -57,6 +57,36 @@ export const AMBIGUOUS_NUMBER_TEXT =
 export const LOG_FOOD_HINT_TEXT =
   'ส่งชื่ออาหารหรือรูปอาหารมาได้เลยครับ\nเช่น "ข้าวกะเพราไก่ไข่ดาว"';
 
+export const FOOD_EDIT_NOT_FOUND_TEXT =
+  'ไม่พบมื้ออาหารนี้ในรายการวันนี้ครับ\nพิมพ์ "ประวัติ" เพื่อดูมื้อวันนี้';
+
+export const FOOD_EDIT_CANCELLED_TEXT = 'ยกเลิกการแก้ไขแล้วครับ';
+
+export const FOOD_EDIT_QTY_PROMPT_TEXT = `พิมพ์ปริมาณใหม่ได้เลยครับ เช่น
+• ครึ่งหนึ่ง
+• กินแค่ 50%
+• 0.5
+• กิน 2 เท่า (พิมพ์ 2)`;
+
+export const FOOD_EDIT_NAME_PROMPT_TEXT =
+  'พิมพ์ชื่ออาหารใหม่ได้เลยครับ\nจะประมาณสารอาหารใหม่ให้ก่อน แล้วยืนยันอีกครั้ง';
+
+export const FOOD_EDIT_NUT_PROMPT_TEXT = `พิมพ์สารอาหารใหม่ได้เลยครับ เช่น
+• kcal 650 protein 35 carbs 70 fat 20
+• 650 35 70 20`;
+
+export const FOOD_EDIT_NUT_INVALID_TEXT =
+  'รูปแบบสารอาหารไม่ถูกต้องครับ\nเช่น kcal 650 protein 35 carbs 70 fat 20';
+
+export const FOOD_EDIT_QTY_INVALID_TEXT =
+  'ยังจับปริมาณไม่ชัดครับ\nลองพิมพ์ เช่น ครึ่งหนึ่ง · 50% · 0.5';
+
+export const FOOD_EDIT_DELETED_TEXT = (foodName: string): string =>
+  `🗑️ ลบ "${foodName}" แล้วครับ`;
+
+export const FOOD_EDIT_UPDATED_TEXT = (foodName: string): string =>
+  `✏️ อัปเดต "${foodName}" แล้วครับ`;
+
 export const GENERAL_HELP_TEXT =
   'ส่งได้เลยครับ เช่น น้ำหนัก 84.2 · ชื่อ/รูปอาหาร · หรือพิมพ์ "วันนี้"';
 

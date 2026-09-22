@@ -17,6 +17,7 @@ import { DailyTotalsService } from './daily-totals.service';
 import { FoodAnalysisService } from './food-analysis.service';
 import { FoodLogService } from './food-log.service';
 import { FoodLoggingService } from './food-logging.service';
+import { foodEditSessionBuffer } from './food-edit.session';
 import {
   AMBIGUOUS_NUMBER_TEXT,
   COMPLETE_PROFILE_FIRST_TEXT,
@@ -50,6 +51,10 @@ describe('FoodLoggingService', () => {
   const foodLogService = {
     createFromAnalysis: jest.fn(),
     listForUserOnDate: jest.fn(),
+    findTodayByIdForUser: jest.fn(),
+    updateNutritionForUserToday: jest.fn(),
+    replaceFromAnalysisForUserToday: jest.fn(),
+    deleteForUserToday: jest.fn(),
   };
   const dailyTotalsService = {
     getSummaryForUser: jest.fn(),
@@ -182,6 +187,7 @@ describe('FoodLoggingService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     aiRateLimiter.reset();
+    foodEditSessionBuffer.reset();
     pendingFoodService.getActiveForUser.mockResolvedValue(null);
     healthRouting.tryHandleText.mockResolvedValue(false);
     healthRouting.tryHandleImage.mockResolvedValue(false);
@@ -190,6 +196,8 @@ describe('FoodLoggingService', () => {
     weightLogService.getRecentDailyAverages.mockResolvedValue([]);
     weightLogService.getSevenDayTrend.mockResolvedValue(null);
     weightLogService.getTargetProgress.mockResolvedValue(null);
+    foodLogService.listForUserOnDate.mockResolvedValue([]);
+    pendingFoodService.clearForUser.mockResolvedValue(undefined);
     aiGateway.run.mockImplementation(
       async (_userId: string, _op: string, work: () => Promise<unknown>) =>
         work(),
@@ -1291,5 +1299,248 @@ describe('FoodLoggingService', () => {
     );
 
     expect(weightLogService.createForUser).toHaveBeenCalledWith('user-a', 84.2);
+  });
+
+  describe('edit today FoodLog', () => {
+    const todayLog = {
+      id: 'log-today',
+      userId: 'user-a',
+      eatenAt: new Date(),
+      foodName: 'ข้าวมันไก่',
+      calories: 650,
+      proteinG: 35,
+      carbsG: 70,
+      fatG: 20,
+    };
+
+    it('lists today food logs via ประวัติ (0 AI)', async () => {
+      foodLogService.listForUserOnDate.mockResolvedValue([todayLog]);
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'ประวัติ',
+      );
+      expect(foodLogService.listForUserOnDate).toHaveBeenCalledWith('user-a');
+      expect(aiGateway.run).not.toHaveBeenCalled();
+      expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
+    });
+
+    it('opens edit menu for own today log without AI', async () => {
+      foodLogService.findTodayByIdForUser.mockResolvedValue(todayLog);
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'foodedit:menu:log-today',
+      );
+      expect(foodLogService.findTodayByIdForUser).toHaveBeenCalledWith(
+        'user-a',
+        'log-today',
+      );
+      expect(aiGateway.run).not.toHaveBeenCalled();
+      expect(lineService.replyButtons).toHaveBeenCalled();
+    });
+
+    it('edits quantity with proportional math and zero AI', async () => {
+      foodLogService.findTodayByIdForUser.mockResolvedValue(todayLog);
+      foodLogService.updateNutritionForUserToday.mockResolvedValue({
+        ...todayLog,
+        calories: 325,
+        proteinG: 17.5,
+        carbsG: 35,
+        fatG: 10,
+      });
+      foodLogService.listForUserOnDate.mockResolvedValue([
+        { ...todayLog, calories: 325 },
+      ]);
+
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'foodedit:qty:log-today',
+      );
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'ครึ่งหนึ่ง',
+      );
+
+      expect(foodLogService.updateNutritionForUserToday).toHaveBeenCalledWith(
+        'user-a',
+        'log-today',
+        {
+          calories: 325,
+          proteinG: 17.5,
+          carbsG: 35,
+          fatG: 10,
+        },
+      );
+      expect(aiGateway.run).not.toHaveBeenCalled();
+      expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
+      expect(sheetsSync.updateDailySummary).toHaveBeenCalled();
+    });
+
+    it('edits nutrition manually with zero AI', async () => {
+      foodLogService.findTodayByIdForUser.mockResolvedValue(todayLog);
+      foodLogService.updateNutritionForUserToday.mockResolvedValue({
+        ...todayLog,
+        calories: 500,
+        proteinG: 40,
+        carbsG: 50,
+        fatG: 15,
+      });
+      foodLogService.listForUserOnDate.mockResolvedValue([]);
+
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'foodedit:nut:log-today',
+      );
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        '500 40 50 15',
+      );
+
+      expect(foodLogService.updateNutritionForUserToday).toHaveBeenCalledWith(
+        'user-a',
+        'log-today',
+        { calories: 500, proteinG: 40, carbsG: 50, fatG: 15 },
+      );
+      expect(aiGateway.run).not.toHaveBeenCalled();
+    });
+
+    it('starts food-name replacement with one AI call and requires confirm', async () => {
+      foodLogService.findTodayByIdForUser.mockResolvedValue(todayLog);
+      foodAnalysisService.analyzeText.mockResolvedValue({
+        foodName: 'ไก่ย่าง',
+        estimatedCalories: 400,
+        proteinG: 40,
+        carbsG: 10,
+        fatG: 18,
+        confidence: 0.8,
+        assumptions: [],
+        estimatedQuantity: 1,
+        quantityUnit: 'plate',
+      });
+      pendingFoodService.upsertPending.mockResolvedValue({
+        originalQuantity: 1,
+        consumedQuantity: 1,
+        quantityUnit: 'plate',
+      });
+
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'foodedit:name:log-today',
+      );
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'ไก่ย่าง 1 จาน',
+      );
+
+      expect(aiGateway.run).toHaveBeenCalledTimes(1);
+      expect(aiGateway.run).toHaveBeenCalledWith(
+        'user-a',
+        'FOOD_TEXT',
+        expect.any(Function),
+      );
+      expect(
+        foodLogService.replaceFromAnalysisForUserToday,
+      ).not.toHaveBeenCalled();
+      expect(lineService.replyButtonsOrPush).toHaveBeenCalled();
+
+      pendingFoodService.getActiveForUser.mockResolvedValue({
+        foodName: 'ไก่ย่าง',
+        calories: 400,
+        proteinG: 40,
+        carbsG: 10,
+        fatG: 18,
+        confidence: 0.8,
+        assumptions: '[]',
+        originalQuantity: 1,
+        consumedQuantity: 1,
+        quantityUnit: 'plate',
+      });
+      pendingFoodService.toAnalysisResult.mockReturnValue({
+        foodName: 'ไก่ย่าง',
+        estimatedCalories: 400,
+        proteinG: 40,
+        carbsG: 10,
+        fatG: 18,
+        confidence: 0.8,
+        assumptions: [],
+        estimatedQuantity: 1,
+        quantityUnit: 'plate',
+      });
+      foodLogService.replaceFromAnalysisForUserToday.mockResolvedValue({
+        ...todayLog,
+        foodName: 'ไก่ย่าง',
+        calories: 400,
+      });
+      dailyTotalsService.getSummaryForUser.mockResolvedValue({
+        totals: { calories: 400, proteinG: 40, carbsG: 10, fatG: 18 },
+        targets: {
+          dailyCalories: 2000,
+          dailyProteinG: 140,
+          dailyCarbsG: 220,
+          dailyFatG: 55,
+        },
+      });
+
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'บันทึก',
+      );
+
+      expect(
+        foodLogService.replaceFromAnalysisForUserToday,
+      ).toHaveBeenCalledWith(
+        'user-a',
+        'log-today',
+        expect.objectContaining({ foodName: 'ไก่ย่าง' }),
+      );
+      expect(pendingFoodService.confirmPendingAtomic).not.toHaveBeenCalled();
+    });
+
+    it('delete requires confirmation then deletes own today log (0 AI)', async () => {
+      foodLogService.findTodayByIdForUser.mockResolvedValue(todayLog);
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'foodedit:del:log-today',
+      );
+      expect(foodLogService.deleteForUserToday).not.toHaveBeenCalled();
+      expect(lineService.replyButtons).toHaveBeenCalled();
+
+      foodLogService.deleteForUserToday.mockResolvedValue(todayLog);
+      foodLogService.listForUserOnDate.mockResolvedValue([]);
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'foodedit:delok:log-today',
+      );
+      expect(foodLogService.deleteForUserToday).toHaveBeenCalledWith(
+        'user-a',
+        'log-today',
+      );
+      expect(aiGateway.run).not.toHaveBeenCalled();
+      expect(sheetsSync.updateDailySummary).toHaveBeenCalled();
+    });
+
+    it('cannot edit another user / missing / not-today log', async () => {
+      foodLogService.findTodayByIdForUser.mockResolvedValue(null);
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'foodedit:menu:other-log',
+      );
+      expect(lineService.replyText).toHaveBeenCalledWith(
+        'token',
+        expect.stringContaining('ไม่พบมื้ออาหาร'),
+      );
+      expect(foodLogService.updateNutritionForUserToday).not.toHaveBeenCalled();
+    });
   });
 });
