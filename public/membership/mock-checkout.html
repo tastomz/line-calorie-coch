@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mock Checkout</title>
+  <link rel="stylesheet" href="/membership/assets/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">Mock Checkout (DEV)</div>
+    <div class="card">
+      <p>PAYMENT_MODE=MOCK — ไม่ใช่ Stripe จริง</p>
+      <p class="muted" id="sid"></p>
+      <button class="btn" id="ok">ชำระเงินสำเร็จ (mock)</button>
+      <button class="btn secondary" id="fail">ชำระเงินล้มเหลว</button>
+      <button class="btn secondary" id="due">Past due</button>
+      <button class="btn secondary" id="cancel">ยกเลิก</button>
+      <div id="msg" class="muted"></div>
+    </div>
+  </div>
+  <script src="/membership/assets/app.js"></script>
+  <script>
+    const sessionId = new URLSearchParams(location.search).get('session_id') || '';
+    document.getElementById('sid').textContent = 'session: ' + sessionId;
+    (async () => {
+      try {
+        const cfg = await api('/api/membership/config');
+        if (!cfg.checkoutEnabled || cfg.paymentMode !== 'MOCK') {
+          document.querySelector('.card').innerHTML =
+            '<p class="err">Mock checkout ไม่เปิดในโหมดนี้</p><a class="btn" href="/account">กลับบัญชี</a>';
+          return;
+        }
+        await api('/api/membership');
+      } catch (e) {
+        if (redirectToLoginIfUnauthorized(e)) return;
+      }
+    })();
+    async function run(outcome) {
+      const msg = document.getElementById('msg');
+      msg.textContent = 'กำลังประมวลผล...';
+      try {
+        await api('/api/membership/mock/complete', {
+          method: 'POST',
+          body: JSON.stringify({ sessionId, outcome }),
+        });
+        if (outcome === 'success') location.href = '/membership/success';
+        else if (outcome === 'cancel') location.href = '/membership/cancel';
+        else { msg.className = 'ok'; msg.textContent = 'อัปเดตสถานะ: ' + outcome; }
+      } catch (e) {
+        if (redirectToLoginIfUnauthorized(e)) return;
+        msg.className = 'err';
+        msg.textContent = e.message;
+      }
+    }
+    document.getElementById('ok').onclick = () => run('success');
+    document.getElementById('fail').onclick = () => run('fail');
+    document.getElementById('due').onclick = () => run('past_due');
+    document.getElementById('cancel').onclick = () => run('cancel');
+  </script>
+</body>
+</html>

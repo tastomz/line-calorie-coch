@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dev Membership</title>
+  <link rel="stylesheet" href="/membership/assets/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">🛠 Dev Membership</div>
+    <p class="muted">ENABLE_DEV_MEMBERSHIP_TOOLS only · not available in production</p>
+    <div class="card">
+      <div>Current test identity</div>
+      <button class="btn" data-id="USER_A">User A</button>
+      <button class="btn secondary" data-id="USER_B">User B</button>
+      <button class="btn secondary" data-id="ADMIN">Admin</button>
+    </div>
+    <div class="card" id="status">Loading…</div>
+    <div class="card">
+      <a class="btn secondary" href="/dev/chat">💬 LINE Chat Simulator</a>
+      <a class="btn secondary" href="/dev/test-scenarios">Test scenarios</a>
+      <a class="btn secondary" href="/dev/checkout">Checkout</a>
+      <a class="btn secondary" href="/dev/admin">Admin dashboard</a>
+      <a class="btn secondary" href="/dev/admin/promos">Promo generator</a>
+      <a class="btn secondary" href="/membership">Public membership</a>
+    </div>
+  </div>
+  <script src="/membership/assets/app.js"></script>
+  <script>
+    async function switchId(identity) {
+      await api('/api/dev/identity', { method: 'POST', body: JSON.stringify({ identity }) });
+      load();
+    }
+    document.querySelectorAll('[data-id]').forEach(b => b.onclick = () => switchId(b.dataset.id));
+    async function load() {
+      try {
+        const m = await api('/api/dev/membership');
+        document.getElementById('status').innerHTML = `
+          <div><b>${m.user.displayName}</b> · role ${m.user.role}</div>
+          <div>Plan: ${m.plan} · Status: ${m.status} · provider ${m.provider}</div>
+          <div>Pro access: ${m.hasProAccess}</div>
+          <div>Trial end: ${fmtDate(m.trialEndsAt)} · Period end: ${fmtDate(m.currentPeriodEnd)}</div>
+          <div>AI today — text ${m.usage.foodTextCalls}/${m.limits.FOOD_TEXT}
+            · vision ${m.usage.visionCalls}/${m.limits.FOOD_VISION}
+            · adj ${m.usage.adjustmentCalls}/${m.limits.COMPOSITION_ADJUSTMENT}
+            · coach ${m.usage.coachCalls}/${m.limits.COACH}
+            · classify ${m.usage.classifyCalls}/${m.limits.CLASSIFY}</div>`;
+      } catch (e) {
+        document.getElementById('status').innerHTML = `<div class="err">${e.message}</div><p>เลือก identity ก่อน</p>`;
+      }
+    }
+    load();
+  </script>
+</body>
+</html>

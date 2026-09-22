@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { HealthModule } from '../health/health.module';
 import { LineModule } from '../line/line.module';
+import { MembershipModule } from '../membership/membership.module';
 import { SheetsModule } from '../sheets/sheets.module';
 import { UsersModule } from '../users/users.module';
 import { WeightModule } from '../weight/weight.module';
@@ -13,7 +15,14 @@ import { MessageClassifyService } from './message-classify.service';
 import { PendingFoodService } from './pending-food.service';
 
 @Module({
-  imports: [UsersModule, LineModule, WeightModule, SheetsModule],
+  imports: [
+    UsersModule,
+    LineModule,
+    WeightModule,
+    SheetsModule,
+    MembershipModule,
+    HealthModule,
+  ],
   providers: [
     FoodAnalysisService,
     MessageClassifyService,

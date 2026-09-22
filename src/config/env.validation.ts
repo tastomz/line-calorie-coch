@@ -9,6 +9,24 @@ export type AppEnv = {
   GOOGLE_SHEETS_SPREADSHEET_ID: string;
   GOOGLE_SERVICE_ACCOUNT_EMAIL: string;
   GOOGLE_PRIVATE_KEY: string;
+  MEMBERSHIP_WEB_URL: string;
+  MEMBERSHIP_SESSION_SECRET: string;
+  STRIPE_PUBLISHABLE_KEY: string;
+  STRIPE_SECRET_KEY: string;
+  STRIPE_WEBHOOK_SECRET: string;
+  STRIPE_PRICE_ID: string;
+  LINE_LOGIN_CHANNEL_ID: string;
+  LINE_LOGIN_CHANNEL_SECRET: string;
+  ADMIN_SESSION_SECRET: string;
+  ADMIN_USERNAME: string;
+  ADMIN_PASSWORD: string;
+  ADMIN_PASSWORD_HASH: string;
+  TRIAL_DEFAULT_DAYS: number;
+  PRO_MONTHLY_PRICE_THB: number;
+  PAYMENT_MODE: string;
+  ENABLE_DEV_MEMBERSHIP_TOOLS: string;
+  ENABLE_MEMBERSHIP_CHECKOUT: string;
+  ADMIN_BOOTSTRAP_LINE_USER_IDS: string;
 };
 
 export class EnvValidationError extends Error {
@@ -66,6 +84,74 @@ export function validateEnv(raw: NodeJS.ProcessEnv = process.env): AppEnv {
   );
   const GOOGLE_PRIVATE_KEY = read(raw, 'GOOGLE_PRIVATE_KEY');
 
+  const MEMBERSHIP_WEB_URL = read(raw, 'MEMBERSHIP_WEB_URL');
+  const MEMBERSHIP_SESSION_SECRET = read(raw, 'MEMBERSHIP_SESSION_SECRET');
+  const STRIPE_PUBLISHABLE_KEY = read(raw, 'STRIPE_PUBLISHABLE_KEY');
+  const STRIPE_SECRET_KEY = read(raw, 'STRIPE_SECRET_KEY');
+  const STRIPE_WEBHOOK_SECRET = read(raw, 'STRIPE_WEBHOOK_SECRET');
+  const STRIPE_PRICE_ID = read(raw, 'STRIPE_PRICE_ID');
+  const LINE_LOGIN_CHANNEL_ID = read(raw, 'LINE_LOGIN_CHANNEL_ID');
+  const LINE_LOGIN_CHANNEL_SECRET = read(raw, 'LINE_LOGIN_CHANNEL_SECRET');
+  const ADMIN_SESSION_SECRET = read(raw, 'ADMIN_SESSION_SECRET');
+  const ADMIN_USERNAME = read(raw, 'ADMIN_USERNAME');
+  const ADMIN_PASSWORD = read(raw, 'ADMIN_PASSWORD');
+  const ADMIN_PASSWORD_HASH = read(raw, 'ADMIN_PASSWORD_HASH');
+  const PAYMENT_MODE = (read(raw, 'PAYMENT_MODE') || 'MOCK').toUpperCase();
+  const ENABLE_DEV_MEMBERSHIP_TOOLS = read(raw, 'ENABLE_DEV_MEMBERSHIP_TOOLS');
+  const ENABLE_MEMBERSHIP_CHECKOUT = read(raw, 'ENABLE_MEMBERSHIP_CHECKOUT');
+  const ADMIN_BOOTSTRAP_LINE_USER_IDS = read(
+    raw,
+    'ADMIN_BOOTSTRAP_LINE_USER_IDS',
+  );
+
+  const trialRaw = read(raw, 'TRIAL_DEFAULT_DAYS') || '7';
+  const TRIAL_DEFAULT_DAYS = Number(trialRaw);
+  if (
+    !Number.isInteger(TRIAL_DEFAULT_DAYS) ||
+    TRIAL_DEFAULT_DAYS < 1 ||
+    TRIAL_DEFAULT_DAYS > 365
+  ) {
+    throw new EnvValidationError('TRIAL_DEFAULT_DAYS must be 1–365');
+  }
+
+  const priceRaw = read(raw, 'PRO_MONTHLY_PRICE_THB') || '50';
+  const PRO_MONTHLY_PRICE_THB = Number(priceRaw);
+  if (!Number.isInteger(PRO_MONTHLY_PRICE_THB) || PRO_MONTHLY_PRICE_THB < 1) {
+    throw new EnvValidationError(
+      'PRO_MONTHLY_PRICE_THB must be a positive integer',
+    );
+  }
+
+  if (STRIPE_SECRET_KEY.startsWith('sk_live_')) {
+    throw new EnvValidationError(
+      'STRIPE_SECRET_KEY live keys are blocked until production payment activation',
+    );
+  }
+
+  if (PAYMENT_MODE !== 'MOCK' && PAYMENT_MODE !== 'STRIPE') {
+    throw new EnvValidationError('PAYMENT_MODE must be MOCK or STRIPE');
+  }
+
+  if (
+    isProduction(NODE_ENV) &&
+    ENABLE_DEV_MEMBERSHIP_TOOLS.toLowerCase() === 'true'
+  ) {
+    throw new EnvValidationError(
+      'ENABLE_DEV_MEMBERSHIP_TOOLS cannot be true in production',
+    );
+  }
+
+  if (
+    isProduction(NODE_ENV) &&
+    ENABLE_MEMBERSHIP_CHECKOUT.toLowerCase() === 'true' &&
+    PAYMENT_MODE === 'STRIPE' &&
+    !STRIPE_SECRET_KEY
+  ) {
+    throw new EnvValidationError(
+      'ENABLE_MEMBERSHIP_CHECKOUT requires Stripe TEST keys when PAYMENT_MODE=STRIPE',
+    );
+  }
+
   if (isProduction(NODE_ENV)) {
     if (!LINE_CHANNEL_SECRET) {
       throw new EnvValidationError(
@@ -88,8 +174,12 @@ export function validateEnv(raw: NodeJS.ProcessEnv = process.env): AppEnv {
         'DATABASE_URL must be a PostgreSQL URL in production',
       );
     }
+    if (ADMIN_USERNAME && !ADMIN_PASSWORD_HASH) {
+      throw new EnvValidationError(
+        'ADMIN_PASSWORD_HASH is required in production when ADMIN_USERNAME is set',
+      );
+    }
   } else {
-    // Development: allow SQLite file URLs; warn-level checks are left to logs elsewhere.
     if (
       !DATABASE_URL.startsWith('file:') &&
       !DATABASE_URL.startsWith('postgresql://') &&
@@ -134,5 +224,23 @@ export function validateEnv(raw: NodeJS.ProcessEnv = process.env): AppEnv {
     GOOGLE_SHEETS_SPREADSHEET_ID,
     GOOGLE_SERVICE_ACCOUNT_EMAIL,
     GOOGLE_PRIVATE_KEY,
+    MEMBERSHIP_WEB_URL,
+    MEMBERSHIP_SESSION_SECRET,
+    STRIPE_PUBLISHABLE_KEY,
+    STRIPE_SECRET_KEY,
+    STRIPE_WEBHOOK_SECRET,
+    STRIPE_PRICE_ID,
+    LINE_LOGIN_CHANNEL_ID,
+    LINE_LOGIN_CHANNEL_SECRET,
+    ADMIN_SESSION_SECRET,
+    ADMIN_USERNAME,
+    ADMIN_PASSWORD,
+    ADMIN_PASSWORD_HASH,
+    TRIAL_DEFAULT_DAYS,
+    PRO_MONTHLY_PRICE_THB,
+    PAYMENT_MODE,
+    ENABLE_DEV_MEMBERSHIP_TOOLS,
+    ENABLE_MEMBERSHIP_CHECKOUT,
+    ADMIN_BOOTSTRAP_LINE_USER_IDS,
   };
 }

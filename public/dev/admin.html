@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dev Admin</title>
+  <link rel="stylesheet" href="/membership/assets/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">Dev Admin Dashboard</div>
+    <p><a href="/dev/membership">← membership</a></p>
+    <div class="card" id="dash">Loading…</div>
+  </div>
+  <script src="/membership/assets/app.js"></script>
+  <script>
+    (async () => {
+      try {
+        await api('/api/dev/identity', { method: 'POST', body: JSON.stringify({ identity: 'ADMIN' }) });
+        const d = await api('/api/dev/admin/dashboard');
+        document.getElementById('dash').innerHTML = `<pre style="white-space:pre-wrap;font-size:13px">${JSON.stringify(d,null,2)}</pre>`;
+      } catch (e) {
+        document.getElementById('dash').innerHTML = `<div class="err">${e.message}</div>`;
+      }
+    })();
+  </script>
+</body>
+</html>

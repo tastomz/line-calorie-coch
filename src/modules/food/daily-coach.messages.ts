@@ -3,6 +3,11 @@ import { DailySummary } from './daily-totals.service';
 import { DailyCoachSummary, MacroTotals } from './daily-summary.service';
 import { formatZonedTime } from './day-bounds';
 import { formatNumber } from './food.messages';
+import {
+  buildDailyMacroReport,
+  buildNextMealTip,
+  formatRemainingBudget,
+} from './nutrition-display';
 
 export const NO_FOOD_LOGS_TODAY_TEXT = 'วันนี้ยังไม่มีรายการอาหารครับ';
 
@@ -23,22 +28,9 @@ function remainingLine(remaining: number, unit: string): string {
 export function buildDailyCoachSummaryMessage(
   summary: DailyCoachSummary,
 ): string {
-  const { consumed, target, remaining } = summary;
-
   return `📊 วันนี้
 
-🔥 ${formatNumber(consumed.calories)} / ${formatNumber(target.calories)} kcal
-${remainingLine(remaining.calories, 'kcal')}
-
-🥩 Protein
-${formatNumber(consumed.proteinG)} / ${formatNumber(target.proteinG)}g
-${remainingLine(remaining.proteinG, 'g')}
-
-🍚 Carbs
-${formatNumber(consumed.carbsG)} / ${formatNumber(target.carbsG)}g
-
-🥑 Fat
-${formatNumber(consumed.fatG)} / ${formatNumber(target.fatG)}g`;
+${buildDailyMacroReport(summary)}`;
 }
 
 export function buildHistoryMessage(
@@ -50,16 +42,16 @@ export function buildHistoryMessage(
 
   const lines = logs.map((log) => {
     const time = formatZonedTime(log.eatenAt);
-    return `${time} · ${log.foodName} — ${formatNumber(log.calories)} kcal`;
+    return `${time}  ${log.foodName}   ${formatNumber(log.calories)} kcal`;
   });
 
   const total = logs.reduce((sum, log) => sum + log.calories, 0);
 
-  return `📋 ประวัติวันนี้
+  return `🍽️ มื้อที่บันทึก
 
 ${lines.join('\n')}
 
-รวม ${formatNumber(total)} kcal`;
+รวม ${formatNumber(total)} kcal · ${logs.length} มื้อ`;
 }
 
 export function buildCaloriesConsumedMessage(
@@ -92,46 +84,7 @@ export function buildProteinRemainingMessage(
  * One concise insight from DB numbers — never invents totals.
  */
 export function buildDeterministicCoachTip(summary: DailyCoachSummary): string {
-  const { remaining, consumed, target } = summary;
-
-  if (
-    consumed.calories === 0 &&
-    consumed.proteinG === 0 &&
-    consumed.carbsG === 0 &&
-    consumed.fatG === 0
-  ) {
-    return '💡 วันนี้ยังไม่มีรายการอาหารครับ พอพร้อมก็กินมื้อแรกแล้วส่งมาบันทึกได้เลย';
-  }
-
-  if (remaining.calories < 0) {
-    const over = Math.abs(remaining.calories);
-    return `💡 วันนี้เกินเป้าประมาณ ${formatNumber(over)} kcal
-ไม่ต้องอดมื้อถัดไป — กลับมาตามเป้าปกติได้ครับ`;
-  }
-
-  if (remaining.calories <= 200) {
-    return `💡 เหลือประมาณ ${formatNumber(remaining.calories)} kcal
-ถ้าจะกินเพิ่ม เลือกมื้อเล็ก ๆ ในช่วงนี้ได้ครับ`;
-  }
-
-  const proteinGap = remaining.proteinG;
-  if (proteinGap >= 40) {
-    return `💡 ตอนนี้โปรตีนยังขาดประมาณ ${formatNumber(proteinGap)}g
-มื้อต่อไปลองเน้นอาหารโปรตีนสูงได้ครับ`;
-  }
-
-  if (proteinGap >= 20 && remaining.calories > 200) {
-    return `💡 โปรตีนยังเหลือประมาณ ${formatNumber(proteinGap)}g จากเป้า ${formatNumber(target.proteinG)}g
-มื้อต่อไปลองเพิ่มแหล่งโปรตีนได้นะครับ`;
-  }
-
-  if (remaining.calories > 500) {
-    return `💡 ยังเหลือประมาณ ${formatNumber(remaining.calories)} kcal
-จัดมื้อต่อไปให้สมดุลตามเป้าได้ครับ`;
-  }
-
-  return `💡 กินไป ${formatNumber(consumed.calories)} / ${formatNumber(target.calories)} kcal แล้ว
-เหลือประมาณ ${formatNumber(remaining.calories)} kcal ครับ`;
+  return `💡 มื้อถัดไป\n${buildNextMealTip(summary)}`;
 }
 
 export function buildMealRecommendationFallback(
@@ -143,17 +96,13 @@ export function buildMealRecommendationFallback(
 (ไม่ใช่คำแนะนำทางการแพทย์)`;
   }
 
-  return `เหลือประมาณ:
-${formatNumber(remaining.calories)} kcal
-${formatNumber(Math.max(0, remaining.proteinG))}g protein
-${formatNumber(Math.max(0, remaining.carbsG))}g carbs
-${formatNumber(Math.max(0, remaining.fatG))}g fat
+  return `เหลือวันนี้
 
-ไอเดียมื้อ (ประมาณคร่าว ๆ):
-1) อกไก่ย่าง + ผัก
-2) ไข่ + สลัด/ข้าวเล็กน้อย
-3) ปลาอบ + ผัก
-(เลือกให้พอดีช่วงที่เหลือ — ไม่ใช่สูตรแพทย์)`;
+${formatRemainingBudget(remaining)}
+
+💡 มื้อถัดไป
+เน้นโปรตีนเป็นหลัก
+เช่น ไก่ / ปลา / ไข่ + ข้าวในปริมาณพอดี`;
 }
 
 /** Adapt Phase 3 DailySummary into coach tip when confirming food. */

@@ -47,11 +47,42 @@ enum MealType {
   UNKNOWN
 }
 
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum HealthDataSource {
+  MANUAL
+  BODY_SCAN
+  WEARABLE
+  AI_ESTIMATED
+  IMPORTED
+}
+
+enum ExerciseType {
+  STRENGTH
+  RUNNING
+  WALKING
+  CYCLING
+  SWIMMING
+  SPORTS
+  MOBILITY
+  OTHER
+}
+
+enum MealPlanSlotStatus {
+  PLANNED
+  DONE
+  SKIPPED
+}
+
 model User {
   id                   String               @id @default(cuid())
   lineUserId           String?              @unique
   displayName          String?
   pictureUrl           String?
+  role                 UserRole             @default(USER)
   onboardingState      OnboardingState      @default(NOT_STARTED)
   draftSex             Sex?
   draftAge             Int?
@@ -66,15 +97,30 @@ model User {
   foodLogs             FoodLog[]
   weightLogs           WeightLog[]
   pendingFoodAnalysis  PendingFoodAnalysis?
+  subscriptions        Subscription[]
+  aiUsages             AIUsage[]
+  promoRedemptions     PromoRedemption[]
+  membershipLinkTokens MembershipLinkToken[]
+  bodyScans            BodyScan[]
+  pendingBodyScan      PendingBodyScan?
+  sleepLogs            SleepLog[]
+  exerciseLogs         ExerciseLog[]
+  activityLogs         ActivityDailyLog[]
+  hydrationLogs        HydrationLog[]
+  recoveryLogs         RecoveryLog[]
+  mealPlans            MealPlan[]
+  weeklyHealthReviews  WeeklyHealthReview[]
 }
 
 model WeightLog {
-  id         String   @id @default(cuid())
+  id         String           @id @default(cuid())
   userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   weightKg   Float
   recordedAt DateTime
-  createdAt  DateTime @default(now())
+  source     HealthDataSource @default(MANUAL)
+  bodyScanId String?
+  createdAt  DateTime         @default(now())
 
   @@index([userId, recordedAt])
 }
@@ -152,4 +198,329 @@ model LineEvent {
   createdAt   DateTime @default(now())
 
   @@index([processedAt])
+}
+
+enum Plan {
+  FREE
+  PRO
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  CANCELED
+  EXPIRED
+  PAST_DUE
+}
+
+enum PaymentProvider {
+  NONE
+  STRIPE
+}
+
+/// Membership / billing entitlement. Absence of a row ⇒ effective FREE.
+model Subscription {
+  id                     String             @id @default(cuid())
+  userId                 String
+  user                   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan                   Plan               @default(FREE)
+  status                 SubscriptionStatus @default(ACTIVE)
+  provider               PaymentProvider    @default(NONE)
+  providerCustomerId     String?
+  providerSubscriptionId String?
+  trialStartedAt         DateTime?
+  trialEndsAt            DateTime?
+  startedAt              DateTime?
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  canceledAt             DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  @@index([userId, status])
+  @@index([userId, plan])
+  @@index([providerSubscriptionId])
+}
+
+model PromoCode {
+  id             String            @id @default(cuid())
+  /// Normalized uppercase code (unique).
+  code           String            @unique
+  description    String?
+  trialDays      Int
+  maxRedemptions Int?
+  redeemedCount  Int               @default(0)
+  expiresAt      DateTime?
+  active         Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  redemptions    PromoRedemption[]
+}
+
+model PromoRedemption {
+  id          String    @id @default(cuid())
+  promoCodeId String
+  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  redeemedAt  DateTime  @default(now())
+  expiresAt   DateTime
+
+  @@unique([promoCodeId, userId])
+  @@index([userId])
+}
+
+/// Daily AI usage counters per user (Asia/Bangkok calendar day as YYYY-MM-DD).
+model AIUsage {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  usageDate          String
+  foodTextCalls      Int      @default(0)
+  visionCalls        Int      @default(0)
+  adjustmentCalls    Int      @default(0)
+  coachCalls         Int      @default(0)
+  classifyCalls      Int      @default(0)
+  bodyScanCalls      Int      @default(0)
+  mealPlanCalls      Int      @default(0)
+  weeklyReviewCalls  Int      @default(0)
+  totalCalls         Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([userId, usageDate])
+  @@index([usageDate])
+}
+
+/// Idempotent payment-provider webhook ledger. Never trust client redirects.
+model PaymentEvent {
+  id              String          @id @default(cuid())
+  provider        PaymentProvider
+  providerEventId String
+  eventType       String
+  processedAt     DateTime        @default(now())
+  /// Non-secret summary JSON for debugging (no card data / secrets).
+  payloadSummary  String?
+  createdAt       DateTime        @default(now())
+
+  @@unique([provider, providerEventId])
+  @@index([eventType])
+  @@index([processedAt])
+}
+
+/// Short-lived signed membership web link (LINE → web). Bound to userId; one-time use.
+model MembershipLinkToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// Admin action audit trail (username from env auth — not a User row).
+model AdminAuditLog {
+  id         String   @id @default(cuid())
+  adminId    String
+  action     String
+  targetType String?
+  targetId   String?
+  metadata   String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([adminId, createdAt])
+}
+
+/// Body composition scan / report snapshot (user-confirmed).
+model BodyScan {
+  id                    String           @id @default(cuid())
+  userId                String
+  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  measuredAt            DateTime
+  source                HealthDataSource @default(BODY_SCAN)
+  reportVendor          String?
+  heightCm              Float?
+  weightKg              Float?
+  bodyFatPercent        Float?
+  bodyFatMassKg         Float?
+  skeletalMuscleMassKg  Float?
+  leanBodyMassKg        Float?
+  visceralFatMassKg     Float?
+  visceralFatAreaCm2    Float?
+  totalBodyWaterKg      Float?
+  waistCm               Float?
+  waistToHipRatio       Float?
+  bmrKcal               Float?
+  teeKcal               Float?
+  proteinMassKg         Float?
+  mineralMassKg         Float?
+  intracellularFluidKg  Float?
+  extracellularFluidKg  Float?
+  reportedCaloriesMin   Int?
+  reportedCaloriesMax   Int?
+  reportedProteinMinG   Float?
+  reportedProteinMaxG   Float?
+  reportedCarbsMinG     Float?
+  reportedCarbsMaxG     Float?
+  reportedFatMinG       Float?
+  reportedFatMaxG       Float?
+  reportReference       String?
+  notes                 String?
+  createdAt             DateTime         @default(now())
+
+  @@index([userId, measuredAt])
+}
+
+model PendingBodyScan {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payloadJson String
+  imageUrl    String?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SleepLog {
+  id                 String           @id @default(cuid())
+  userId             String
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sleepDate          String
+  bedtime            DateTime
+  wakeTime           DateTime
+  durationMinutes    Int
+  source             HealthDataSource @default(MANUAL)
+  sleepScore         Int?
+  deepSleepMinutes   Int?
+  remSleepMinutes    Int?
+  lightSleepMinutes  Int?
+  awakeMinutes       Int?
+  notes              String?
+  createdAt          DateTime         @default(now())
+
+  @@index([userId, sleepDate])
+}
+
+model ExerciseLog {
+  id               String           @id @default(cuid())
+  userId           String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  performedAt      DateTime
+  type             ExerciseType     @default(OTHER)
+  workoutName      String?
+  durationMinutes  Int
+  caloriesBurned   Float?
+  distanceKm       Float?
+  sets             Int?
+  reps             Int?
+  intensity        String?
+  heartRate        Int?
+  source           HealthDataSource @default(MANUAL)
+  notes            String?
+  createdAt        DateTime         @default(now())
+
+  @@index([userId, performedAt])
+}
+
+model ActivityDailyLog {
+  id             String           @id @default(cuid())
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activityDate   String
+  steps          Int              @default(0)
+  activeMinutes  Int?
+  distanceKm     Float?
+  activeCalories Float?
+  source         HealthDataSource @default(MANUAL)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([userId, activityDate])
+  @@index([userId, activityDate])
+}
+
+model HydrationLog {
+  id         String           @id @default(cuid())
+  userId     String
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recordedAt DateTime
+  amountMl   Int
+  source     HealthDataSource @default(MANUAL)
+  createdAt  DateTime         @default(now())
+
+  @@index([userId, recordedAt])
+}
+
+model RecoveryLog {
+  id             String           @id @default(cuid())
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recoveryDate   String
+  energyScore    Int
+  stressScore    Int
+  recoveryScore  Int
+  sorenessScore  Int
+  notes          String?
+  source         HealthDataSource @default(MANUAL)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([userId, recoveryDate])
+  @@index([userId, recoveryDate])
+}
+
+model MealPlan {
+  id             String         @id @default(cuid())
+  userId         String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planDate       String
+  totalCalories  Int
+  totalProteinG  Float
+  totalCarbsG    Float
+  totalFatG      Float
+  slots          MealPlanSlot[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@unique([userId, planDate])
+  @@index([userId, planDate])
+}
+
+model MealPlanSlot {
+  id              String             @id @default(cuid())
+  mealPlanId      String
+  mealPlan        MealPlan           @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+  mealType        MealType
+  calorieTarget   Int
+  proteinTargetG  Float
+  carbsTargetG    Float
+  fatTargetG      Float
+  plannedFood     String?
+  status          MealPlanSlotStatus @default(PLANNED)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([mealPlanId])
+}
+
+model WeeklyHealthReview {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weekStartDate String
+  weekEndDate   String
+  metricsJson   String
+  aiSummary     String?
+  focusJson     String?
+  generatedAt   DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@unique([userId, weekStartDate])
+  @@index([userId, weekStartDate])
 }

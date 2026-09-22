@@ -2,11 +2,12 @@ import { PendingFoodAnalysis } from '@prisma/client';
 import { FoodAnalysisResult } from './food-analysis.types';
 import { DailySummary } from './daily-totals.service';
 import { quantityUnitLabelTh } from './quantity-adjustment';
+import { buildDailyMacroReport } from './nutrition-display';
 
 export const FOOD_CONFIRM_CHOICES = [
-  { label: 'บันทึก', text: 'บันทึก' },
-  { label: 'แก้ไข', text: 'แก้ไข' },
-  { label: 'ยกเลิก', text: 'ยกเลิก' },
+  { label: '✓ บันทึก', text: 'บันทึก' },
+  { label: '✎ แก้ไข', text: 'แก้ไข' },
+  { label: '✕ ยกเลิก', text: 'ยกเลิก' },
 ];
 
 export const REPLACE_PENDING_CHOICES = [
@@ -31,13 +32,13 @@ export const SYSTEM_BUSY_TEXT =
 export const NO_PENDING_FOOD_TEXT =
   'ยังไม่มีมื้ออาหารที่รอยืนยันครับ\nส่งชื่ออาหารหรือรูปอาหารมาได้เลย';
 
-export const FOOD_CANCELLED_TEXT = 'ยกเลิกการบันทึกแล้วครับ';
+export const FOOD_CANCELLED_TEXT = '✕ ยกเลิกการบันทึกแล้วครับ';
 
 export const FOOD_INVALID_CONFIRM_TEXT =
-  'เลือกได้เลยครับ: บันทึก · แก้ไข · ยกเลิก';
+  'เลือกได้เลยครับ: ✓ บันทึก · ✎ แก้ไข · ✕ ยกเลิก';
 
 export const FOOD_QUANTITY_CLARIFY_TEXT =
-  'ประมาณกี่ชิ้นครับ?\nเช่น กินแค่ 3 ชิ้น หรือครึ่งหนึ่ง';
+  'ประมาณเท่าไรครับ?\nเช่น กินแค่ 3 ชิ้น · กินครึ่งหนึ่ง · กินแค่ 50%';
 
 export const FOOD_EDIT_HELP_TEXT = `แก้ไขได้เลยครับ เช่น
 • กินแค่ 3 ชิ้น
@@ -100,18 +101,18 @@ export function buildFoodEstimateMessage(
 
   const assumptionLine =
     analysis.assumptions.length > 0
-      ? `\n\nสมมติฐาน: ${analysis.assumptions.slice(0, 2).join(' · ')}`
+      ? `\n\n💬 สมมติฐาน: ${analysis.assumptions.slice(0, 2).join(' · ')}`
       : '';
 
   return `🍽️ ประเมินมื้อนี้
 
 ${analysis.foodName}
-ประมาณ ${formatNumber(analysis.estimatedCalories)} kcal
-${qtyLine}
+🔥 ประมาณ ${formatNumber(analysis.estimatedCalories)} kcal
+📏 ${qtyLine}
 
-P ${formatMacro(analysis.proteinG)}g · C ${formatMacro(analysis.carbsG)}g · F ${formatMacro(analysis.fatG)}g
+🥩 ${formatMacro(analysis.proteinG)}g · 🍚 ${formatMacro(analysis.carbsG)}g · 🥑 ${formatMacro(analysis.fatG)}g
 
-ความมั่นใจ ${confidencePct}%${assumptionLine}
+✨ ความมั่นใจ ${confidencePct}%${assumptionLine}
 
 ถ้ากินไม่หมด พิมพ์จำนวนได้ เช่น กินแค่ 3 ชิ้น`;
 }
@@ -132,30 +133,55 @@ export function buildQuantityAdjustedMessage(
 
   return `🍣 ปรับเป็น ${formatMacro(consumed)} ${unit}
 
-${formatMacro(consumed)} / ${formatMacro(original)} ${unit}
-${formatNumber(analysis.estimatedCalories)} kcal
-P ${formatMacro(analysis.proteinG)}g · C ${formatMacro(analysis.carbsG)}g · F ${formatMacro(analysis.fatG)}g`;
+📏 ${formatMacro(consumed)} / ${formatMacro(original)} ${unit}
+🔥 ${formatNumber(analysis.estimatedCalories)} kcal
+🥩 ${formatMacro(analysis.proteinG)}g · 🍚 ${formatMacro(analysis.carbsG)}g · 🥑 ${formatMacro(analysis.fatG)}g`;
 }
 
 export function buildFoodSavedMessage(
   analysis: FoodAnalysisResult,
   summary: DailySummary,
 ): string {
-  const targetCal = summary.targets
-    ? formatNumber(summary.targets.dailyCalories)
-    : '-';
-  const targetProtein = summary.targets
-    ? formatNumber(summary.targets.dailyProteinG)
-    : '-';
+  const coach = toCoachSummaryFromDaily(summary);
+  const mealBlock = `✅ บันทึกแล้ว
 
-  return `✅ บันทึกแล้ว
+🍽️ ${analysis.foodName}
+🔥 ${formatNumber(analysis.estimatedCalories)} kcal
+🥩 ${formatMacro(analysis.proteinG)}g · 🍚 ${formatMacro(analysis.carbsG)}g · 🥑 ${formatMacro(analysis.fatG)}g`;
 
-${analysis.foodName}
-${formatNumber(analysis.estimatedCalories)} kcal
+  if (!coach) {
+    return mealBlock;
+  }
 
-วันนี้
-${formatNumber(summary.totals.calories)} / ${targetCal} kcal
-Protein ${formatNumber(summary.totals.proteinG)} / ${targetProtein} g`;
+  return `${mealBlock}
+
+📊 วันนี้
+${buildDailyMacroReport(coach)}`;
+}
+
+function toCoachSummaryFromDaily(summary: DailySummary) {
+  if (!summary.targets) return null;
+  return {
+    date: new Date(),
+    consumed: {
+      calories: summary.totals.calories,
+      proteinG: summary.totals.proteinG,
+      carbsG: summary.totals.carbsG,
+      fatG: summary.totals.fatG,
+    },
+    target: {
+      calories: summary.targets.dailyCalories,
+      proteinG: summary.targets.dailyProteinG,
+      carbsG: summary.targets.dailyCarbsG,
+      fatG: summary.targets.dailyFatG,
+    },
+    remaining: {
+      calories: summary.targets.dailyCalories - summary.totals.calories,
+      proteinG: summary.targets.dailyProteinG - summary.totals.proteinG,
+      carbsG: summary.targets.dailyCarbsG - summary.totals.carbsG,
+      fatG: summary.targets.dailyFatG - summary.totals.fatG,
+    },
+  };
 }
 
 export function buildProfileMessage(params: {
@@ -168,13 +194,13 @@ export function buildProfileMessage(params: {
 }): string {
   return `👤 โปรไฟล์
 
-น้ำหนักปัจจุบัน: ${formatMacro(params.currentWeightKg)} kg
-เป้าหมาย: ${formatMacro(params.targetWeightKg)} kg
+⚖️ ปัจจุบัน ${formatMacro(params.currentWeightKg)} kg
+🎯 เป้า ${formatMacro(params.targetWeightKg)} kg
 
-พลังงาน: ${formatNumber(params.dailyCalories)} kcal
-Protein: ${formatNumber(params.dailyProteinG)}g
-Carbs: ${formatNumber(params.dailyCarbsG)}g
-Fat: ${formatNumber(params.dailyFatG)}g
+🔥 พลังงาน ${formatNumber(params.dailyCalories)} kcal/วัน
+🥩 โปรตีน ${formatNumber(params.dailyProteinG)} g
+🍚 คาร์บ ${formatNumber(params.dailyCarbsG)} g
+🥑 ไขมัน ${formatNumber(params.dailyFatG)} g
 
 พิมพ์ "แก้ไขโปรไฟล์" เพื่อตั้งค่าใหม่`;
 }

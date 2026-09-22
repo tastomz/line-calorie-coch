@@ -37,6 +37,7 @@ import {
   WELCOME_BACK_TEXT,
   WELCOME_TEXT,
 } from './onboarding.messages';
+import { buildGoalConfirmationFlex } from './onboarding.flex';
 import {
   parseActivityLevel,
   parseAge,
@@ -45,6 +46,7 @@ import {
   parseSex,
   parseWeightKg,
 } from './onboarding.parser';
+import { FlexMessagePayload } from '../line/line-flex';
 
 export type OutboundMessage =
   | { kind: 'text'; text: string }
@@ -52,6 +54,12 @@ export type OutboundMessage =
       kind: 'buttons';
       text: string;
       buttons: { label: string; text: string }[];
+    }
+  | {
+      kind: 'flex';
+      flex: FlexMessagePayload;
+      fallbackText: string;
+      fallbackButtons: { label: string; text: string }[];
     };
 
 @Injectable()
@@ -309,16 +317,18 @@ export class OnboardingService {
 
     const input = this.requireDraftInput(refreshed);
     const targets = calculateNutritionTargets(input);
+    const confirmParams = {
+      currentWeightKg: input.currentWeightKg,
+      targetWeightKg: input.targetWeightKg,
+      goal: input.goal,
+      targets,
+    };
 
     return {
-      kind: 'buttons',
-      text: buildConfirmationText({
-        currentWeightKg: input.currentWeightKg,
-        targetWeightKg: input.targetWeightKg,
-        goal: input.goal,
-        targets,
-      }),
-      buttons: CONFIRM_CHOICES,
+      kind: 'flex',
+      flex: buildGoalConfirmationFlex(confirmParams),
+      fallbackText: buildConfirmationText(confirmParams),
+      fallbackButtons: CONFIRM_CHOICES,
     };
   }
 
@@ -418,16 +428,24 @@ export class OnboardingService {
         try {
           const input = this.requireDraftInput(user);
           const targets = calculateNutritionTargets(input);
-          await this.lineService.replyButtons(
-            replyToken,
-            buildConfirmationText({
-              currentWeightKg: input.currentWeightKg,
-              targetWeightKg: input.targetWeightKg,
-              goal: input.goal,
-              targets,
-            }),
-            CONFIRM_CHOICES,
-          );
+          const confirmParams = {
+            currentWeightKg: input.currentWeightKg,
+            targetWeightKg: input.targetWeightKg,
+            goal: input.goal,
+            targets,
+          };
+          try {
+            await this.lineService.replyFlex(
+              replyToken,
+              buildGoalConfirmationFlex(confirmParams),
+            );
+          } catch {
+            await this.lineService.replyButtons(
+              replyToken,
+              buildConfirmationText(confirmParams),
+              CONFIRM_CHOICES,
+            );
+          }
         } catch {
           await this.startOnboarding(user.id, replyToken);
         }
@@ -468,6 +486,18 @@ export class OnboardingService {
   ): Promise<void> {
     if (outbound.kind === 'text') {
       await this.lineService.replyText(replyToken, outbound.text);
+      return;
+    }
+    if (outbound.kind === 'flex') {
+      try {
+        await this.lineService.replyFlex(replyToken, outbound.flex);
+      } catch {
+        await this.lineService.replyButtons(
+          replyToken,
+          outbound.fallbackText,
+          outbound.fallbackButtons,
+        );
+      }
       return;
     }
     await this.lineService.replyButtons(

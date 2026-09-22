@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>เข้าสู่ระบบสมาชิก</title>
+  <link rel="stylesheet" href="/membership/assets/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">เข้าสู่ระบบ</div>
+    <div class="sub">ยืนยันตัวตนผ่านลิงก์จาก LINE หรือ LINE Login</div>
+    <div class="card">
+      <p class="muted">เปิดหน้านี้จากปุ่มใน LINE จะเข้าสู่ระบบอัตโนมัติ</p>
+      <div id="status" class="muted">กำลังตรวจสอบ...</div>
+      <div id="err" class="err" hidden></div>
+      <a class="btn secondary" href="/membership">กลับหน้าสมาชิก</a>
+    </div>
+  </div>
+  <script src="/membership/assets/app.js"></script>
+  <script>
+    (async () => {
+      const status = document.getElementById('status');
+      const err = document.getElementById('err');
+      const params = new URLSearchParams(location.search);
+      const token = params.get('t');
+      const next = params.get('next') || ACCOUNT_PATH;
+      const safeNext =
+        next.startsWith('/') && !next.startsWith('//') ? next : ACCOUNT_PATH;
+      try {
+        if (token) {
+          await api('/api/membership/auth/link', {
+            method: 'POST',
+            body: JSON.stringify({ token }),
+          });
+          status.textContent = 'เข้าสู่ระบบสำเร็จ';
+          location.replace(safeNext);
+          return;
+        }
+        try {
+          await api('/api/membership');
+          location.replace(safeNext);
+          return;
+        } catch {}
+        status.textContent =
+          'กรุณาเปิดลิงก์จาก LINE (สมาชิก → สมัคร Pro) หรือตั้งค่า LINE Login / LIFF';
+      } catch (e) {
+        status.hidden = true;
+        err.hidden = false;
+        err.textContent = e.message || 'เข้าสู่ระบบไม่สำเร็จ';
+      }
+    })();
+  </script>
+</body>
+</html>

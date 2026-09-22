@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tastom Pro</title>
+  <link rel="stylesheet" href="/membership/assets/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">👑 Tastom Pro</div>
+    <div class="sub">สมาชิก AI Nutrition Coach</div>
+
+    <div class="card">
+      <div class="muted">FREE</div>
+      <div class="price">฿0 <span>/ เดือน</span></div>
+      <ul class="muted">
+        <li>ติดตามแคลอรี่ / มื้ออาหาร</li>
+        <li>น้ำหนัก · ประวัติ · โปรไฟล์</li>
+        <li>AI จำกัดตามโควต้ารายวัน</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="muted">PRO</div>
+      <div class="price">฿50 <span>/ เดือน</span></div>
+      <ul>
+        <li>วิเคราะห์อาหารด้วย AI ได้มากขึ้น</li>
+        <li>วิเคราะห์รูปอาหารได้มากขึ้น</li>
+        <li>AI Coach</li>
+        <li>ช่วยปรับมื้ออาหาร</li>
+        <li>ใช้งาน nutrition tracking ต่อเนื่อง</li>
+      </ul>
+      <p class="muted">Pro = ใช้งาน AI ได้มากขึ้น (ไม่ใช่ไม่จำกัด)</p>
+      <a class="btn" id="ctaUpgrade" href="/account">ไปที่บัญชี / ใช้โค้ด</a>
+      <a class="btn secondary" href="/account">บัญชีของฉัน</a>
+      <a class="btn secondary" href="/login">เข้าสู่ระบบ</a>
+    </div>
+
+    <div class="card">
+      <h3>เปรียบเทียบ</h3>
+      <table class="table">
+        <thead><tr><th></th><th>FREE</th><th>PRO</th></tr></thead>
+        <tbody>
+          <tr><td>ข้อความ AI</td><td>5/วัน</td><td>30/วัน</td></tr>
+          <tr><td>รูป AI</td><td>2/วัน</td><td>15/วัน</td></tr>
+          <tr><td>แก้ไขอาหาร</td><td>3/วัน</td><td>20/วัน</td></tr>
+          <tr><td>AI Coach</td><td>3/วัน</td><td>30/วัน</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>🎁 มีโค้ดโปรโมชั่น?</h3>
+      <p class="muted">เข้าสู่ระบบแล้วใช้โค้ดได้ที่หน้าบัญชี หรือพิมพ์ใน LINE: ใช้โค้ด TASTOM-XXXXXX</p>
+    </div>
+  </div>
+  <script src="/membership/assets/app.js"></script>
+  <script>
+    (async () => {
+      try {
+        const cfg = await api('/api/membership/config');
+        const cta = document.getElementById('ctaUpgrade');
+        if (cfg.checkoutEnabled) {
+          cta.href = '/upgrade';
+          cta.textContent = 'สมัคร Pro 50 บาท/เดือน';
+        }
+      } catch {}
+    })();
+  </script>
+</body>
+</html>

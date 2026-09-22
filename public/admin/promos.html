@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin Promos</title>
+  <link rel="stylesheet" href="/admin/assets/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <h1>🎁 Free PRO Codes</h1>
+    <p><a href="/admin/dashboard">Dashboard</a></p>
+    <div class="card">
+      <p>สร้าง Code (10 / 15 / 30 วัน · max 1 คน · server-generated TASTOM-XXXXXX)</p>
+      <button class="btn" data-d="10">10 วัน</button>
+      <button class="btn" data-d="15">15 วัน</button>
+      <button class="btn" data-d="30">30 วัน</button>
+      <div id="created" style="margin-top:12px"></div>
+    </div>
+    <div class="card" id="list">Loading...</div>
+  </div>
+  <script>
+    async function api(path, opt) {
+      const res = await fetch(path, { credentials: 'include', ...opt, headers: { 'Content-Type': 'application/json', ...(opt?.headers||{}) } });
+      if (res.status === 401) { location.href = '/admin/login'; throw new Error('auth'); }
+      if (res.status === 403) {
+        document.body.innerHTML = '<div class="wrap"><div class="card"><h1>ไม่มีสิทธิ์ Admin</h1><p>บัญชีนี้ไม่ใช่ ADMIN</p><a href="/account">กลับบัญชี</a></div></div>';
+        throw new Error('forbidden');
+      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'error');
+      return data;
+    }
+    async function gen(days) {
+      const promo = await api('/admin/promos/generate', {
+        method: 'POST',
+        body: JSON.stringify({ trialDays: days, maxRedemptions: 1 }),
+      });
+      document.getElementById('created').innerHTML = `
+        <div>Code: <b>${promo.code}</b>
+        <button class="btn" onclick="navigator.clipboard.writeText('${promo.code}')">Copy</button></div>
+        <div>PRO: ${promo.trialDays} วัน · ใช้ได้: ${promo.maxRedemptions} คน · Status: Active</div>`;
+      load();
+    }
+    async function load() {
+      const promos = await api('/admin/promos');
+      document.getElementById('list').innerHTML = `<table class="table">
+        <tr><th>Code</th><th>Days</th><th>Used</th><th>Active</th><th></th></tr>
+        ${promos.map(p => `<tr>
+          <td>${p.code}</td><td>${p.trialDays}</td>
+          <td>${p.redeemedCount}${p.maxRedemptions!=null?'/'+p.maxRedemptions:''}</td>
+          <td>${p.active}</td>
+          <td>${p.active ? `<button class="btn" data-off="${p.id}">Deactivate</button>` : ''}</td>
+        </tr>`).join('')}</table>`;
+      document.querySelectorAll('[data-off]').forEach(b => b.onclick = async () => {
+        await api('/admin/promos/' + b.dataset.off, { method: 'PATCH', body: JSON.stringify({ active: false }) });
+        load();
+      });
+    }
+    document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => gen(Number(b.dataset.d)));
+    load().catch(e => document.getElementById('list').textContent = e.message);
+  </script>
+</body>
+</html>

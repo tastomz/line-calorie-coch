@@ -32,8 +32,8 @@ export function buildWeightSavedMessage(
 ): string {
   return `⚖️ บันทึกน้ำหนักแล้ว
 
-${formatWeightKg(weightKg)} kg
-${formatThaiDate(recordedAt)}`;
+✨ ${formatWeightKg(weightKg)} kg
+📅 ${formatThaiDate(recordedAt)}`;
 }
 
 export function buildWeightOverviewMessage(params: {

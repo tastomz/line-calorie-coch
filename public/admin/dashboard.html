@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin Dashboard</title>
+  <link rel="stylesheet" href="/admin/assets/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <h1>Admin Dashboard</h1>
+    <p><a href="/admin/promos">Promo codes</a> · <a href="#" id="logout">Logout</a></p>
+    <div id="dash" class="card">Loading...</div>
+    <div class="card">
+      <h3>ค้นหาผู้ใช้</h3>
+      <input class="input" id="q" placeholder="userId / lineUserId / name" style="width:70%" />
+      <button class="btn" id="search">ค้นหา</button>
+      <div id="users"></div>
+    </div>
+    <div class="card" id="detail"></div>
+  </div>
+  <script>
+    async function api(path, opt) {
+      const res = await fetch(path, { credentials: 'include', ...opt, headers: { 'Content-Type': 'application/json', ...(opt?.headers||{}) } });
+      if (res.status === 401) { location.href = '/admin/login'; throw new Error('auth'); }
+      if (res.status === 403) {
+        document.body.innerHTML = '<div class="wrap"><div class="card"><h1>ไม่มีสิทธิ์ Admin</h1><p>บัญชีนี้ไม่ใช่ ADMIN</p><a href="/account">กลับบัญชี</a></div></div>';
+        throw new Error('forbidden');
+      }
+      return res.json();
+    }
+    async function load() {
+      const d = await api('/admin/dashboard');
+      document.getElementById('dash').innerHTML = `
+        <div class="grid">
+          <div class="stat"><span>Users</span><b>${d.totalUsers}</b></div>
+          <div class="stat"><span>FREE</span><b>${d.freeUsers}</b></div>
+          <div class="stat"><span>PRO</span><b>${d.proUsers}</b></div>
+          <div class="stat"><span>Trial</span><b>${d.trialUsers}</b></div>
+          <div class="stat"><span>Active</span><b>${d.activeSubscriptions}</b></div>
+          <div class="stat"><span>Canceled</span><b>${d.canceledSubscriptions}</b></div>
+          <div class="stat"><span>AI calls</span><b>${d.aiUsageTotals.total}</b></div>
+        </div>
+        <p style="opacity:.7;margin-top:12px">${d.revenueNote}</p>
+        <p>AI by op — text ${d.aiUsageTotals.foodText} · vision ${d.aiUsageTotals.vision} · adj ${d.aiUsageTotals.adjustment} · coach ${d.aiUsageTotals.coach} · classify ${d.aiUsageTotals.classify}</p>`;
+    }
+    document.getElementById('search').onclick = async () => {
+      const list = await api('/admin/users?q=' + encodeURIComponent(document.getElementById('q').value));
+      document.getElementById('users').innerHTML = `<table class="table"><tr><th>Name</th><th>LINE</th><th></th></tr>
+        ${list.map(u => `<tr><td>${u.displayName||'-'}</td><td>${u.lineUserId||'-'}</td>
+        <td><button class="btn" data-id="${u.id}">ดู</button></td></tr>`).join('')}</table>`;
+      document.querySelectorAll('[data-id]').forEach(btn => btn.onclick = async () => {
+        const d = await api('/admin/users/' + btn.dataset.id);
+        document.getElementById('detail').innerHTML = `<pre style="white-space:pre-wrap;font-size:12px">${JSON.stringify(d, null, 2)}</pre>`;
+      });
+    };
+    document.getElementById('logout').onclick = async (e) => {
+      e.preventDefault();
+      await api('/admin/logout', { method: 'POST', body: '{}' });
+      location.href = '/admin/login';
+    };
+    load().catch(() => location.href = '/admin/login');
+  </script>
+</body>
+</html>

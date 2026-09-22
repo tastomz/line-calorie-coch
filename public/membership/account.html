@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>บัญชีสมาชิก</title>
+  <link rel="stylesheet" href="/membership/assets/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">บัญชีสมาชิก</div>
+    <div id="content" class="muted">กำลังโหลด...</div>
+  </div>
+  <script src="/membership/assets/app.js"></script>
+  <script>
+    async function load() {
+      const el = document.getElementById('content');
+      try {
+        const m = await api('/api/membership');
+        const u = m.usage;
+        const L = m.limits;
+        const isFree = !m.hasProAccess;
+
+        let redeemHtml = '';
+        if (isFree) {
+          redeemHtml = `
+            <div class="card">
+              <h3>🎁 ใช้โค้ดโปรโมชั่น</h3>
+              <div class="row">
+                <input class="input" id="promo" placeholder="TASTOM-XXXXXX" />
+                <button class="btn" style="width:auto;margin:0" id="redeem">ใช้โค้ด</button>
+              </div>
+              <div id="promoMsg" class="muted"></div>
+            </div>`;
+        } else {
+          redeemHtml = `
+            <div class="card">
+              <h3>🎁 โค้ดโปรโมชั่น</h3>
+              <p class="muted">คุณมี Pro อยู่แล้ว — ไม่ต้องใช้โค้ดเพิ่ม</p>
+            </div>`;
+        }
+
+        let actionsHtml = '';
+        if (m.checkoutEnabled) {
+          if (isFree) {
+            actionsHtml = `<a class="btn" href="/upgrade">สมัคร Pro</a>`;
+          } else if (m.status === 'TRIALING') {
+            actionsHtml = `<a class="btn" href="/upgrade">สมัคร Pro (ชำระเงิน)</a>`;
+          } else if (m.status === 'CANCELED') {
+            actionsHtml = `
+              <button class="btn" id="resume">กลับมาใช้งานต่อ</button>
+              <p class="muted">สมาชิกจะสิ้นสุดวันที่ ${fmtDate(m.periodEnd)}</p>`;
+          } else {
+            actionsHtml = `<button class="btn secondary" id="cancel">ยกเลิกสมาชิก</button>`;
+          }
+        } else {
+          actionsHtml = `<p class="muted">การชำระเงินยังไม่เปิด — ใช้โค้ดโปรโมชั่นได้ถ้ามี</p>`;
+          if (m.status === 'CANCELED' && m.hasProAccess) {
+            actionsHtml += `<p class="muted">สิทธิ์ Pro ใช้ได้ถึง ${fmtDate(m.periodEnd)}</p>`;
+          }
+        }
+
+        el.innerHTML = `
+          <div class="card">
+            <div>${m.displayName || 'ผู้ใช้ LINE'}</div>
+            <div class="price" style="font-size:1.4rem">${planLabel(m)}
+              <span class="badge">${statusLabelTh(m.status)}</span>
+            </div>
+            <div class="muted">แพ็กเกจ: ${m.plan}</div>
+            <div class="muted">วันหมดอายุ / สิ้นรอบ: ${fmtDate(m.periodEnd)}</div>
+            <div class="muted">ราคา Pro: ฿${m.priceThbMonthly}/เดือน</div>
+          </div>
+          <div class="card">
+            <h3>AI วันนี้</h3>
+            <div>🍚 ข้อความ ${u.foodTextCalls}/${L.FOOD_TEXT}</div>
+            <div>📸 รูป ${u.visionCalls}/${L.FOOD_VISION}</div>
+            <div>🔧 แก้ไข ${u.adjustmentCalls}/${L.COMPOSITION_ADJUSTMENT}</div>
+            <div>🤖 Coach ${u.coachCalls}/${L.COACH}</div>
+            ${L.BODY_SCAN != null ? `<div>🧍 Body Scan ${u.bodyScanCalls ?? 0}/${L.BODY_SCAN}</div>` : ''}
+            ${L.MEAL_PLAN != null ? `<div>🍱 Meal ${u.mealPlanCalls ?? 0}/${L.MEAL_PLAN}</div>` : ''}
+            ${L.WEEKLY_REVIEW != null ? `<div>📈 Weekly ${u.weeklyReviewCalls ?? 0}/${L.WEEKLY_REVIEW}</div>` : ''}
+          </div>
+          ${redeemHtml}
+          <div class="card" id="actions">${actionsHtml}</div>
+          <div class="card">
+            <button class="btn secondary" id="logout">ออกจากระบบ</button>
+            <a class="btn secondary" href="/membership">หน้าสมาชิก</a>
+          </div>
+        `;
+
+        document.getElementById('redeem')?.addEventListener('click', async () => {
+          const code = document.getElementById('promo').value;
+          const msg = document.getElementById('promoMsg');
+          try {
+            const r = await api('/api/membership/promo/redeem', {
+              method: 'POST', body: JSON.stringify({ code }),
+            });
+            msg.className = 'ok';
+            msg.textContent = `สำเร็จ! Pro ฟรี ${r.trialDays} วัน · หมดอายุ ${fmtDate(r.expiresAt)}`;
+            setTimeout(load, 600);
+          } catch (e) {
+            if (redirectToLoginIfUnauthorized(e)) return;
+            msg.className = 'err';
+            msg.textContent = e.message;
+          }
+        });
+        document.getElementById('cancel')?.addEventListener('click', async () => {
+          if (!confirm('ยืนยันยกเลิก? จะใช้ได้ถึงสิ้นรอบบิล')) return;
+          try {
+            await api('/api/membership/cancel', { method: 'POST', body: '{}' });
+            load();
+          } catch (e) {
+            if (redirectToLoginIfUnauthorized(e)) return;
+            alert(e.message);
+          }
+        });
+        document.getElementById('resume')?.addEventListener('click', async () => {
+          try {
+            await api('/api/membership/resume', { method: 'POST', body: '{}' });
+            load();
+          } catch (e) {
+            if (redirectToLoginIfUnauthorized(e)) return;
+            alert(e.message);
+          }
+        });
+        document.getElementById('logout')?.addEventListener('click', async () => {
+          await api('/api/membership/logout', { method: 'POST', body: '{}' });
+          location.replace(LOGIN_PATH);
+        });
+      } catch (e) {
+        if (redirectToLoginIfUnauthorized(e)) return;
+        el.innerHTML = `<div class="card"><div class="err">${e.message}</div>
+          <a class="btn" href="${LOGIN_PATH}">เข้าสู่ระบบ</a></div>`;
+      }
+    }
+    load();
+  </script>
+</body>
+</html>

@@ -41,8 +41,15 @@ Assumes a typical logging day (not a load test):
 
 Heavy photo users cost more (vision tokens). Prefer text when possible.
 
+## Plan daily quotas (product)
+
+In addition to per-minute rate limits, membership enforces **daily** AI quotas
+(FREE vs PRO). See [MEMBERSHIP.md](./MEMBERSHIP.md) and `plan.config.ts`.
+
+Payment collection is **not implemented**; quotas and entitlement are.
+
 ## What we do not do (yet)
 
-- Per-tenant billing
+- Real payment / Stripe checkout
 - Soft monthly spend caps at the OpenAI dashboard (set those in the OpenAI account — **manual**)
 - Shared Redis rate limits across multiple app instances (V1 is in-process)

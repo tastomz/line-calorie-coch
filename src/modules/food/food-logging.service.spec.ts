@@ -5,8 +5,10 @@ import { LineService } from '../line/line.service';
 import { NutritionProfileService } from '../users/nutrition-profile.service';
 import { WeightLogService } from '../weight/weight-log.service';
 import { SheetsSyncService } from '../sheets/sheets-sync.service';
+import { AiGatewayService } from '../membership/ai-gateway.service';
+import { AiQuotaExceededError } from '../membership/membership.errors';
+import { MembershipService } from '../membership/membership.service';
 import { PROFILE_REQUIRED_TEXT } from './daily-coach.messages';
-import { DailyCoachService } from './daily-coach.service';
 import {
   DailySummaryService,
   NutritionProfileMissingError,
@@ -55,10 +57,6 @@ describe('FoodLoggingService', () => {
   const dailySummaryService = {
     getDailySummary: jest.fn(),
   };
-  const dailyCoachService = {
-    buildTodayCoachTip: jest.fn(),
-    buildMealRecommendation: jest.fn(),
-  };
   const weightLogService = {
     createForUser: jest.fn(),
     getTodayAverageKg: jest.fn(),
@@ -84,8 +82,69 @@ describe('FoodLoggingService', () => {
     replyButtons: jest.fn(),
     replyTextOrPush: jest.fn(),
     replyButtonsOrPush: jest.fn(),
+    replyFlex: jest
+      .fn()
+      .mockRejectedValue(new Error('flex disabled in unit test')),
+    replyFlexOrPush: jest.fn(),
     getMessageContentBytes: jest.fn(),
     getMessageContentPreviewBytes: jest.fn(),
+  };
+  const aiGateway = {
+    run: jest.fn(
+      async (_userId: string, _op: string, work: () => Promise<unknown>) =>
+        work(),
+    ),
+  };
+  const membershipService = {
+    buildStatusText: jest.fn(),
+    redeemPromo: jest.fn(),
+  };
+  const healthRouting = {
+    tryHandleText: jest.fn().mockResolvedValue(false),
+    tryHandleImage: jest.fn().mockResolvedValue(false),
+  };
+  const healthDashboard = {
+    buildToday: jest.fn((params: Record<string, unknown>) =>
+      Promise.resolve({
+        programLabel: 'Week 1 · Day 1',
+        nutrition: params.nutrition ?? null,
+        weightKg: (params.todayWeightKg as number | null) ?? null,
+        sleepMinutes: null,
+        exerciseMinutes: 0,
+        steps: null,
+        waterMl: 0,
+        waterTargetMl: 2500,
+        recoveryScore: null,
+        tip: 'บันทึกมื้ออาหารและสุขภาพวันต่อวันได้เลยครับ',
+      }),
+    ),
+    formatDuration: jest.fn((m: number) => `${m}m`),
+    formatDashboardText: jest.fn((snap: Record<string, unknown>) => {
+      const nutrition = snap.nutrition as {
+        consumed: { calories: number; proteinG: number };
+        target: { calories: number; proteinG: number };
+      } | null;
+      const weightKg = snap.weightKg as number | null;
+      const lines = [`📊 วันนี้`, String(snap.programLabel), ''];
+      if (nutrition) {
+        lines.push(
+          `🔥 ${nutrition.consumed.calories.toLocaleString('en-US')} / ${nutrition.target.calories.toLocaleString('en-US')} kcal`,
+        );
+        lines.push(
+          `🥩 ${nutrition.consumed.proteinG} / ${nutrition.target.proteinG} g`,
+        );
+        lines.push('');
+      }
+      if (weightKg != null) {
+        lines.push(`⚖️ ${weightKg.toFixed(1)} kg`);
+      }
+      lines.push('💧 0.0 / 2.5 L');
+      lines.push('', '💡 Coach Tip', String(snap.tip));
+      return lines.join('\n');
+    }),
+  };
+  const healthInsights = {
+    buildInsights: jest.fn().mockReturnValue([]),
   };
 
   const service = new FoodLoggingService(
@@ -95,17 +154,22 @@ describe('FoodLoggingService', () => {
     foodLogService as unknown as FoodLogService,
     dailyTotalsService as unknown as DailyTotalsService,
     dailySummaryService as unknown as DailySummaryService,
-    dailyCoachService as unknown as DailyCoachService,
     weightLogService as unknown as WeightLogService,
     sheetsSync as unknown as SheetsSyncService,
     nutritionProfileService as unknown as NutritionProfileService,
     lineService as unknown as LineService,
+    aiGateway as unknown as AiGatewayService,
+    membershipService as unknown as MembershipService,
+    healthRouting as unknown as import('../health/health-routing.service').HealthRoutingService,
+    healthDashboard as unknown as import('../health/health-dashboard.service').HealthDashboardService,
+    healthInsights,
   );
 
   const completedUser = {
     id: 'user-a',
     lineUserId: 'U-line-a',
     onboardingState: OnboardingState.COMPLETED,
+    createdAt: new Date('2026-01-01T00:00:00Z'),
   };
 
   const sampleSummary = {
@@ -119,14 +183,17 @@ describe('FoodLoggingService', () => {
     jest.clearAllMocks();
     aiRateLimiter.reset();
     pendingFoodService.getActiveForUser.mockResolvedValue(null);
-    dailyCoachService.buildTodayCoachTip.mockResolvedValue('ทิปจากโค้ช');
-    dailyCoachService.buildMealRecommendation.mockResolvedValue(
-      'แนะนำอกไก่กับผัก',
-    );
+    healthRouting.tryHandleText.mockResolvedValue(false);
+    healthRouting.tryHandleImage.mockResolvedValue(false);
+    healthInsights.buildInsights.mockReturnValue([]);
     weightLogService.getTodayAverageKg.mockResolvedValue(null);
     weightLogService.getRecentDailyAverages.mockResolvedValue([]);
     weightLogService.getSevenDayTrend.mockResolvedValue(null);
     weightLogService.getTargetProgress.mockResolvedValue(null);
+    aiGateway.run.mockImplementation(
+      async (_userId: string, _op: string, work: () => Promise<unknown>) =>
+        work(),
+    );
     messageClassifyService.classify.mockResolvedValue({
       type: 'food',
       weightKg: null,
@@ -164,8 +231,113 @@ describe('FoodLoggingService', () => {
       expect.objectContaining({ foodName: 'ข้าวกะเพราไก่ไข่ดาว' }),
       undefined,
     );
+    expect(messageClassifyService.classify).not.toHaveBeenCalled();
+    expect(foodAnalysisService.analyzeText).toHaveBeenCalledTimes(1);
     expect(lineService.replyButtonsOrPush).toHaveBeenCalled();
     expect(foodLogService.createFromAnalysis).not.toHaveBeenCalled();
+  });
+
+  it('handles สมาชิก command with zero AI', async () => {
+    membershipService.buildStatusText.mockResolvedValue(
+      '👤 สมาชิก\nแพ็กเกจ: Free',
+    );
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'สมาชิก',
+    );
+
+    expect(membershipService.buildStatusText).toHaveBeenCalledWith('user-a');
+    expect(aiGateway.run).not.toHaveBeenCalled();
+    expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
+    expect(messageClassifyService.classify).not.toHaveBeenCalled();
+  });
+
+  it('handles แพ็กเกจ and สิทธิ์ as membership commands', async () => {
+    membershipService.buildStatusText.mockResolvedValue('status');
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'แพ็กเกจ',
+    );
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'สิทธิ์',
+    );
+    expect(membershipService.buildStatusText).toHaveBeenCalledTimes(2);
+    expect(aiGateway.run).not.toHaveBeenCalled();
+  });
+
+  it('handles ใช้โค้ด promo command with zero AI', async () => {
+    membershipService.redeemPromo.mockResolvedValue('🎉 ใช้โค้ดสำเร็จ!');
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'ใช้โค้ด WELCOME30',
+    );
+
+    expect(membershipService.redeemPromo).toHaveBeenCalledWith(
+      'user-a',
+      'WELCOME30',
+    );
+    expect(aiGateway.run).not.toHaveBeenCalled();
+  });
+
+  it('replies with quota exceeded message when FOOD_TEXT quota is full', async () => {
+    aiGateway.run.mockRejectedValue(
+      new AiQuotaExceededError('FOOD_TEXT', 'FREE', 5, 5),
+    );
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'ข้าวกะเพราไก่',
+    );
+
+    expect(lineService.replyText).toHaveBeenCalledWith(
+      'token',
+      expect.stringContaining('โควต้า'),
+    );
+    expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
+  });
+
+  it('routes food analysis through AI gateway FOOD_TEXT', async () => {
+    foodAnalysisService.analyzeText.mockResolvedValue({
+      foodName: 'ข้าวกะเพราไก่',
+      estimatedCalories: 500,
+      proteinG: 30,
+      carbsG: 55,
+      fatG: 18,
+      confidence: 0.8,
+      assumptions: [],
+      estimatedQuantity: 1,
+      quantityUnit: 'plate',
+    });
+    pendingFoodService.upsertPending.mockResolvedValue({
+      originalQuantity: 1,
+      consumedQuantity: 1,
+      quantityUnit: 'plate',
+    });
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'ข้าวกะเพราไก่',
+    );
+
+    expect(aiGateway.run).toHaveBeenCalledWith(
+      'user-a',
+      'FOOD_TEXT',
+      expect.any(Function),
+    );
+    expect(messageClassifyService.classify).not.toHaveBeenCalled();
+    expect(foodAnalysisService.analyzeText).toHaveBeenCalledTimes(1);
+    expect(foodAnalysisService.analyzeText).toHaveBeenCalledWith(
+      'ข้าวกะเพราไก่',
+    );
   });
 
   it('confirms pending analysis and saves FoodLog + daily totals', async () => {
@@ -416,7 +588,273 @@ describe('FoodLoggingService', () => {
     expect(lineService.replyButtonsOrPush).toHaveBeenCalled();
   });
 
-  it('handles วันนี้ command with DB summary + coach tip', async () => {
+  it('applies percentage adjustment without calling OpenAI', async () => {
+    pendingFoodService.getActiveForUser.mockResolvedValue({
+      userId: 'user-a',
+      originalQuantity: 1,
+      quantityUnit: 'plate',
+    });
+    pendingFoodService.requireActiveForUser.mockResolvedValue({
+      userId: 'user-a',
+      originalQuantity: 1,
+      quantityUnit: 'plate',
+    });
+    pendingFoodService.applyConsumedQuantity.mockResolvedValue({
+      userId: 'user-a',
+      originalQuantity: 1,
+      consumedQuantity: 0.5,
+      quantityUnit: 'plate',
+      calories: 325,
+      proteinG: 20,
+      carbsG: 35,
+      fatG: 12,
+      confidence: 0.8,
+      foodName: 'ข้าวมันไก่',
+      assumptions: '[]',
+    });
+    pendingFoodService.toAnalysisResult.mockReturnValue({
+      foodName: 'ข้าวมันไก่',
+      estimatedCalories: 325,
+      proteinG: 20,
+      carbsG: 35,
+      fatG: 12,
+      confidence: 0.8,
+      assumptions: [],
+      estimatedQuantity: 0.5,
+      quantityUnit: 'plate',
+    });
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'กินแค่ 50%',
+    );
+
+    expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
+    expect(messageClassifyService.classify).not.toHaveBeenCalled();
+    expect(pendingFoodService.applyConsumedQuantity).toHaveBeenCalledWith(
+      'user-a',
+      0.5,
+    );
+    expect(lineService.replyButtonsOrPush).toHaveBeenCalled();
+  });
+
+  it('asks clarification for กิน 50 without unit and does not call OpenAI', async () => {
+    pendingFoodService.getActiveForUser.mockResolvedValue({
+      userId: 'user-a',
+      originalQuantity: 1,
+      quantityUnit: 'plate',
+    });
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'กิน 50',
+    );
+
+    expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
+    expect(messageClassifyService.classify).not.toHaveBeenCalled();
+    expect(pendingFoodService.applyConsumedQuantity).not.toHaveBeenCalled();
+    expect(lineService.replyText).toHaveBeenCalledWith(
+      'token',
+      expect.stringContaining('ประมาณเท่าไร'),
+    );
+  });
+
+  it('applies half and unit quantity on pending with zero AI', async () => {
+    pendingFoodService.getActiveForUser.mockResolvedValue({
+      userId: 'user-a',
+      originalQuantity: 1,
+      quantityUnit: 'plate',
+    });
+    pendingFoodService.requireActiveForUser.mockResolvedValue({
+      userId: 'user-a',
+      originalQuantity: 1,
+      quantityUnit: 'plate',
+    });
+    pendingFoodService.applyConsumedQuantity.mockResolvedValue({
+      originalQuantity: 1,
+      consumedQuantity: 0.5,
+      quantityUnit: 'plate',
+    });
+    pendingFoodService.toAnalysisResult.mockReturnValue({
+      foodName: 'ข้าว',
+      estimatedCalories: 300,
+      proteinG: 10,
+      carbsG: 40,
+      fatG: 8,
+      confidence: 0.8,
+      assumptions: [],
+      estimatedQuantity: 0.5,
+      quantityUnit: 'plate',
+    });
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'กินครึ่ง',
+    );
+    expect(pendingFoodService.applyConsumedQuantity).toHaveBeenCalledWith(
+      'user-a',
+      0.5,
+    );
+    expect(messageClassifyService.classify).not.toHaveBeenCalled();
+    expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
+
+    pendingFoodService.applyConsumedQuantity.mockClear();
+    pendingFoodService.applyConsumedQuantity.mockResolvedValue({
+      originalQuantity: 1,
+      consumedQuantity: 2,
+      quantityUnit: 'plate',
+    });
+    pendingFoodService.toAnalysisResult.mockReturnValue({
+      foodName: 'ข้าว',
+      estimatedCalories: 600,
+      proteinG: 20,
+      carbsG: 80,
+      fatG: 16,
+      confidence: 0.8,
+      assumptions: [],
+      estimatedQuantity: 2,
+      quantityUnit: 'plate',
+    });
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'กิน 2 จาน',
+    );
+    expect(pendingFoodService.applyConsumedQuantity).toHaveBeenCalledWith(
+      'user-a',
+      2,
+    );
+    expect(messageClassifyService.classify).not.toHaveBeenCalled();
+  });
+
+  it('uses one composition AI call for natural-language pending correction', async () => {
+    pendingFoodService.getActiveForUser.mockResolvedValue({
+      userId: 'user-a',
+      originalQuantity: 1,
+      quantityUnit: 'plate',
+      originalCalories: 650,
+      originalProteinG: 35,
+      originalCarbsG: 70,
+      originalFatG: 25,
+      calories: 650,
+      proteinG: 35,
+      carbsG: 70,
+      fatG: 25,
+      foodName: 'ข้าวกะเพราไก่',
+    });
+    pendingFoodService.requireActiveForUser.mockResolvedValue({
+      userId: 'user-a',
+      originalQuantity: 1,
+      quantityUnit: 'plate',
+      originalCalories: 650,
+      originalProteinG: 35,
+      originalCarbsG: 70,
+      originalFatG: 25,
+      calories: 650,
+      proteinG: 35,
+      carbsG: 70,
+      fatG: 25,
+      foodName: 'ข้าวกะเพราไก่',
+    });
+    pendingFoodService.toAnalysisResult.mockReturnValue({
+      foodName: 'ข้าวกะเพราไก่',
+      estimatedCalories: 650,
+      proteinG: 35,
+      carbsG: 70,
+      fatG: 25,
+      confidence: 0.8,
+      assumptions: [],
+      estimatedQuantity: 1,
+      quantityUnit: 'plate',
+    });
+    foodAnalysisService.analyzeCompositionAdjustment.mockResolvedValue({
+      foodName: 'ข้าวกะเพราหมู',
+      estimatedCalories: 700,
+      proteinG: 32,
+      carbsG: 70,
+      fatG: 30,
+      confidence: 0.75,
+      assumptions: [],
+      estimatedQuantity: 1,
+      quantityUnit: 'plate',
+    });
+    pendingFoodService.replaceWithCompositionAnalysis.mockResolvedValue({
+      foodName: 'ข้าวกะเพราหมู',
+      originalQuantity: 1,
+      consumedQuantity: 1,
+      quantityUnit: 'plate',
+    });
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'ไม่ใช่ไก่ เป็นหมู',
+    );
+
+    expect(
+      foodAnalysisService.analyzeCompositionAdjustment,
+    ).toHaveBeenCalledTimes(1);
+    expect(messageClassifyService.classify).not.toHaveBeenCalled();
+    expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
+  });
+
+  it('uses classify fallback once for ambiguous non-food text', async () => {
+    messageClassifyService.classify.mockResolvedValue({
+      type: 'other',
+      weightKg: null,
+      weightQuery: null,
+      coachHint: null,
+    });
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'อะไรสักอย่าง',
+    );
+
+    expect(messageClassifyService.classify).toHaveBeenCalledTimes(1);
+    expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
+  });
+
+  it('classifier FOOD leads to exactly one food analysis', async () => {
+    messageClassifyService.classify.mockResolvedValue({
+      type: 'food',
+      weightKg: null,
+      weightQuery: null,
+      coachHint: null,
+    });
+    foodAnalysisService.analyzeText.mockResolvedValue({
+      foodName: 'อะไรสักอย่าง',
+      estimatedCalories: 400,
+      proteinG: 20,
+      carbsG: 40,
+      fatG: 10,
+      confidence: 0.5,
+      assumptions: [],
+      estimatedQuantity: 1,
+      quantityUnit: 'serving',
+    });
+    pendingFoodService.upsertPending.mockResolvedValue({
+      originalQuantity: 1,
+      consumedQuantity: 1,
+      quantityUnit: 'serving',
+    });
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'อะไรสักอย่าง',
+    );
+
+    expect(messageClassifyService.classify).toHaveBeenCalledTimes(1);
+    expect(foodAnalysisService.analyzeText).toHaveBeenCalledTimes(1);
+  });
+
+  it('handles วันนี้ command with deterministic tip and zero OpenAI', async () => {
     dailySummaryService.getDailySummary.mockResolvedValue(sampleSummary);
 
     await service.handleCompletedText(
@@ -426,16 +864,13 @@ describe('FoodLoggingService', () => {
     );
 
     expect(dailySummaryService.getDailySummary).toHaveBeenCalledWith('user-a');
-    expect(dailyCoachService.buildTodayCoachTip).toHaveBeenCalledWith(
-      sampleSummary,
-    );
+    expect(messageClassifyService.classify).not.toHaveBeenCalled();
+    expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
+    expect(foodAnalysisService.analyzeImage).not.toHaveBeenCalled();
     expect(lineService.replyText).toHaveBeenCalledWith(
       'token',
-      expect.stringMatching(
-        /📊 วันนี้[\s\S]*1,250 \/ 2,000 kcal[\s\S]*ทิปจากโค้ช/,
-      ),
+      expect.stringMatching(/📊 วันนี้[\s\S]*1,250 \/ 2,000 kcal[\s\S]*💡/),
     );
-    expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
   });
 
   it('handles ประวัติ command with today FoodLogs only for that user', async () => {
@@ -504,14 +939,8 @@ describe('FoodLoggingService', () => {
     );
   });
 
-  it('meal recommendation uses remaining macros from summary', async () => {
+  it('meal recommendation uses template without OpenAI', async () => {
     dailySummaryService.getDailySummary.mockResolvedValue(sampleSummary);
-    messageClassifyService.classify.mockResolvedValue({
-      type: 'coach',
-      weightKg: null,
-      weightQuery: null,
-      coachHint: 'meal_recommendation',
-    });
 
     await service.handleCompletedText(
       completedUser as never,
@@ -519,21 +948,17 @@ describe('FoodLoggingService', () => {
       'มื้อเย็นกินอะไรดี',
     );
 
-    expect(dailyCoachService.buildMealRecommendation).toHaveBeenCalledWith(
-      sampleSummary.remaining,
-      'มื้อเย็นกินอะไรดี',
-    );
+    expect(dailySummaryService.getDailySummary).toHaveBeenCalledWith('user-a');
+    expect(messageClassifyService.classify).not.toHaveBeenCalled();
+    expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
     expect(lineService.replyText).toHaveBeenCalledWith(
       'token',
-      'แนะนำอกไก่กับผัก',
+      expect.stringMatching(/เหลือวันนี้[\s\S]*มื้อถัดไป[\s\S]*ไก่/),
     );
   });
 
-  it('keeps numeric today summary when AI coach fails (fallback tip)', async () => {
+  it('keeps numeric today summary with deterministic tip', async () => {
     dailySummaryService.getDailySummary.mockResolvedValue(sampleSummary);
-    dailyCoachService.buildTodayCoachTip.mockResolvedValue(
-      'วันนี้กินไป 1,250 / 2,000 kcal แล้ว\nเหลืออีกประมาณ 750 kcal ครับ',
-    );
 
     await service.handleCompletedText(
       completedUser as never,
@@ -545,6 +970,7 @@ describe('FoodLoggingService', () => {
       'token',
       expect.stringContaining('1,250 / 2,000 kcal'),
     );
+    expect(messageClassifyService.classify).not.toHaveBeenCalled();
   });
 
   it('asks for profile when NutritionProfile is missing', async () => {
@@ -747,7 +1173,7 @@ describe('FoodLoggingService', () => {
 
     expect(lineService.replyText).toHaveBeenCalledWith(
       'token',
-      expect.stringContaining('น้ำหนักวันนี้: 84.2 kg'),
+      expect.stringContaining('⚖️ 84.2 kg'),
     );
   });
 
@@ -798,6 +1224,34 @@ describe('FoodLoggingService', () => {
       3,
     );
     expect(lineService.replyButtonsOrPush).toHaveBeenCalled();
+  });
+
+  it('analyzes photo with exactly one vision call and no classify', async () => {
+    lineService.getMessageContentPreviewBytes.mockResolvedValue(
+      Buffer.from('fake-image'),
+    );
+    foodAnalysisService.analyzeImage.mockResolvedValue({
+      foodName: 'ข้าวมันไก่',
+      estimatedCalories: 600,
+      proteinG: 30,
+      carbsG: 60,
+      fatG: 20,
+      confidence: 0.8,
+      assumptions: [],
+      estimatedQuantity: 1,
+      quantityUnit: 'plate',
+    });
+    pendingFoodService.upsertPending.mockResolvedValue({
+      originalQuantity: 1,
+      consumedQuantity: 1,
+      quantityUnit: 'plate',
+    });
+
+    await service.handleImage(completedUser as never, 'token', 'msg-img-1');
+
+    expect(foodAnalysisService.analyzeImage).toHaveBeenCalledTimes(1);
+    expect(messageClassifyService.classify).not.toHaveBeenCalled();
+    expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
   });
 
   it('rate-limits expensive food analysis with a friendly message', async () => {

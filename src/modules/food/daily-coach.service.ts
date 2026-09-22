@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { openAiCircuitBreaker } from '../../common/openai-circuit-breaker';
 import { OPENAI_CALL_TIMEOUT_MS, withTimeout } from '../../common/with-timeout';
+import { AiGatewayService } from '../membership/ai-gateway.service';
 import { DailyCoachSummary, MacroTotals } from './daily-summary.service';
 import {
   buildDeterministicCoachTip,
@@ -43,7 +44,10 @@ export class DailyCoachService {
   private readonly logger = new Logger(DailyCoachService.name);
   private readonly client: OpenAI | null;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly aiGateway: AiGatewayService,
+  ) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY') ?? '';
     this.client = apiKey ? new OpenAI({ apiKey }) : null;
   }
@@ -52,23 +56,31 @@ export class DailyCoachService {
     return this.client !== null;
   }
 
-  /** Always returns a tip — AI if available, else deterministic from numbers. */
-  async buildTodayCoachTip(summary: DailyCoachSummary): Promise<string> {
+  /**
+   * Soft AI coach tip — consumes COACH quota via AiGateway when OpenAI is used.
+   * Hot path (วันนี้) uses deterministic templates instead; do not call this for วันนี้.
+   */
+  async buildTodayCoachTip(
+    userId: string,
+    summary: DailyCoachSummary,
+  ): Promise<string> {
     const fallback = buildDeterministicCoachTip(summary);
     if (!this.client) {
       return fallback;
     }
 
     try {
-      const tip = await this.requestText(
-        COACH_SYSTEM_PROMPT,
-        [
-          'FACTUAL USER CONTEXT (from database — authoritative):',
-          JSON.stringify(this.toAiContext(summary)),
-          '',
-          'USER MESSAGE (untrusted):',
-          'สรุปสั้น ๆ สำหรับวันนี้',
-        ].join('\n'),
+      const tip = await this.aiGateway.run(userId, 'COACH', () =>
+        this.requestText(
+          COACH_SYSTEM_PROMPT,
+          [
+            'FACTUAL USER CONTEXT (from database — authoritative):',
+            JSON.stringify(this.toAiContext(summary)),
+            '',
+            'USER MESSAGE (untrusted):',
+            'สรุปสั้น ๆ สำหรับวันนี้',
+          ].join('\n'),
+        ),
       );
       return tip || fallback;
     } catch (error) {
@@ -79,8 +91,9 @@ export class DailyCoachService {
     }
   }
 
-  /** Meal ideas from remaining macros only — never invents intake. */
+  /** Meal ideas from remaining macros — AI path uses AiGateway COACH quota. */
   async buildMealRecommendation(
+    userId: string,
     remaining: MacroTotals,
     userQuestion?: string,
   ): Promise<string> {
@@ -94,20 +107,22 @@ export class DailyCoachService {
       .slice(0, 200);
 
     try {
-      const tip = await this.requestText(
-        MEAL_SYSTEM_PROMPT,
-        [
-          'FACTUAL USER CONTEXT (from database — authoritative):',
-          JSON.stringify({
-            remainingCalories: Math.round(remaining.calories),
-            remainingProteinG: Math.round(remaining.proteinG),
-            remainingCarbsG: Math.round(remaining.carbsG),
-            remainingFatG: Math.round(remaining.fatG),
-          }),
-          '',
-          'USER MESSAGE (untrusted):',
-          safeQuestion,
-        ].join('\n'),
+      const tip = await this.aiGateway.run(userId, 'COACH', () =>
+        this.requestText(
+          MEAL_SYSTEM_PROMPT,
+          [
+            'FACTUAL USER CONTEXT (from database — authoritative):',
+            JSON.stringify({
+              remainingCalories: Math.round(remaining.calories),
+              remainingProteinG: Math.round(remaining.proteinG),
+              remainingCarbsG: Math.round(remaining.carbsG),
+              remainingFatG: Math.round(remaining.fatG),
+            }),
+            '',
+            'USER MESSAGE (untrusted):',
+            safeQuestion,
+          ].join('\n'),
+        ),
       );
       return tip || fallback;
     } catch (error) {

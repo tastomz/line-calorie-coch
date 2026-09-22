@@ -18,10 +18,12 @@ describe('daily-coach.messages', () => {
   it('formats today summary with remaining values', () => {
     const text = buildDailyCoachSummaryMessage(baseSummary());
     expect(text).toContain('📊 วันนี้');
+    expect(text).toContain('🔥 พลังงาน');
     expect(text).toContain('1,250 / 2,000 kcal');
-    expect(text).toContain('เหลือ 750 kcal');
-    expect(text).toContain('82 / 140g');
-    expect(text).toContain('เหลือ 58 g');
+    expect(text).toContain('เหลือวันนี้');
+    expect(text).toContain('🔥 750 kcal');
+    expect(text).toContain('🥩 โปรตีน 58g');
+    expect(text).toContain('💡 มื้อถัดไป');
   });
 
   it('formats history from FoodLog rows', () => {
@@ -37,8 +39,9 @@ describe('daily-coach.messages', () => {
         calories: 550,
       },
     ]);
-    expect(text).toContain('📋 ประวัติวันนี้');
-    expect(text).toContain('ไข่ 2 ฟอง — 140 kcal');
+    expect(text).toContain('🍽️ มื้อที่บันทึก');
+    expect(text).toContain('ไข่ 2 ฟอง');
+    expect(text).toContain('140 kcal');
     expect(text).toContain('รวม 690 kcal');
   });
 
@@ -51,7 +54,9 @@ describe('daily-coach.messages', () => {
       ...baseSummary(),
       remaining: { calories: 800, proteinG: 50, carbsG: 100, fatG: 20 },
     });
-    expect(tip).toContain('โปรตีนยังขาดประมาณ 50g');
+    expect(tip).toContain('💡 มื้อถัดไป');
+    expect(tip).toContain('เน้นโปรตีนเป็นหลัก');
+    expect(tip).toContain('ไก่ / ปลา / ไข่');
   });
 
   it('coaches near calorie target', () => {
@@ -59,7 +64,7 @@ describe('daily-coach.messages', () => {
       ...baseSummary(),
       remaining: { calories: 180, proteinG: 10, carbsG: 20, fatG: 5 },
     });
-    expect(tip).toContain('เหลือประมาณ 180 kcal');
+    expect(tip).toContain('มื้อเล็ก');
   });
 
   it('coaches exceeded calories without shaming', () => {
@@ -67,7 +72,6 @@ describe('daily-coach.messages', () => {
       ...baseSummary(),
       remaining: { calories: -150, proteinG: -5, carbsG: -10, fatG: -2 },
     });
-    expect(tip).toContain('เกินเป้าประมาณ 150 kcal');
     expect(tip).toContain('ไม่ต้องอดมื้อถัดไป');
   });
 
@@ -78,7 +82,9 @@ describe('daily-coach.messages', () => {
       carbsG: 70,
       fatG: 20,
     });
+    expect(text).toContain('เหลือวันนี้');
     expect(text).toContain('650');
-    expect(text).toContain('55');
+    expect(text).toContain('โปรตีน 55g');
+    expect(text).toContain('มื้อถัดไป');
   });
 });

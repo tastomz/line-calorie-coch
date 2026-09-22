@@ -1,6 +1,7 @@
 export type QuantityAdjustment =
   | { kind: 'all' }
   | { kind: 'half' }
+  | { kind: 'percent'; percent: number }
   | { kind: 'absolute'; quantity: number }
   | { kind: 'fraction'; numerator: number; denominator: number }
   | { kind: 'ambiguous' }
@@ -29,9 +30,16 @@ const AMBIGUOUS_PATTERNS = [
   /a\s+little/i,
 ];
 
+const UNIT_TOKEN =
+  '(?:ชิ้นซูชิ|ชิ้น|คำ|จาน|ส่วน|ลูก|ชาม|ถ้วย|pieces?|bites?|plates?|bowls?|cups?|servings?)';
+
 /**
  * Deterministic parser for Thai/English quantity adjustments.
  * Does not call AI.
+ *
+ * Precedence: all → composition/ambiguous (vague) → half → percent →
+ * fraction → absolute (unit required) → กิน+number (ambiguous) →
+ * bare number (optional) → composition → none.
  *
  * @param options.allowBareNumber When true (pending-food confirmation context),
  *   a lone number like "3" or "84.2" is treated as absolute quantity.
@@ -78,6 +86,18 @@ export function parseQuantityAdjustment(
     return { kind: 'half' };
   }
 
+  // Percent MUST be before absolute so "กินแค่ 50%" is not quantity 50.
+  const percentMatch = normalized.match(
+    /(?:กิน(?:ไป|แค่)?\s*)?(\d+(?:\.\d+)?)\s*(?:%|เปอร์เซ็น(?:ต์)?|percent\b)/i,
+  );
+  if (percentMatch) {
+    const percent = Number(percentMatch[1]);
+    if (Number.isFinite(percent) && percent > 0 && percent <= 100) {
+      return { kind: 'percent', percent };
+    }
+    return { kind: 'ambiguous' };
+  }
+
   const fromMatch = normalized.match(
     /(?:กิน(?:ไป|แค่)?\s*)?(\d+(?:\.\d+)?)\s*(?:จาก|\/|of)\s*(\d+(?:\.\d+)?)/,
   );
@@ -89,15 +109,19 @@ export function parseQuantityAdjustment(
     };
   }
 
-  const absoluteMatch = normalized.match(
-    /(?:กิน(?:ไป|แค่)?\s*)?(\d+(?:\.\d+)?)\s*(ชิ้น|คำ|จาน|ส่วน|ลูก|ชิ้นซูชิ|pieces?|bites?|plates?)?/,
+  // Absolute requires an explicit unit (never treat "กิน 50" as 50 plates).
+  // Do not use \\b after Thai units — JS word boundaries are ASCII-only.
+  const absoluteWithUnit = new RegExp(
+    `(?:กิน(?:ไป|แค่)?\\s*)?(\\d+(?:\\.\\d+)?)\\s*${UNIT_TOKEN}(?=$|\\s|[^\\u0E00-\\u0E7Fa-z0-9%])`,
   );
-  if (
-    absoluteMatch &&
-    (/กิน/.test(normalized) ||
-      /ชิ้น|คำ|จาน|ส่วน|piece|bite|plate/.test(normalized))
-  ) {
+  const absoluteMatch = normalized.match(absoluteWithUnit);
+  if (absoluteMatch) {
     return { kind: 'absolute', quantity: Number(absoluteMatch[1]) };
+  }
+
+  // "กิน 50" / "กินแค่ 50" — number without unit or % → ask clarification.
+  if (/^กิน(?:ไป|แค่)?\s*\d+(?:\.\d+)?\s*$/.test(normalized)) {
+    return { kind: 'ambiguous' };
   }
 
   // Bare number only in pending-food confirmation context.
@@ -145,6 +169,8 @@ export function resolveConsumedQuantity(
       return originalQuantity;
     case 'half':
       return originalQuantity / 2;
+    case 'percent':
+      return originalQuantity * (adjustment.percent / 100);
     case 'absolute':
       return adjustment.quantity;
     case 'fraction':

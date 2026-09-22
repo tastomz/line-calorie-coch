@@ -1,60 +1,48 @@
-Read `PROJECT_SPEC.md` completely before making any changes.
+# LINE AI Nutrition Coach — Product Spec
 
-We are building the AI Nutrition Coach described in the specification.
+Source of truth for product behavior. Details: `docs/`.
 
-Your task is ONLY:
+## Core product
 
-## Phase 0 — Project Setup
+**Tastom — Personal Health Coach** (LINE): nutrition + body composition + weight + sleep + exercise + activity + hydration + recovery, with deterministic analysis first and AI only when it adds value.
 
-Set up a clean NestJS + TypeScript + Prisma + SQLite backend.
+Onboarding, food logging (text/image + confirm), quantity edits, daily health dashboard, weight, soft coaching, Sheets export (optional, never SoT).
 
-Requirements:
+Database is source of truth. OpenAI is estimation/wording/extraction only.
 
-* NestJS
-* TypeScript
-* Prisma
-* SQLite
-* Config/environment support
-* ESLint
-* Prettier
-* Unit testing
-* E2E testing structure
-* Clean `.gitignore`
-* `.env.example`
-* Basic README
-* Clean folder structure
+Health expansion: [docs/HEALTH_COACH.md](docs/HEALTH_COACH.md).
 
-Important rules:
+## Membership platform
 
-1. Do NOT implement LINE integration.
-2. Do NOT implement OpenAI integration.
-3. Do NOT implement Google Sheets.
-4. Do NOT implement authentication.
-5. Do NOT implement nutrition calculations yet.
-6. Do NOT implement FoodLog yet.
-7. Do NOT add unnecessary dependencies.
-8. Do NOT invent features that are not in PROJECT_SPEC.md.
-9. Do not modify unrelated files.
-10. Keep the architecture simple and ready for Phase 1.
+See [docs/MEMBERSHIP.md](docs/MEMBERSHIP.md).
 
-Before coding:
+Roles: `USER` | `ADMIN` (PRO ≠ admin). Promo Free PRO: 10/15/30 days (`TASTOM-XXXXXX`).  
+Local QA: `/dev/*` when `ENABLE_DEV_MEMBERSHIP_TOOLS=true`. Payment default `MOCK`; Stripe TEST optional.  
+**PAYMENT LIVE = NOT ACTIVE.**
 
-* Inspect the current repository.
-* Check whether it is empty or contains existing code.
-* If existing code conflicts with PROJECT_SPEC.md, explain the conflict before changing it.
+| Plan | Price | Positioning |
+| --- | --- | --- |
+| FREE | 0 | Core tracking free |
+| PRO | **50 THB/month** | ใช้งาน AI ได้มากขึ้น (not unlimited) |
 
-After coding:
+FREE quotas/day: text 5 · vision 2 · composition 3 · coach 3 · classify 5 · body scan 1 · meal ideas 2 · weekly 1  
+PRO quotas/day: text 30 · vision 15 · composition 20 · coach 30 · classify 30 · body scan 5 · meal ideas 15 · weekly 4  
 
-1. Run lint.
-2. Run unit tests.
-3. Run the E2E test suite if available.
-4. Fix straightforward errors caused by your changes.
-5. Show me:
+Trial default: **7 days**. Promo codes grant temporary PRO.
 
-   * files created
-   * files modified
-   * commands executed
-   * test results
-   * any remaining issues
+External membership web (`/membership/*`) + Stripe **TEST** checkout.  
+Webhooks update DB. Success page does **not** grant PRO.  
+**PAYMENT LIVE = NOT ACTIVE YET.**
 
-Do not proceed to Phase 1.
+LINE: `สมาชิก` / `แพ็กเกจ` / `สิทธิ์` / `ใช้โค้ด <CODE>`  
+Upgrade opens signed `MEMBERSHIP_WEB_URL` link (no raw userId).
+
+Admin: `/admin` (env credentials + audit log).
+
+## AI routing (preserve)
+
+Obvious food → Food AI; ambiguous → classify; วันนี้/meal tips deterministic; quantity local; image → vision (or body scan when armed); composition AI when needed; weekly review AI once then reuse. All OpenAI via `AiGatewayService`.
+
+## DB
+
+Dev SQLite `prisma/` · Prod Postgres `prisma/postgres/` (do not apply prod migrations from feature work without review).

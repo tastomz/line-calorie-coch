@@ -1,14 +1,16 @@
 # line-calorie-coch
 
-NestJS + TypeScript + Prisma backend for the LINE AI Nutrition Coach.
+NestJS + TypeScript + Prisma backend for **Tastom — Personal Health Coach** (LINE).
+
+Nutrition, body composition, weight, sleep, exercise, activity, hydration, recovery — with AI only where it adds value. Spec: [PROJECT_SPEC.md](PROJECT_SPEC.md) · Health: [docs/HEALTH_COACH.md](docs/HEALTH_COACH.md) · Membership: [docs/MEMBERSHIP.md](docs/MEMBERSHIP.md).
 
 ## Architecture
 
 | Layer | Role |
 | --- | --- |
 | LINE webhook | Only user-facing interface (signature required) |
-| Prisma / DB | **Source of truth** (FoodLog, WeightLog, NutritionProfile, users) |
-| OpenAI | Estimation / classification / coach wording only — never SoT for totals |
+| Prisma / DB | **Source of truth** (food, weight, body scans, sleep, exercise, …) |
+| OpenAI | Estimation / classification / extraction / coach wording only — never SoT |
 | Google Sheets | Optional reporting export — never SoT |
 
 ```text
@@ -96,6 +98,18 @@ Multi-stage, non-root, no secrets in the image. Full steps: [docs/DEPLOYMENT.md]
 
 Set `OPENAI_API_KEY`. Cost controls: [docs/AI_COST.md](docs/AI_COST.md).
 Quantity adjustments stay local (no OpenAI).
+
+## Membership / subscription / AI usage
+
+FREE + PRO (**50 THB/month**). Promo Free PRO codes **10/15/30 days** (`TASTOM-XXXXXX`).
+
+- Web: `/membership` · API: `/api/membership/*`
+- Local QA: `/dev/*` (`ENABLE_DEV_MEMBERSHIP_TOOLS=true`)
+- Payment: `PAYMENT_MODE=MOCK` (default) or `STRIPE` TEST
+- Admin: `/admin` · roles `USER`/`ADMIN`
+- Docs: [docs/MEMBERSHIP.md](docs/MEMBERSHIP.md)
+
+**PAYMENT LIVE = NOT ACTIVE.**
 
 ## Google Sheets (optional)
 

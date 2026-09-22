@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dev Checkout</title>
+  <link rel="stylesheet" href="/membership/assets/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">Dev Checkout</div>
+    <p class="muted">MOCK payment by default · set PAYMENT_MODE=STRIPE for Stripe TEST</p>
+    <div class="card">
+      <button class="btn" id="go">Start checkout</button>
+      <div id="msg" class="muted"></div>
+    </div>
+    <a href="/dev/membership">← back</a>
+  </div>
+  <script src="/membership/assets/app.js"></script>
+  <script>
+    document.getElementById('go').onclick = async () => {
+      await api('/api/dev/identity', { method: 'POST', body: JSON.stringify({ identity: 'USER_A' }) });
+      try {
+        const r = await api('/api/membership/checkout', { method: 'POST', body: '{}' });
+        location.href = r.url;
+      } catch (e) {
+        document.getElementById('msg').className = 'err';
+        document.getElementById('msg').textContent = e.message;
+      }
+    };
+  </script>
+</body>
+</html>

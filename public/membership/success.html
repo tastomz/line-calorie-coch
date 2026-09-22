@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ชำระเงินเรียบร้อย</title>
+  <link rel="stylesheet" href="/membership/assets/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">ชำระเงินเรียบร้อย</div>
+    <div class="card">
+      <p>ระบบกำลังยืนยันสถานะสมาชิก</p>
+      <p class="muted">อย่าเพิ่งสรุปว่าเป็น Pro จากหน้านี้ — รอ webhook จาก Stripe อัปเดตฐานข้อมูล</p>
+      <div id="status" class="muted">กำลังเช็กสถานะ...</div>
+      <a class="btn" href="/account">ไปหน้าบัญชี</a>
+    </div>
+  </div>
+  <script src="/membership/assets/app.js"></script>
+  <script>
+    async function poll(n = 0) {
+      const el = document.getElementById('status');
+      try {
+        const m = await api('/api/membership');
+        if (m.hasProAccess) {
+          el.className = 'ok';
+          el.textContent = 'ยืนยันแล้ว: คุณเป็น Pro แล้ว';
+          return;
+        }
+        el.textContent = 'กำลังยืนยันสถานะสมาชิกครับ ลองเช็กอีกครั้งในอีกสักครู่';
+        if (n < 10) setTimeout(() => poll(n + 1), 2000);
+      } catch (e) {
+        if (redirectToLoginIfUnauthorized(e)) return;
+        el.className = 'err';
+        el.textContent = e.message;
+      }
+    }
+    poll();
+  </script>
+</body>
+</html>

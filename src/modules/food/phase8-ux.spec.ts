@@ -23,7 +23,7 @@ describe('Phase 8 UX messages', () => {
     });
     expect(msg).toContain('🍽️ ประเมินมื้อนี้');
     expect(msg).toContain('650 kcal');
-    expect(msg).toContain('P 35g · C 70g · F 25g');
+    expect(msg).toContain('🥩 35g · 🍚 70g · 🥑 25g');
     expect(msg).toContain('ความมั่นใจ 80%');
   });
 
@@ -49,6 +49,7 @@ describe('Phase 8 UX messages', () => {
     expect(msg).toContain('🍣 ปรับเป็น 3 ชิ้น');
     expect(msg).toContain('3 / 10');
     expect(msg).toContain('180 kcal');
+    expect(msg).toContain('🥩 7.5g · 🍚 24g · 🥑 6g');
   });
 
   it('formats daily summary with emoji macros', () => {
@@ -59,8 +60,10 @@ describe('Phase 8 UX messages', () => {
       remaining: { calories: 750, proteinG: 58, carbsG: 100, fatG: 13 },
     });
     expect(msg).toContain('📊 วันนี้');
-    expect(msg).toContain('🔥');
-    expect(msg).toContain('เหลือ 750 kcal');
+    expect(msg).toContain('🔥 พลังงาน');
+    expect(msg).toContain('เหลือวันนี้');
+    expect(msg).toContain('🔥 750 kcal');
+    expect(msg).toContain('💡 มื้อถัดไป');
   });
 
   it('formats profile summary', () => {

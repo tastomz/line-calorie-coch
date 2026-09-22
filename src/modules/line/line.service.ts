@@ -6,6 +6,7 @@ import {
   validateSignature as lineValidateSignature,
 } from '@line/bot-sdk';
 import { LineOutboundError } from './line-outbound.error';
+import { lineReplyCapture } from './line-reply-capture';
 import { LineButtonItem, LineQuickReplyItem } from './line.types';
 
 @Injectable()
@@ -183,6 +184,12 @@ export class LineService implements OnModuleInit {
   }
 
   async pushText(lineUserId: string, text: string): Promise<void> {
+    const capture = lineReplyCapture.getStore();
+    if (capture) {
+      capture.replies.push({ text });
+      return;
+    }
+
     if (!this.client) {
       throw new LineOutboundError(
         'LINE_CHANNEL_ACCESS_TOKEN is not configured',
@@ -239,6 +246,32 @@ export class LineService implements OnModuleInit {
     await this.replyQuickActions(replyToken, text, buttons);
   }
 
+  /** Send a LINE Flex message (altText used for capture / accessibility). */
+  async replyFlex(
+    replyToken: string,
+    flex: { type: 'flex'; altText: string; contents: unknown },
+  ): Promise<void> {
+    await this.replyMessages(replyToken, [
+      flex as unknown as messagingApi.Message,
+    ]);
+  }
+
+  async replyFlexOrPush(
+    replyToken: string,
+    lineUserId: string,
+    flex: { type: 'flex'; altText: string; contents: unknown },
+  ): Promise<void> {
+    try {
+      await this.replyFlex(replyToken, flex);
+    } catch (error) {
+      if (!(error instanceof LineOutboundError)) {
+        throw error;
+      }
+      this.logger.warn('LINE replyFlex failed; pushing altText');
+      await this.pushText(lineUserId, flex.altText);
+    }
+  }
+
   /**
    * Buttons via reply, or plain text push if replyToken is expired.
    * Quick-reply items are dropped on push fallback (LINE push limitation for this V1 path).
@@ -266,6 +299,42 @@ export class LineService implements OnModuleInit {
     replyToken: string,
     messages: messagingApi.Message[],
   ): Promise<void> {
+    const capture = lineReplyCapture.getStore();
+    if (capture) {
+      for (const message of messages) {
+        if (message.type === 'text') {
+          const textMsg = message;
+          const buttons =
+            textMsg.quickReply?.items
+              ?.map((item) => {
+                const action = item.action as
+                  { type?: string; label?: string; text?: string } | undefined;
+                if (action?.type === 'message' && action.label && action.text) {
+                  return { label: action.label, text: action.text };
+                }
+                return null;
+              })
+              .filter(
+                (b): b is { label: string; text: string } => b !== null,
+              ) ?? undefined;
+          capture.replies.push({
+            text: textMsg.text ?? '',
+            buttons: buttons && buttons.length > 0 ? buttons : undefined,
+          });
+        } else if (message.type === 'flex') {
+          const flexMsg = message;
+          capture.replies.push({
+            text: flexMsg.altText ?? '[flex]',
+          });
+        } else {
+          capture.replies.push({
+            text: `[unsupported message type: ${message.type}]`,
+          });
+        }
+      }
+      return;
+    }
+
     if (!this.client) {
       // Do not silently succeed — otherwise LineEvent idempotency claims the
       // event and LINE will not deliver a visible reply.

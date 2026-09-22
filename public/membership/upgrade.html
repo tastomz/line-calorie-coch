@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>สมัคร Pro</title>
+  <link rel="stylesheet" href="/membership/assets/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">สมัคร Tastom Pro</div>
+    <div class="card">
+      <div class="price">฿50 <span>/ เดือน</span></div>
+      <p>ใช้งาน AI ได้มากขึ้น</p>
+      <p class="muted" id="payNote">กำลังตรวจสอบสถานะการชำระเงิน...</p>
+      <button class="btn" id="go" hidden>สมัคร Pro 50 บาท/เดือน</button>
+      <div id="msg" class="muted"></div>
+      <a class="btn secondary" href="/account">กลับบัญชี</a>
+    </div>
+  </div>
+  <script src="/membership/assets/app.js"></script>
+  <script>
+    (async () => {
+      const go = document.getElementById('go');
+      const note = document.getElementById('payNote');
+      const msg = document.getElementById('msg');
+      try {
+        await api('/api/membership');
+      } catch (e) {
+        if (redirectToLoginIfUnauthorized(e)) return;
+        msg.className = 'err';
+        msg.textContent = e.message;
+        return;
+      }
+      let cfg = { checkoutEnabled: false };
+      try {
+        cfg = await api('/api/membership/config');
+      } catch {}
+      if (!cfg.checkoutEnabled) {
+        note.textContent =
+          'การชำระเงินยังไม่เปิดให้บริการ — ใช้โค้ดโปรโมชั่นที่หน้าบัญชีได้ถ้ามี';
+        return;
+      }
+      note.textContent =
+        cfg.paymentMode === 'MOCK'
+          ? 'โหมดทดสอบ (MOCK) — ไม่ใช่การชำระเงินจริง'
+          : 'ชำระเงินผ่าน Stripe Checkout (โหมดทดสอบ)';
+      go.hidden = false;
+      go.onclick = async () => {
+        msg.textContent = 'กำลังสร้างลิงก์ชำระเงิน...';
+        try {
+          const r = await api('/api/membership/checkout', {
+            method: 'POST',
+            body: '{}',
+          });
+          location.href = r.url;
+        } catch (e) {
+          if (redirectToLoginIfUnauthorized(e)) return;
+          msg.className = 'err';
+          msg.textContent =
+            e.message || 'ยังไม่สามารถเปิดสมาชิก Pro ได้ครับ ลองใหม่อีกครั้ง';
+        }
+      };
+    })();
+  </script>
+</body>
+</html>

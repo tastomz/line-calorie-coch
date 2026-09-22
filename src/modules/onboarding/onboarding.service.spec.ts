@@ -50,6 +50,7 @@ describe('OnboardingService', () => {
     getUserProfile: jest.fn(),
     replyText: jest.fn(),
     replyButtons: jest.fn(),
+    replyFlex: jest.fn(),
   };
   const foodLoggingService = {
     handleCompletedText: jest.fn(),
@@ -198,9 +199,9 @@ describe('OnboardingService', () => {
       user,
       'ลดน้ำหนัก',
     );
-    expect(confirmation.kind).toBe('buttons');
-    if (confirmation.kind === 'buttons') {
-      expect(confirmation.text).toContain('🎯 เป้าหมายของคุณ');
+    expect(confirmation.kind).toBe('flex');
+    if (confirmation.kind === 'flex') {
+      expect(confirmation.fallbackText).toContain('🎯 เป้าหมายของคุณ');
       const expected = calculateNutritionTargets({
         sex: 'MALE',
         age: 29,
@@ -210,9 +211,10 @@ describe('OnboardingService', () => {
         activityLevel: 'MODERATE',
         goal: 'LOSE_WEIGHT',
       });
-      expect(confirmation.text).toContain(
+      expect(confirmation.fallbackText).toContain(
         expected.dailyCalories.toLocaleString('en-US'),
       );
+      expect(confirmation.flex.type).toBe('flex');
     }
   });
 

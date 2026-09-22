@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dev Promo Generator</title>
+  <link rel="stylesheet" href="/membership/assets/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">🎁 Free PRO Codes</div>
+    <p class="muted">Admin only · 10 / 15 / 30 วัน · maxRedemptions=1</p>
+    <div class="card">
+      <button class="btn" data-d="10">10 วัน</button>
+      <button class="btn" data-d="15">15 วัน</button>
+      <button class="btn" data-d="30">30 วัน</button>
+      <div id="out" class="muted" style="margin-top:12px"></div>
+    </div>
+    <div class="card" id="list">…</div>
+    <a href="/dev/membership">← back</a>
+  </div>
+  <script src="/membership/assets/app.js"></script>
+  <script>
+    async function ensureAdmin() {
+      await api('/api/dev/identity', { method: 'POST', body: JSON.stringify({ identity: 'ADMIN' }) });
+    }
+    async function gen(days) {
+      await ensureAdmin();
+      // Use real admin API via env admin? Use generate after admin cookie.
+      // Dev path: call /admin/promos/generate — needs admin session.
+      // First login isn't available; use membership ADMIN role which AdminSessionGuard accepts.
+      const promo = await api('/admin/promos/generate', {
+        method: 'POST',
+        body: JSON.stringify({ trialDays: days, maxRedemptions: 1 }),
+      });
+      document.getElementById('out').innerHTML = `
+        <div class="ok">Code: <b id="code">${promo.code}</b>
+        <button class="btn secondary" style="width:auto;display:inline" onclick="navigator.clipboard.writeText('${promo.code}')">Copy</button></div>
+        <div>PRO: ${promo.trialDays} วัน · ใช้ได้: ${promo.maxRedemptions} คน · Active</div>`;
+      load();
+    }
+    async function load() {
+      await ensureAdmin();
+      const promos = await api('/admin/promos');
+      document.getElementById('list').innerHTML = promos.map(p => `
+        <div style="margin:8px 0;border-bottom:1px solid #2a3d31;padding-bottom:8px">
+          <b>${p.code}</b> · ${p.trialDays}d · ${p.redeemedCount}/${p.maxRedemptions ?? '∞'} · ${p.active ? 'Active' : 'Off'}
+          ${p.active ? `<button class="btn secondary" style="width:auto" data-off="${p.id}">Deactivate</button>` : ''}
+        </div>`).join('');
+      document.querySelectorAll('[data-off]').forEach(b => b.onclick = async () => {
+        await api('/admin/promos/' + b.dataset.off, { method: 'PATCH', body: JSON.stringify({ active: false }) });
+        load();
+      });
+    }
+    document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => gen(Number(b.dataset.d)));
+    load().catch(e => document.getElementById('list').innerHTML = `<div class="err">${e.message}</div>`);
+  </script>
+</body>
+</html>

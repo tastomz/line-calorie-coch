@@ -20,6 +20,7 @@ describe('UsersService LINE helpers', () => {
   const service = new UsersService(
     prisma as unknown as PrismaService,
     sheetsSync as unknown as SheetsSyncService,
+    { get: () => '' } as never,
   );
 
   beforeEach(() => {
@@ -59,6 +60,7 @@ describe('UsersService LINE helpers', () => {
         lineUserId: 'U2',
         displayName: 'Bob',
         pictureUrl: 'http://x',
+        role: 'USER',
         onboardingState: OnboardingState.NOT_STARTED,
       },
     });

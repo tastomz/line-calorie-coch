@@ -37,6 +37,7 @@ export const MAIN_MENU_ACTIONS = [
   '📋 ประวัติ',
   '⚖️ น้ำหนัก',
   '👤 โปรไฟล์',
+  '👤 สมาชิก',
 ] as const;
 
 export type MainMenuAction = (typeof MAIN_MENU_ACTIONS)[number];

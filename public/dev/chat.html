@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LINE Chat Simulator</title>
+  <style>
+    :root {
+      --bg: #7494a9;
+      --panel: #ffffff;
+      --mine: #95ec69;
+      --bot: #ffffff;
+      --text: #111;
+      --muted: #5a6a75;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Sarabun", "Noto Sans Thai", system-ui, sans-serif;
+      background: var(--bg);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+    }
+    .phone {
+      width: 100%;
+      max-width: 420px;
+      min-height: 100vh;
+      background: #eef2f5;
+      display: flex;
+      flex-direction: column;
+    }
+    .top {
+      background: #28353e;
+      color: #fff;
+      padding: 14px 12px 10px;
+    }
+    .top h1 { margin: 0; font-size: 1.05rem; }
+    .top .sub { opacity: 0.75; font-size: 0.85rem; margin-top: 4px; }
+    .ids { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+    .ids button, .quick button, .bar button, .chips button {
+      border: 0;
+      border-radius: 999px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font: inherit;
+    }
+    .ids button { background: #3d515c; color: #fff; }
+    .ids button.active { background: #06c755; }
+    .log {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 12px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .row { display: flex; }
+    .row.me { justify-content: flex-end; }
+    .row.bot { justify-content: flex-start; }
+    .bubble {
+      max-width: 82%;
+      padding: 10px 12px;
+      border-radius: 14px;
+      white-space: pre-wrap;
+      line-height: 1.45;
+      font-size: 0.95rem;
+      color: var(--text);
+      box-shadow: 0 1px 1px rgba(0,0,0,.06);
+    }
+    .row.me .bubble { background: var(--mine); border-bottom-right-radius: 4px; }
+    .row.bot .bubble { background: var(--bot); border-bottom-left-radius: 4px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .chips button { background: #e8f7ee; color: #0b5; border: 1px solid #b7e6c7; }
+    .suggestions {
+      padding: 0 10px 8px;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .suggestions button { background: #fff; color: #333; border: 1px solid #c9d4dc; font-size: 0.85rem; }
+    .bar {
+      display: flex;
+      gap: 8px;
+      padding: 10px;
+      background: #fff;
+      border-top: 1px solid #d5dee4;
+    }
+    .bar input {
+      flex: 1;
+      border: 1px solid #c9d4dc;
+      border-radius: 20px;
+      padding: 12px 14px;
+      font: inherit;
+    }
+    .bar button { background: #06c755; color: #fff; font-weight: 600; min-width: 72px; }
+    .hint { color: var(--muted); font-size: 0.8rem; padding: 0 12px 8px; }
+    a { color: #9fd; }
+  </style>
+</head>
+<body>
+  <div class="phone">
+    <div class="top">
+      <h1>💬 LINE Chat Simulator (Local)</h1>
+      <div class="sub">ถาม–ตอบเหมือนใน LINE · ไม่ส่งออก LINE จริง</div>
+      <div class="ids">
+        <button type="button" data-id="USER_A" class="active">User A</button>
+        <button type="button" data-id="USER_B">User B</button>
+        <button type="button" data-id="ADMIN">Admin</button>
+        <button type="button" id="follow" style="background:#4a6fa5">เริ่มติดตาม (follow)</button>
+      </div>
+      <div class="sub" style="margin-top:8px"><a href="/dev/membership">← Dev membership</a></div>
+    </div>
+    <div class="log" id="log"></div>
+    <div class="hint">ลอง: สวัสดี · วันนี้ · สมาชิก · ข้าวกะเพราไก่ · น้ำหนัก 84.2 · ใช้โค้ด TASTOM-XXXXXX</div>
+    <div class="suggestions">
+      <button type="button" data-s="สวัสดี">สวัสดี</button>
+      <button type="button" data-s="วันนี้">วันนี้</button>
+      <button type="button" data-s="สมาชิก">สมาชิก</button>
+      <button type="button" data-s="ข้าวกะเพราไก่">ข้าวกะเพราไก่</button>
+      <button type="button" data-s="น้ำหนัก 84.2">น้ำหนัก 84.2</button>
+      <button type="button" data-s="ประวัติ">ประวัติ</button>
+    </div>
+    <div class="bar">
+      <input id="input" placeholder="พิมพ์ข้อความเหมือนใน LINE…" autocomplete="off" />
+      <button type="button" id="send">ส่ง</button>
+    </div>
+  </div>
+  <script>
+    let identity = 'USER_A';
+    const log = document.getElementById('log');
+    const input = document.getElementById('input');
+
+    function addBubble(side, text, buttons) {
+      const row = document.createElement('div');
+      row.className = 'row ' + side;
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = text || '(ว่าง)';
+      if (buttons && buttons.length) {
+        const chips = document.createElement('div');
+        chips.className = 'chips';
+        buttons.forEach((b) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.textContent = b.label;
+          btn.onclick = () => send(b.text);
+          chips.appendChild(btn);
+        });
+        bubble.appendChild(chips);
+      }
+      row.appendChild(bubble);
+      log.appendChild(row);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    async function send(text) {
+      const t = (text || input.value || '').trim();
+      if (!t) return;
+      input.value = '';
+      addBubble('me', t);
+      try {
+        const res = await fetch('/api/dev/chat', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identity, text: t }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'ส่งไม่สำเร็จ');
+        (data.replies || []).forEach((r) => addBubble('bot', r.text, r.buttons));
+        if (!(data.replies || []).length) addBubble('bot', '(บอทไม่ตอบข้อความ)');
+      } catch (e) {
+        addBubble('bot', '⚠️ ' + (e.message || 'error'));
+      }
+    }
+
+    document.querySelectorAll('.ids [data-id]').forEach((btn) => {
+      btn.onclick = () => {
+        identity = btn.dataset.id;
+        document.querySelectorAll('.ids [data-id]').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        addBubble('bot', 'สลับเป็น ' + identity);
+      };
+    });
+    document.querySelectorAll('[data-s]').forEach((b) => {
+      b.onclick = () => send(b.dataset.s);
+    });
+    document.getElementById('send').onclick = () => send();
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') send();
+    });
+    document.getElementById('follow').onclick = async () => {
+      addBubble('me', '[follow]');
+      try {
+        const res = await fetch('/api/dev/chat/follow', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identity }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'follow failed');
+        (data.replies || []).forEach((r) => addBubble('bot', r.text, r.buttons));
+      } catch (e) {
+        addBubble('bot', '⚠️ ' + e.message);
+      }
+    };
+
+    addBubble('bot', 'พร้อมแล้ว — พิมพ์ข้อความเหมือนคุยใน LINE ได้เลย\nกด “เริ่มติดตาม” ถ้ายังไม่เคย onboard');
+  </script>
+</body>
+</html>

@@ -1,11 +1,27 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnboardingState, User } from '@prisma/client';
+import OpenAI from 'openai';
 import { aiRateLimiter } from '../../common/ai-rate-limiter';
 import { LineOutboundError } from '../line/line-outbound.error';
 import { LineService } from '../line/line.service';
+import { AiGatewayService } from '../membership/ai-gateway.service';
+import { AiQuotaExceededError } from '../membership/membership.errors';
+import {
+  buildQuotaExceededMessage,
+  isMembershipCommand,
+  parsePromoCommand,
+} from '../membership/membership.messages';
+import { MembershipService } from '../membership/membership.service';
 import { SheetsSyncService } from '../sheets/sheets-sync.service';
 import { NutritionProfileService } from '../users/nutrition-profile.service';
 import { WeightLogService } from '../weight/weight-log.service';
+import {
+  HealthDashboardService,
+  HealthInsightService,
+} from '../health/health-dashboard.service';
+import { HealthRoutingService } from '../health/health-routing.service';
+import { isHealthCoachQuestion } from '../health/health-commands';
+import { buildHealthDashboardFlex } from '../health/health.flex';
 import {
   detectWeightQuestionIntent,
   isWeightDomainText,
@@ -15,7 +31,6 @@ import {
   buildLatestWeightMessage,
   buildProgressSinceFirstMessage,
   buildTargetProgressMessage,
-  buildTodayWeightLine,
   buildTrendMessage,
   buildWeightOverviewMessage,
   buildWeightSavedMessage,
@@ -32,14 +47,13 @@ import {
   buildCaloriesConsumedMessage,
   buildCaloriesRemainingMessage,
   buildDailyCoachSummaryMessage,
-  buildDeterministicCoachTip,
   buildHistoryMessage,
+  buildMealRecommendationFallback,
   buildProteinConsumedMessage,
   buildProteinRemainingMessage,
   DAILY_SUMMARY_ERROR_TEXT,
   PROFILE_REQUIRED_TEXT,
 } from './daily-coach.messages';
-import { DailyCoachService } from './daily-coach.service';
 import {
   DailySummaryService,
   NutritionProfileMissingError,
@@ -51,6 +65,7 @@ import {
 } from './food-analysis.service';
 import { FoodAnalysisValidationError } from './food-analysis.validator';
 import { FoodLogService } from './food-log.service';
+import { isLikelyFoodText } from './food-text-heuristic';
 import {
   AMBIGUOUS_NUMBER_TEXT,
   buildFoodEstimateMessage,
@@ -113,11 +128,15 @@ export class FoodLoggingService {
     private readonly foodLogService: FoodLogService,
     private readonly dailyTotalsService: DailyTotalsService,
     private readonly dailySummaryService: DailySummaryService,
-    private readonly dailyCoachService: DailyCoachService,
     private readonly weightLogService: WeightLogService,
     private readonly sheetsSync: SheetsSyncService,
     private readonly nutritionProfileService: NutritionProfileService,
     private readonly lineService: LineService,
+    private readonly aiGateway: AiGatewayService,
+    private readonly membershipService: MembershipService,
+    private readonly healthRouting: HealthRoutingService,
+    private readonly healthDashboard: HealthDashboardService,
+    private readonly healthInsights: HealthInsightService,
   ) {}
 
   isConfirm(text: string): boolean {
@@ -169,11 +188,7 @@ export class FoodLoggingService {
     }
 
     if ((FOOD_COMMANDS.TODAY as readonly string[]).includes(normalized)) {
-      await this.replyTodaySummary(
-        user.id,
-        replyToken,
-        user.lineUserId ?? user.id,
-      );
+      await this.replyTodaySummary(user, replyToken);
       return 'handled';
     }
 
@@ -192,6 +207,22 @@ export class FoodLoggingService {
       return 'handled';
     }
 
+    if (isMembershipCommand(normalized)) {
+      const textOut = await this.membershipService.buildStatusText(user.id);
+      await this.lineService.replyText(replyToken, textOut);
+      return 'handled';
+    }
+
+    const promoCode = parsePromoCommand(normalized);
+    if (promoCode) {
+      const textOut = await this.membershipService.redeemPromo(
+        user.id,
+        promoCode,
+      );
+      await this.lineService.replyText(replyToken, textOut);
+      return 'handled';
+    }
+
     if (
       (FOOD_COMMANDS.LOG_FOOD_HINT as readonly string[]).includes(normalized)
     ) {
@@ -203,26 +234,24 @@ export class FoodLoggingService {
       return 'not_command';
     }
 
+    // Health trackers / body / sleep / etc. (deterministic-first).
+    if (await this.healthRouting.tryHandleText(user, replyToken, normalized)) {
+      return 'handled';
+    }
+
     // Medical-safety gate before AI.
     if (detectCoachIntent(normalized) === 'medical') {
       await this.lineService.replyText(replyToken, MEDICAL_ADVICE_TEXT);
       return 'handled';
     }
 
-    // Deterministic coach NL (DB facts) before classify — saves tokens.
-    const coachIntent = detectCoachIntent(normalized);
-    if (coachIntent !== 'none' && coachIntent !== 'medical') {
-      await this.handleCoachIntent(
-        user.id,
-        replyToken,
-        coachIntent,
-        user.lineUserId ?? user.id,
-        normalized,
-      );
+    // Cross-data health coach questions (structured facts → AI COACH).
+    if (isHealthCoachQuestion(normalized)) {
+      await this.replyCrossHealthCoach(user, replyToken, normalized);
       return 'handled';
     }
 
-    // If there is an active pending analysis, try quantity/edit first.
+    // Pending quantity/edit BEFORE coach or any AI routing.
     const pending = await this.pendingFoodService.getActiveForUser(user.id);
     if (pending) {
       const handled = await this.handlePendingAdjustment(
@@ -234,6 +263,13 @@ export class FoodLoggingService {
       if (handled) {
         return 'handled';
       }
+    }
+
+    // Deterministic coach NL (DB facts) — no classify.
+    const coachIntent = detectCoachIntent(normalized);
+    if (coachIntent !== 'none' && coachIntent !== 'medical') {
+      await this.handleCoachIntent(user.id, replyToken, coachIntent);
+      return 'handled';
     }
 
     // Bare number without pending context is ambiguous (weight vs quantity).
@@ -253,8 +289,20 @@ export class FoodLoggingService {
       return 'handled';
     }
 
-    // Ambiguous free text → cheap AI classify (type + optional weightKg).
     const lineUserId = user.lineUserId ?? user.id;
+
+    // High-confidence food text → analyze once (skip classify).
+    if (isLikelyFoodText(normalized)) {
+      await this.offerReplaceOrAnalyze(
+        user.id,
+        replyToken,
+        { kind: 'text', text: normalized },
+        lineUserId,
+      );
+      return 'handled';
+    }
+
+    // Ambiguous free text → cheap AI classify fallback.
     if (!aiRateLimiter.tryConsume(lineUserId, 'classify')) {
       await this.lineService.replyText(replyToken, FOOD_RATE_LIMITED_TEXT);
       return 'handled';
@@ -275,7 +323,9 @@ export class FoodLoggingService {
     lineUserId: string,
   ): Promise<void> {
     try {
-      const classified = await this.messageClassifyService.classify(text);
+      const classified = await this.aiGateway.run(userId, 'CLASSIFY', () =>
+        this.messageClassifyService.classify(text),
+      );
       this.logger.log(
         `Classified type=${classified.type} weightKg=${classified.weightKg ?? '-'} query=${classified.weightQuery ?? '-'} coach=${classified.coachHint ?? '-'}`,
       );
@@ -302,16 +352,10 @@ export class FoodLoggingService {
       if (classified.type === 'coach') {
         const hint = parseCoachHint(classified.coachHint);
         if (hint) {
-          await this.handleCoachIntent(
-            userId,
-            replyToken,
-            hint,
-            lineUserId,
-            text,
-          );
+          await this.handleCoachIntent(userId, replyToken, hint);
           return;
         }
-        await this.replyTodaySummary(userId, replyToken, lineUserId);
+        await this.replyTodaySummary(userId, replyToken);
         return;
       }
 
@@ -332,6 +376,13 @@ export class FoodLoggingService {
       }
       await this.lineService.replyText(replyToken, GENERAL_HELP_TEXT);
     } catch (error) {
+      if (error instanceof AiQuotaExceededError) {
+        await this.lineService.replyText(
+          replyToken,
+          buildQuotaExceededMessage(error),
+        );
+        return;
+      }
       if (error instanceof MessageClassifyError) {
         this.logger.warn(`Classify unavailable, using rule fallback`);
         await this.routeWithoutClassify(userId, replyToken, text, lineUserId);
@@ -366,13 +417,7 @@ export class FoodLoggingService {
       return;
     }
     if (coachIntent !== 'none') {
-      await this.handleCoachIntent(
-        userId,
-        replyToken,
-        coachIntent,
-        lineUserId,
-        text,
-      );
+      await this.handleCoachIntent(userId, replyToken, coachIntent);
       return;
     }
     await this.offerReplaceOrAnalyze(
@@ -390,6 +435,10 @@ export class FoodLoggingService {
   ): Promise<void> {
     if (user.onboardingState !== OnboardingState.COMPLETED) {
       await this.lineService.replyText(replyToken, COMPLETE_PROFILE_FIRST_TEXT);
+      return;
+    }
+
+    if (await this.healthRouting.tryHandleImage(user, replyToken, messageId)) {
       return;
     }
 
@@ -423,27 +472,39 @@ export class FoodLoggingService {
   }
 
   private async replyTodaySummary(
-    userId: string,
+    userOrId: User | string,
     replyToken: string,
-    lineUserId?: string,
   ): Promise<void> {
+    const userId = typeof userOrId === 'string' ? userOrId : userOrId.id;
+    const userCreatedAt =
+      typeof userOrId === 'string' ? new Date() : userOrId.createdAt;
     try {
       const summary = await this.dailySummaryService.getDailySummary(userId);
-      const tip =
-        lineUserId && !aiRateLimiter.tryConsume(lineUserId, 'coach')
-          ? buildDeterministicCoachTip(summary)
-          : await this.dailyCoachService.buildTodayCoachTip(summary);
       const todayWeightKg =
         await this.weightLogService.getTodayAverageKg(userId);
-      const weightLine =
-        todayWeightKg != null
-          ? `\n\n${buildTodayWeightLine(todayWeightKg)}`
-          : '';
-      // AI failure must not break numeric summary — tip already falls back.
-      await this.lineService.replyText(
-        replyToken,
-        `${buildDailyCoachSummaryMessage(summary)}${weightLine}\n\n${tip}`,
-      );
+      const snap = await this.healthDashboard.buildToday({
+        userId,
+        userCreatedAt,
+        nutrition: summary,
+        todayWeightKg,
+      });
+      const insights = this.healthInsights.buildInsights(snap);
+      if (insights.length > 0) {
+        snap.tip = insights[0];
+      }
+      try {
+        await this.lineService.replyFlex(
+          replyToken,
+          buildHealthDashboardFlex(snap, (m) =>
+            this.healthDashboard.formatDuration(m),
+          ),
+        );
+      } catch {
+        await this.lineService.replyText(
+          replyToken,
+          this.healthDashboard.formatDashboardText(snap),
+        );
+      }
     } catch (error) {
       if (error instanceof NutritionProfileMissingError) {
         await this.lineService.replyText(replyToken, PROFILE_REQUIRED_TEXT);
@@ -452,7 +513,6 @@ export class FoodLoggingService {
       this.logger.error(
         `Today summary failed: ${error instanceof Error ? error.message : 'unknown error'}`,
       );
-      // Last-resort: try Phase 3 totals path without AI.
       try {
         const legacy = await this.dailyTotalsService.getSummaryForUser(userId);
         if (!legacy.targets) {
@@ -482,11 +542,100 @@ export class FoodLoggingService {
         };
         await this.lineService.replyText(
           replyToken,
-          `${buildDailyCoachSummaryMessage(summary)}\n\n${buildDeterministicCoachTip(summary)}`,
+          buildDailyCoachSummaryMessage(summary),
         );
       } catch {
         await this.lineService.replyText(replyToken, DAILY_SUMMARY_ERROR_TEXT);
       }
+    }
+  }
+
+  private async replyCrossHealthCoach(
+    user: User,
+    replyToken: string,
+    question: string,
+  ): Promise<void> {
+    let nutrition = null;
+    try {
+      nutrition = await this.dailySummaryService.getDailySummary(user.id);
+    } catch {
+      nutrition = null;
+    }
+    const todayWeightKg = await this.weightLogService.getTodayAverageKg(
+      user.id,
+    );
+    const snap = await this.healthDashboard.buildToday({
+      userId: user.id,
+      userCreatedAt: user.createdAt,
+      nutrition,
+      todayWeightKg,
+    });
+    const deterministic = this.healthInsights.buildInsights(snap);
+    const apiKey = (process.env.OPENAI_API_KEY ?? '').trim();
+    if (!apiKey) {
+      await this.lineService.replyText(
+        replyToken,
+        deterministic.length > 0
+          ? `💡 จากข้อมูลที่มี\n\n${deterministic.map((d) => `• ${d}`).join('\n')}`
+          : 'ข้อมูลยังไม่พอสำหรับวิเคราะห์ครับ',
+      );
+      return;
+    }
+    try {
+      const openai = new OpenAI({ apiKey });
+      const answer = await this.aiGateway.run(user.id, 'COACH', async () => {
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          temperature: 0.4,
+          max_tokens: 280,
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You are Tastom personal health coach. Use only provided facts. Thai, short, practical. No diagnosis, no medication. Distinguish measured vs estimated.',
+            },
+            {
+              role: 'user',
+              content: JSON.stringify({
+                question,
+                snapshot: {
+                  calories: snap.nutrition?.consumed.calories ?? null,
+                  calorieTarget: snap.nutrition?.target.calories ?? null,
+                  proteinG: snap.nutrition?.consumed.proteinG ?? null,
+                  proteinTarget: snap.nutrition?.target.proteinG ?? null,
+                  weightKg: snap.weightKg,
+                  sleepMinutes: snap.sleepMinutes,
+                  exerciseMinutes: snap.exerciseMinutes,
+                  steps: snap.steps,
+                  waterMl: snap.waterMl,
+                  recoveryScore: snap.recoveryScore,
+                },
+                insights: deterministic,
+              }),
+            },
+          ],
+        });
+        return (
+          completion.choices[0]?.message?.content?.trim() ||
+          deterministic.join('\n') ||
+          'ยังสรุปจากข้อมูลที่มีไม่ชัดครับ'
+        );
+      });
+      await this.lineService.replyText(replyToken, `💡 Coach\n\n${answer}`);
+    } catch (error) {
+      if (error instanceof AiQuotaExceededError) {
+        await this.lineService.replyText(
+          replyToken,
+          buildQuotaExceededMessage(error),
+        );
+        return;
+      }
+      await this.lineService.replyText(
+        replyToken,
+        deterministic.length > 0
+          ? `💡 จากข้อมูลที่มี\n\n${deterministic.map((d) => `• ${d}`).join('\n')}`
+          : 'ตอบคำถามสุขภาพไม่สำเร็จครับ',
+      );
     }
   }
 
@@ -610,15 +759,13 @@ export class FoodLoggingService {
     userId: string,
     replyToken: string,
     intent: CoachHint,
-    lineUserId: string,
-    userQuestion?: string,
   ): Promise<void> {
     try {
       if (intent === 'history' || intent === 'today_summary') {
         if (intent === 'history') {
           await this.replyHistory(userId, replyToken);
         } else {
-          await this.replyTodaySummary(userId, replyToken, lineUserId);
+          await this.replyTodaySummary(userId, replyToken);
         }
         return;
       }
@@ -654,14 +801,8 @@ export class FoodLoggingService {
         return;
       }
       if (intent === 'meal_recommendation') {
-        if (!aiRateLimiter.tryConsume(lineUserId, 'coach')) {
-          await this.lineService.replyText(replyToken, FOOD_RATE_LIMITED_TEXT);
-          return;
-        }
-        const tip = await this.dailyCoachService.buildMealRecommendation(
-          summary.remaining,
-          userQuestion,
-        );
+        // Template-first — no OpenAI for meal suggestions on the hot path.
+        const tip = buildMealRecommendationFallback(summary.remaining);
         await this.lineService.replyText(replyToken, tip);
         return;
       }
@@ -811,11 +952,15 @@ export class FoodLoggingService {
         consumedQuantity: pending.originalQuantity,
       });
 
-      const analysis =
-        await this.foodAnalysisService.analyzeCompositionAdjustment({
-          previous,
-          instruction,
-        });
+      const analysis = await this.aiGateway.run(
+        userId,
+        'COMPOSITION_ADJUSTMENT',
+        () =>
+          this.foodAnalysisService.analyzeCompositionAdjustment({
+            previous,
+            instruction,
+          }),
+      );
 
       const updated =
         await this.pendingFoodService.replaceWithCompositionAnalysis(
@@ -830,6 +975,13 @@ export class FoodLoggingService {
         FOOD_CONFIRM_CHOICES,
       );
     } catch (error) {
+      if (error instanceof AiQuotaExceededError) {
+        await this.lineService.replyText(
+          replyToken,
+          buildQuotaExceededMessage(error),
+        );
+        return;
+      }
       this.logger.warn(
         `Composition adjustment failed: ${error instanceof Error ? error.message : 'unknown error'}`,
       );
@@ -964,10 +1116,14 @@ export class FoodLoggingService {
     try {
       const analysis =
         input.kind === 'text'
-          ? await this.foodAnalysisService.analyzeText(input.text)
-          : await this.foodAnalysisService.analyzeImage({
-              imageBytes: input.imageBytes,
-            });
+          ? await this.aiGateway.run(userId, 'FOOD_TEXT', () =>
+              this.foodAnalysisService.analyzeText(input.text),
+            )
+          : await this.aiGateway.run(userId, 'FOOD_VISION', () =>
+              this.foodAnalysisService.analyzeImage({
+                imageBytes: input.imageBytes,
+              }),
+            );
 
       const pending = await this.pendingFoodService.upsertPending(
         userId,
@@ -982,6 +1138,13 @@ export class FoodLoggingService {
         FOOD_CONFIRM_CHOICES,
       );
     } catch (error) {
+      if (error instanceof AiQuotaExceededError) {
+        await this.lineService.replyText(
+          replyToken,
+          buildQuotaExceededMessage(error),
+        );
+        return;
+      }
       if (error instanceof LineOutboundError) {
         throw error;
       }

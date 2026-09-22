@@ -37,6 +37,8 @@ COPY --from=build --chown=app:app /app/dist ./dist
 COPY --from=build --chown=app:app /app/node_modules ./node_modules
 COPY --from=build --chown=app:app /app/package.json ./package.json
 COPY --from=build --chown=app:app /app/prisma ./prisma
+# Membership / admin / (dev) HTML pages — served via Nest page controllers
+COPY --chown=app:app public ./public
 
 USER app
 EXPOSE 3000
