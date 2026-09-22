@@ -1,4 +1,8 @@
-import { FoodAnalysisResult } from './food-analysis.types';
+import {
+  FOOD_QUANTITY_UNITS,
+  FoodAnalysisResult,
+  FoodQuantityUnit,
+} from './food-analysis.types';
 
 export class FoodAnalysisValidationError extends Error {
   constructor(message: string) {
@@ -27,15 +31,75 @@ function assertPositive(field: string, value: unknown): number {
 const MAX_CALORIES = 10000;
 const MAX_MACRO_G = 2000;
 
-const ALLOWED_UNITS = new Set([
-  'piece',
-  'plate',
-  'bite',
-  'serving',
-  'bowl',
-  'cup',
-  'item',
-]);
+const ALLOWED_UNITS = new Set<string>(FOOD_QUANTITY_UNITS);
+
+/**
+ * Map common model synonyms / plurals / Thai labels → canonical unit.
+ * Unknown values stay as-is and are rejected by ALLOWED_UNITS (not silently widened).
+ */
+const QUANTITY_UNIT_ALIASES: Readonly<Record<string, FoodQuantityUnit>> = {
+  pieces: 'piece',
+  pcs: 'piece',
+  pc: 'piece',
+  slice: 'piece',
+  slices: 'piece',
+  skewer: 'piece',
+  skewers: 'piece',
+  stick: 'piece',
+  sticks: 'piece',
+  ชิ้น: 'piece',
+  อัน: 'piece',
+
+  plates: 'plate',
+  dish: 'plate',
+  dishes: 'plate',
+  จาน: 'plate',
+
+  bites: 'bite',
+  คำ: 'bite',
+
+  servings: 'serving',
+  portion: 'serving',
+  portions: 'serving',
+  scoop: 'serving',
+  scoops: 'serving',
+  serve: 'serving',
+  // Mass/volume estimates that are not discrete countable units → serving.
+  g: 'serving',
+  gram: 'serving',
+  grams: 'serving',
+  kg: 'serving',
+  ส่วน: 'serving',
+
+  bowls: 'bowl',
+  ชาม: 'bowl',
+  ถ้วยใหญ่: 'bowl',
+
+  cups: 'cup',
+  glass: 'cup',
+  glasses: 'cup',
+  mug: 'cup',
+  ml: 'cup',
+  ถ้วย: 'cup',
+  แก้ว: 'cup',
+
+  items: 'item',
+  pack: 'item',
+  packs: 'item',
+  box: 'item',
+  boxes: 'item',
+};
+
+export function normalizeQuantityUnit(raw: string): string {
+  const trimmed = raw.trim().toLowerCase();
+  if (!trimmed) {
+    return '';
+  }
+  if (ALLOWED_UNITS.has(trimmed)) {
+    return trimmed;
+  }
+  return QUANTITY_UNIT_ALIASES[trimmed] ?? trimmed;
+}
 
 export function validateFoodAnalysisResult(raw: unknown): FoodAnalysisResult {
   if (!raw || typeof raw !== 'object') {
@@ -62,13 +126,13 @@ export function validateFoodAnalysisResult(raw: unknown): FoodAnalysisResult {
     data.estimatedQuantity,
   );
 
-  const quantityUnitRaw =
-    typeof data.quantityUnit === 'string'
-      ? data.quantityUnit.trim().toLowerCase()
-      : '';
+  const quantityUnitInput =
+    typeof data.quantityUnit === 'string' ? data.quantityUnit : '';
+  const quantityUnitRaw = normalizeQuantityUnit(quantityUnitInput);
   if (!quantityUnitRaw || !ALLOWED_UNITS.has(quantityUnitRaw)) {
+    const shown = quantityUnitInput.trim() || '(empty)';
     throw new FoodAnalysisValidationError(
-      'quantityUnit must be one of: piece, plate, bite, serving, bowl, cup, item',
+      `quantityUnit "${shown}" must be one of: ${FOOD_QUANTITY_UNITS.join(', ')}`,
     );
   }
 
@@ -103,7 +167,7 @@ export function validateFoodAnalysisResult(raw: unknown): FoodAnalysisResult {
     confidence,
     assumptions,
     estimatedQuantity,
-    quantityUnit: quantityUnitRaw,
+    quantityUnit: quantityUnitRaw as FoodQuantityUnit,
   };
 }
 
