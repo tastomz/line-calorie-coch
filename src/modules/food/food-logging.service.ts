@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { OnboardingState, User } from '@prisma/client';
+import { FoodLog, OnboardingState, User } from '@prisma/client';
 import OpenAI from 'openai';
 import { aiRateLimiter } from '../../common/ai-rate-limiter';
 import { LineOutboundError } from '../line/line-outbound.error';
@@ -101,6 +101,10 @@ import { parseFoodEdit } from './food-edit';
 import {
   parseFoodEditCommand,
   FOOD_EDIT_CANCEL_TEXT,
+  foodEditDelOkText,
+  foodEditNameText,
+  foodEditNutText,
+  foodEditQtyText,
 } from './food-edit.commands';
 import {
   buildFoodDeleteConfirmFlex,
@@ -858,9 +862,9 @@ export class FoodLoggingService {
             replyToken,
             `✏️ แก้ไข ${log.foodName}`,
             [
-              { label: 'ปริมาณ', text: `foodedit:qty:${log.id}` },
-              { label: 'ชื่ออาหาร', text: `foodedit:name:${log.id}` },
-              { label: 'สารอาหาร', text: `foodedit:nut:${log.id}` },
+              { label: 'ปริมาณ', text: foodEditQtyText(log.id) },
+              { label: 'ชื่ออาหาร', text: foodEditNameText(log.id) },
+              { label: 'สารอาหาร', text: foodEditNutText(log.id) },
               { label: 'ยกเลิก', text: FOOD_EDIT_CANCEL_TEXT },
             ],
           );
@@ -891,6 +895,9 @@ export class FoodLoggingService {
         await this.lineService.replyText(replyToken, FOOD_EDIT_NUT_PROMPT_TEXT);
         return;
       case 'del':
+        // Clear any in-flight qty/name/nut session so typed input cannot
+        // mutate a different FoodLog while delete confirm is showing.
+        foodEditSessionBuffer.clear(user.id);
         try {
           await this.lineService.replyFlex(
             replyToken,
@@ -901,7 +908,7 @@ export class FoodLoggingService {
             replyToken,
             `ต้องการลบ ${log.foodName} · ${Math.round(log.calories)} kcal ใช่ไหม?`,
             [
-              { label: 'ยืนยันลบ', text: `foodedit:delok:${log.id}` },
+              { label: 'ยืนยันลบ', text: foodEditDelOkText(log.id) },
               { label: 'ยกเลิก', text: FOOD_EDIT_CANCEL_TEXT },
             ],
           );
@@ -1005,7 +1012,7 @@ export class FoodLoggingService {
         scaled,
       );
       foodEditSessionBuffer.clear(userId);
-      this.enqueueDailySummaryRefresh(userId, updated.eatenAt);
+      this.enqueueFoodLogSheetSync('upsert', updated);
       await this.replyTodayFoodList(
         userId,
         replyToken,
@@ -1040,7 +1047,7 @@ export class FoodLoggingService {
         parsed.nutrition,
       );
       foodEditSessionBuffer.clear(userId);
-      this.enqueueDailySummaryRefresh(userId, updated.eatenAt);
+      this.enqueueFoodLogSheetSync('upsert', updated);
       await this.replyTodayFoodList(
         userId,
         replyToken,
@@ -1126,7 +1133,7 @@ export class FoodLoggingService {
         foodLogId,
       );
       foodEditSessionBuffer.clear(userId);
-      this.enqueueDailySummaryRefresh(userId, deleted.eatenAt);
+      this.enqueueFoodLogSheetSync('delete', deleted);
       await this.replyTodayFoodList(
         userId,
         replyToken,
@@ -1141,9 +1148,21 @@ export class FoodLoggingService {
     }
   }
 
-  private enqueueDailySummaryRefresh(userId: string, day: Date): void {
-    this.sheetsSync.enqueue('updateDailySummary', async () => {
-      await this.sheetsSync.updateDailySummary(userId, day);
+  /**
+   * Keep FOOD_LOGS row + DailySummary in sync after edit/delete.
+   * DB remains source of truth; Sheets errors are swallowed by enqueue.
+   */
+  private enqueueFoodLogSheetSync(
+    action: 'upsert' | 'delete',
+    log: FoodLog,
+  ): void {
+    this.sheetsSync.enqueue(`foodLog:${action}`, async () => {
+      if (action === 'upsert') {
+        await this.sheetsSync.upsertFoodLog(log);
+      } else {
+        await this.sheetsSync.deleteFoodLog(log.id);
+      }
+      await this.sheetsSync.updateDailySummary(log.userId, log.eatenAt);
     });
   }
 
@@ -1651,7 +1670,7 @@ export class FoodLoggingService {
       );
       await this.pendingFoodService.clearForUser(userId);
       foodEditSessionBuffer.clear(userId);
-      this.enqueueDailySummaryRefresh(userId, updated.eatenAt);
+      this.enqueueFoodLogSheetSync('upsert', updated);
 
       const summary = await this.dailyTotalsService.getSummaryForUser(userId);
       const message = `${FOOD_EDIT_UPDATED_TEXT(updated.foodName)}\n\n${buildFoodSavedMessage(analysis, summary)}`;

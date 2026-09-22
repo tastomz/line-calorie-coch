@@ -76,6 +76,8 @@ describe('FoodLoggingService', () => {
       void work().catch(() => undefined);
     }),
     appendFoodLog: jest.fn().mockResolvedValue(undefined),
+    upsertFoodLog: jest.fn().mockResolvedValue(undefined),
+    deleteFoodLog: jest.fn().mockResolvedValue(undefined),
     appendWeightLog: jest.fn().mockResolvedValue(undefined),
     updateDailySummary: jest.fn().mockResolvedValue(undefined),
   };
@@ -1526,7 +1528,88 @@ describe('FoodLoggingService', () => {
         'log-today',
       );
       expect(aiGateway.run).not.toHaveBeenCalled();
+      expect(sheetsSync.deleteFoodLog).toHaveBeenCalledWith('log-today');
       expect(sheetsSync.updateDailySummary).toHaveBeenCalled();
+    });
+
+    it('clears qty session when opening delete confirm (no cross-log mutation)', async () => {
+      const logA = { ...todayLog, id: 'log-a', calories: 650 };
+      const logB = {
+        ...todayLog,
+        id: 'log-b',
+        foodName: 'ไข่ต้ม',
+        calories: 140,
+      };
+
+      foodLogService.findTodayByIdForUser.mockImplementation(
+        (_userId: string, id: string) =>
+          Promise.resolve(id === 'log-a' ? logA : id === 'log-b' ? logB : null),
+      );
+
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'foodedit:qty:log-a',
+      );
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'foodedit:del:log-b',
+      );
+
+      // Typed quantity after del must NOT scale log-a.
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'ครึ่งหนึ่ง',
+      );
+      expect(foodLogService.updateNutritionForUserToday).not.toHaveBeenCalled();
+    });
+
+    it('upserts FOOD_LOGS sheet row after quantity edit', async () => {
+      foodLogService.findTodayByIdForUser.mockResolvedValue(todayLog);
+      const updated = {
+        ...todayLog,
+        calories: 325,
+        proteinG: 17.5,
+        carbsG: 35,
+        fatG: 10,
+      };
+      foodLogService.updateNutritionForUserToday.mockResolvedValue(updated);
+      foodLogService.listForUserOnDate.mockResolvedValue([updated]);
+
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'foodedit:qty:log-today',
+      );
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'ครึ่งหนึ่ง',
+      );
+
+      expect(sheetsSync.upsertFoodLog).toHaveBeenCalledWith(updated);
+      expect(sheetsSync.updateDailySummary).toHaveBeenCalled();
+    });
+
+    it('Flex fallback buttons use foodedit helpers', async () => {
+      foodLogService.findTodayByIdForUser.mockResolvedValue(todayLog);
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'foodedit:menu:log-today',
+      );
+      expect(lineService.replyButtons).toHaveBeenCalledWith(
+        'token',
+        expect.any(String),
+        expect.arrayContaining([
+          { label: 'ปริมาณ', text: 'foodedit:qty:log-today' },
+          { label: 'ชื่ออาหาร', text: 'foodedit:name:log-today' },
+          { label: 'สารอาหาร', text: 'foodedit:nut:log-today' },
+          { label: 'ยกเลิก', text: 'foodedit:cancel' },
+        ]),
+      );
     });
 
     it('cannot edit another user / missing / not-today log', async () => {

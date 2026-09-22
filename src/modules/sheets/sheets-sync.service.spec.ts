@@ -6,9 +6,11 @@ import { SHEET_TABS } from './sheets.constants';
 
 describe('SheetsSyncService', () => {
   const upsertRowById = jest.fn().mockResolvedValue(undefined);
+  const deleteRowById = jest.fn().mockResolvedValue(undefined);
   const googleSheets = {
     isEnabled: jest.fn().mockReturnValue(true),
     upsertRowById,
+    deleteRowById,
   };
 
   const prisma = {
@@ -39,6 +41,7 @@ describe('SheetsSyncService', () => {
     jest.clearAllMocks();
     googleSheets.isEnabled.mockReturnValue(true);
     upsertRowById.mockResolvedValue(undefined);
+    deleteRowById.mockResolvedValue(undefined);
   });
 
   it('upserts user by id', async () => {
@@ -114,6 +117,35 @@ describe('SheetsSyncService', () => {
       'f1',
       expect.arrayContaining(['f1', 'u1', 'ข้าว', 500]),
     );
+  });
+
+  it('upsertFoodLog reuses FOOD_LOGS id key after edits', async () => {
+    const log = {
+      id: 'f1',
+      userId: 'u1',
+      eatenAt: new Date('2026-09-19T10:00:00.000Z'),
+      mealType: 'UNKNOWN',
+      foodName: 'ข้าวแก้',
+      calories: 300,
+      proteinG: 10,
+      carbsG: 40,
+      fatG: 8,
+      aiConfidence: 0.8,
+      notes: null,
+      imageUrl: null,
+      createdAt: new Date('2026-09-19T10:00:00.000Z'),
+    };
+    await service.upsertFoodLog(log as never);
+    expect(upsertRowById).toHaveBeenCalledWith(
+      SHEET_TABS.FOOD_LOGS,
+      'f1',
+      expect.arrayContaining(['f1', 'ข้าวแก้', 300]),
+    );
+  });
+
+  it('deleteFoodLog removes FOOD_LOGS row by id', async () => {
+    await service.deleteFoodLog('f1');
+    expect(deleteRowById).toHaveBeenCalledWith(SHEET_TABS.FOOD_LOGS, 'f1');
   });
 
   it('syncs weight log by weightLog.id', async () => {
