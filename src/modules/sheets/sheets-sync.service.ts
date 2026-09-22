@@ -91,6 +91,16 @@ export class SheetsSyncService {
     );
   }
 
+  /** Upsert FOOD_LOGS row after edit (same id key as append). */
+  async upsertFoodLog(log: FoodLog): Promise<void> {
+    await this.appendFoodLog(log);
+  }
+
+  /** Remove FOOD_LOGS row after delete. Idempotent if already gone. */
+  async deleteFoodLog(foodLogId: string): Promise<void> {
+    await this.googleSheets.deleteRowById(SHEET_TABS.FOOD_LOGS, foodLogId);
+  }
+
   async appendWeightLog(log: WeightLog): Promise<void> {
     await this.googleSheets.upsertRowById(
       SHEET_TABS.WEIGHT_LOGS,

@@ -16,6 +16,9 @@ export class GoogleSheetsService {
   private readonly spreadsheetId: string;
   private readonly sheets: sheets_v4.Sheets | null;
   private readonly ensuredTabs = new Set<string>();
+  private readonly sheetIdCache = new Map<string, number>();
+  /** Serializes writeRow/removeRowById per tab so a delete's row-shift can never race a stale-index update. */
+  private readonly tabLocks = new Map<string, Promise<void>>();
 
   constructor(private readonly configService: ConfigService) {
     this.spreadsheetId =
@@ -68,6 +71,40 @@ export class GoogleSheetsService {
     );
   }
 
+  /**
+   * Delete the row whose column A equals `id`.
+   * No-op if the row is already missing (idempotent).
+   */
+  async deleteRowById(tab: SheetTabName, id: string): Promise<void> {
+    if (!this.isEnabled() || !this.sheets) {
+      return;
+    }
+
+    await withTimeout(
+      this.removeRowById(tab, id),
+      SHEETS_CALL_TIMEOUT_MS,
+      'google_sheets_delete',
+    );
+  }
+
+  /**
+   * Runs `fn` after every previously queued op on this tab has settled, so
+   * row-index reads/writes on the same tab never interleave with a
+   * structural change (deleteDimension) from another call.
+   */
+  private withTabLock<T>(tab: string, fn: () => Promise<T>): Promise<T> {
+    const previous = this.tabLocks.get(tab) ?? Promise.resolve();
+    const result = previous.then(fn, fn);
+    this.tabLocks.set(
+      tab,
+      result.then(
+        () => undefined,
+        () => undefined,
+      ),
+    );
+    return result;
+  }
+
   private async writeRow(
     tab: SheetTabName,
     id: string,
@@ -76,26 +113,93 @@ export class GoogleSheetsService {
     if (!this.sheets) {
       return;
     }
-    await this.ensureTabWithHeaders(tab);
-    const rowIndex = await this.findRowIndexById(tab, id);
-    const values = [row.map((cell) => (cell == null ? '' : cell))];
+    await this.withTabLock(tab, async () => {
+      if (!this.sheets) {
+        return;
+      }
+      await this.ensureTabWithHeaders(tab);
+      const rowIndex = await this.findRowIndexById(tab, id);
+      const values = [row.map((cell) => (cell == null ? '' : cell))];
 
-    if (rowIndex == null) {
-      await this.sheets.spreadsheets.values.append({
+      if (rowIndex == null) {
+        await this.sheets.spreadsheets.values.append({
+          spreadsheetId: this.spreadsheetId,
+          range: `${tab}!A:Z`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values },
+        });
+        return;
+      }
+
+      await this.sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
-        range: `${tab}!A:Z`,
+        range: `${tab}!A${rowIndex}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values },
       });
+    });
+  }
+
+  private async removeRowById(tab: SheetTabName, id: string): Promise<void> {
+    if (!this.sheets) {
       return;
     }
+    await this.withTabLock(tab, async () => {
+      if (!this.sheets) {
+        return;
+      }
+      await this.ensureTabWithHeaders(tab);
+      const rowIndex = await this.findRowIndexById(tab, id);
+      if (rowIndex == null || rowIndex <= 1) {
+        // Missing, or would delete the header row — treat as done.
+        return;
+      }
 
-    await this.sheets.spreadsheets.values.update({
-      spreadsheetId: this.spreadsheetId,
-      range: `${tab}!A${rowIndex}`,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values },
+      const sheetId = await this.resolveSheetId(tab);
+      if (sheetId == null) {
+        return;
+      }
+
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: this.spreadsheetId,
+        requestBody: {
+          requests: [
+            {
+              deleteDimension: {
+                range: {
+                  sheetId,
+                  dimension: 'ROWS',
+                  startIndex: rowIndex - 1,
+                  endIndex: rowIndex,
+                },
+              },
+            },
+          ],
+        },
+      });
     });
+  }
+
+  private async resolveSheetId(tab: SheetTabName): Promise<number | null> {
+    const cached = this.sheetIdCache.get(tab);
+    if (cached != null) {
+      return cached;
+    }
+    if (!this.sheets) {
+      return null;
+    }
+    // Falls back to a direct fetch only if ensureTabWithHeaders (which
+    // populates the cache for every known tab) somehow missed this one.
+    const meta = await this.sheets.spreadsheets.get({
+      spreadsheetId: this.spreadsheetId,
+      fields: 'sheets.properties(sheetId,title)',
+    });
+    for (const sheet of meta.data.sheets ?? []) {
+      if (sheet.properties?.title && sheet.properties?.sheetId != null) {
+        this.sheetIdCache.set(sheet.properties.title, sheet.properties.sheetId);
+      }
+    }
+    return this.sheetIdCache.get(tab) ?? null;
   }
 
   private async findRowIndexById(
@@ -127,21 +231,26 @@ export class GoogleSheetsService {
 
     const meta = await this.sheets.spreadsheets.get({
       spreadsheetId: this.spreadsheetId,
-      fields: 'sheets.properties.title',
+      fields: 'sheets.properties(sheetId,title)',
     });
-    const existing = new Set(
-      (meta.data.sheets ?? [])
-        .map((s) => s.properties?.title)
-        .filter((t): t is string => Boolean(t)),
-    );
+    for (const sheet of meta.data.sheets ?? []) {
+      if (sheet.properties?.title && sheet.properties?.sheetId != null) {
+        this.sheetIdCache.set(sheet.properties.title, sheet.properties.sheetId);
+      }
+    }
 
-    if (!existing.has(tab)) {
-      await this.sheets.spreadsheets.batchUpdate({
+    if (!this.sheetIdCache.has(tab)) {
+      const created = await this.sheets.spreadsheets.batchUpdate({
         spreadsheetId: this.spreadsheetId,
         requestBody: {
           requests: [{ addSheet: { properties: { title: tab } } }],
         },
       });
+      const newSheetId =
+        created.data.replies?.[0]?.addSheet?.properties?.sheetId;
+      if (newSheetId != null) {
+        this.sheetIdCache.set(tab, newSheetId);
+      }
     }
 
     const headerRes = await this.sheets.spreadsheets.values.get({
