@@ -2,11 +2,16 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
   app.use(cookieParser());
+  // CSP is off: public/admin & public/membership pages rely on inline <script>
+  // tags. Enabling the default CSP would block them without a nonce/hash
+  // refactor. Other headers (HSTS, X-Frame-Options, nosniff, ...) still apply.
+  app.use(helmet({ contentSecurityPolicy: false }));
   app.enableShutdownHooks();
 
   const configService = app.get(ConfigService);

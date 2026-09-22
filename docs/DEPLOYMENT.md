@@ -122,6 +122,23 @@ docker run --rm -e DATABASE_URL line-calorie-coch:prod \
   npx prisma migrate deploy
 ```
 
+### 3a. Railway
+
+**Status:** implemented (`railway.json`) — Postgres provisioning, backups, and env vars are still **not configured** (manual, in the Railway dashboard)
+
+`railway.json` is Railway's config-as-code file; it applies automatically once the service is linked to this repo:
+
+- `deploy.preDeployCommand` runs `npx prisma migrate deploy` before every deploy (equivalent to the Docker "release step" above).
+- `deploy.numReplicas` is pinned to `1` — rate limiting and the pending-confirm buffer are in-process (see `docs/SECURITY.md`); do not raise this without moving that state to the DB or a shared store.
+- `deploy.healthcheckPath` points at `/health/ready` (DB-aware), not `/health/live`, so Railway only cuts traffic over to a new deploy once it can reach the database.
+
+Still manual in the Railway dashboard:
+
+- Provision the Postgres plugin and set `DATABASE_URL` from it.
+- Enable Postgres backups / PITR (`docs/BACKUP.md` is documentation only — nothing enables this automatically).
+- Set the required env vars from `.env.example` (`LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`, `OPENAI_API_KEY`, plus the membership/Stripe vars if that feature is enabled).
+- Point the LINE webhook at the Railway-issued HTTPS domain (see below).
+
 ### 4. HTTPS webhook (production)
 
 **Status:** documented — **not configured** in this repo
