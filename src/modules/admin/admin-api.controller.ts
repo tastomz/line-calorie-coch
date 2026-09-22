@@ -21,7 +21,7 @@ import { AdminDashboardService } from './admin-dashboard.service';
 import { AdminId } from './admin-session.decorator';
 import { AdminSessionGuard } from './admin-session.guard';
 
-@Controller('admin')
+@Controller('admin/api')
 export class AdminApiController {
   constructor(
     private readonly auth: AdminAuthService,

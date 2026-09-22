@@ -30,7 +30,7 @@
       return res.json();
     }
     async function load() {
-      const d = await api('/admin/dashboard');
+      const d = await api('/admin/api/dashboard');
       document.getElementById('dash').innerHTML = `
         <div class="grid">
           <div class="stat"><span>Users</span><b>${d.totalUsers}</b></div>
@@ -45,18 +45,18 @@
         <p>AI by op — text ${d.aiUsageTotals.foodText} · vision ${d.aiUsageTotals.vision} · adj ${d.aiUsageTotals.adjustment} · coach ${d.aiUsageTotals.coach} · classify ${d.aiUsageTotals.classify}</p>`;
     }
     document.getElementById('search').onclick = async () => {
-      const list = await api('/admin/users?q=' + encodeURIComponent(document.getElementById('q').value));
+      const list = await api('/admin/api/users?q=' + encodeURIComponent(document.getElementById('q').value));
       document.getElementById('users').innerHTML = `<table class="table"><tr><th>Name</th><th>LINE</th><th></th></tr>
         ${list.map(u => `<tr><td>${u.displayName||'-'}</td><td>${u.lineUserId||'-'}</td>
         <td><button class="btn" data-id="${u.id}">ดู</button></td></tr>`).join('')}</table>`;
       document.querySelectorAll('[data-id]').forEach(btn => btn.onclick = async () => {
-        const d = await api('/admin/users/' + btn.dataset.id);
+        const d = await api('/admin/api/users/' + btn.dataset.id);
         document.getElementById('detail').innerHTML = `<pre style="white-space:pre-wrap;font-size:12px">${JSON.stringify(d, null, 2)}</pre>`;
       });
     };
     document.getElementById('logout').onclick = async (e) => {
       e.preventDefault();
-      await api('/admin/logout', { method: 'POST', body: '{}' });
+      await api('/admin/api/logout', { method: 'POST', body: '{}' });
       location.href = '/admin/login';
     };
     load().catch(() => location.href = '/admin/login');

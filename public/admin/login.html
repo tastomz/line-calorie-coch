@@ -18,7 +18,7 @@
   </div>
   <script>
     document.getElementById('go').onclick = async () => {
-      const res = await fetch('/admin/login', {
+      const res = await fetch('/admin/api/login', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -30,7 +30,7 @@
         document.getElementById('err').textContent = 'เข้าสู่ระบบไม่สำเร็จ';
         return;
       }
-      location.href = '/admin/dashboard';
+      location.href = '/admin';
     };
   </script>
 </body>

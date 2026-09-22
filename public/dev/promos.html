@@ -27,9 +27,9 @@
     async function gen(days) {
       await ensureAdmin();
       // Use real admin API via env admin? Use generate after admin cookie.
-      // Dev path: call /admin/promos/generate — needs admin session.
+      // Dev path: call /admin/api/promos/generate — needs admin session.
       // First login isn't available; use membership ADMIN role which AdminSessionGuard accepts.
-      const promo = await api('/admin/promos/generate', {
+      const promo = await api('/admin/api/promos/generate', {
         method: 'POST',
         body: JSON.stringify({ trialDays: days, maxRedemptions: 1 }),
       });
@@ -41,14 +41,14 @@
     }
     async function load() {
       await ensureAdmin();
-      const promos = await api('/admin/promos');
+      const promos = await api('/admin/api/promos');
       document.getElementById('list').innerHTML = promos.map(p => `
         <div style="margin:8px 0;border-bottom:1px solid #2a3d31;padding-bottom:8px">
           <b>${p.code}</b> · ${p.trialDays}d · ${p.redeemedCount}/${p.maxRedemptions ?? '∞'} · ${p.active ? 'Active' : 'Off'}
           ${p.active ? `<button class="btn secondary" style="width:auto" data-off="${p.id}">Deactivate</button>` : ''}
         </div>`).join('');
       document.querySelectorAll('[data-off]').forEach(b => b.onclick = async () => {
-        await api('/admin/promos/' + b.dataset.off, { method: 'PATCH', body: JSON.stringify({ active: false }) });
+        await api('/admin/api/promos/' + b.dataset.off, { method: 'PATCH', body: JSON.stringify({ active: false }) });
         load();
       });
     }

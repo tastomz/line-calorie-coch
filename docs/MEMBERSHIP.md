@@ -118,7 +118,7 @@ Live keys (`sk_live_`) remain blocked.
 
 ## Admin Free PRO codes
 
-`POST /admin/promos/generate` `{ "trialDays": 10|15|30, "maxRedemptions": 1 }`  
+`POST /admin/api/promos/generate` `{ "trialDays": 10|15|30, "maxRedemptions": 1 }`  
 → `TASTOM-XXXXXX`, provider NONE + TRIALING on redeem.
 
 ## AI gateway audit
