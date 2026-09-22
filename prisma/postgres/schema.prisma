@@ -99,6 +99,7 @@ model User {
   pendingFoodAnalysis  PendingFoodAnalysis?
   subscriptions        Subscription[]
   aiUsages             AIUsage[]
+  aiCallLogs           AiCallLog[]
   promoRedemptions     PromoRedemption[]
   membershipLinkTokens MembershipLinkToken[]
   bodyScans            BodyScan[]
@@ -290,6 +291,28 @@ model AIUsage {
 
   @@unique([userId, usageDate])
   @@index([usageDate])
+}
+
+/// Per-AI-call token accounting for admin cost dashboard (no prompts/responses).
+model AiCallLog {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// AiOperation string (FOOD_TEXT, FOOD_VISION, …)
+  operation    String
+  model        String
+  inputTokens  Int
+  outputTokens Int
+  totalTokens  Int
+  /// Asia/Bangkok calendar day YYYY-MM-DD (same convention as AIUsage.usageDate)
+  usageDate    String
+  createdAt    DateTime @default(now())
+
+  @@index([usageDate])
+  @@index([userId, usageDate])
+  @@index([operation, usageDate])
+  @@index([model, usageDate])
+  @@index([createdAt])
 }
 
 /// Idempotent payment-provider webhook ledger. Never trust client redirects.

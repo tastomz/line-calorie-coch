@@ -17,6 +17,7 @@ describe('AiUsageService', () => {
         aIUsage: { upsert, updateMany, findUnique },
       }),
     ),
+    aiCallLog: { create: jest.fn().mockResolvedValue({}) },
   };
 
   const entitlement = {
@@ -81,6 +82,25 @@ describe('AiUsageService', () => {
     const calls = updateMany.mock.calls as unknown as [UpdateManyArg][];
     expect(calls[0][0].where).toMatchObject({
       visionCalls: { lt: 2 },
+    });
+  });
+
+  it('records token usage into AiCallLog', async () => {
+    await service.recordTokenUsage('user-a', 'FOOD_TEXT', {
+      model: 'gpt-4o-mini',
+      inputTokens: 11,
+      outputTokens: 4,
+    });
+    expect(prisma.aiCallLog.create).toHaveBeenCalledWith({
+      data: {
+        userId: 'user-a',
+        operation: 'FOOD_TEXT',
+        model: 'gpt-4o-mini',
+        inputTokens: 11,
+        outputTokens: 4,
+        totalTokens: 15,
+        usageDate: '2026-09-22',
+      },
     });
   });
 });

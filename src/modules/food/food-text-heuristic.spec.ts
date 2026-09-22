@@ -17,4 +17,12 @@ describe('isLikelyFoodText', () => {
     expect(isLikelyFoodText('สวัสดี')).toBe(false);
     expect(isLikelyFoodText('')).toBe(false);
   });
+
+  it('rejects Rich Menu entry commands', () => {
+    expect(isLikelyFoodText('อาหาร')).toBe(false);
+    expect(isLikelyFoodText(' อาหาร ')).toBe(false);
+    expect(isLikelyFoodText('🍽️ อาหาร')).toBe(false);
+    expect(isLikelyFoodText('โค้ช')).toBe(false);
+    expect(isLikelyFoodText('🧠 โค้ช')).toBe(false);
+  });
 });

@@ -5,6 +5,10 @@ import { aiRateLimiter } from '../../common/ai-rate-limiter';
 import { LineOutboundError } from '../line/line-outbound.error';
 import { LineService } from '../line/line.service';
 import { AiGatewayService } from '../membership/ai-gateway.service';
+import {
+  reportAiTokenUsage,
+  usageFromOpenAiCompletion,
+} from '../membership/ai-token-capture';
 import { AiQuotaExceededError } from '../membership/membership.errors';
 import {
   buildQuotaExceededMessage,
@@ -83,6 +87,7 @@ import {
   GENERAL_HELP_TEXT,
   LOG_FOOD_HINT_TEXT,
   MEDICAL_ADVICE_TEXT,
+  COACH_ENTRY_TEXT,
   NO_PENDING_FOOD_TEXT,
   REPLACE_PENDING_CHOICES,
   REPLACE_PENDING_TEXT,
@@ -106,6 +111,10 @@ import {
 export const FOOD_COMMANDS = {
   START: ['เริ่ม', 'แก้ไขโปรไฟล์'],
   TODAY: ['วันนี้', '📊 วันนี้', '🍽️ วันนี้'],
+  /** Rich Menu 🍽️ อาหาร — entry hint only; never Food AI. */
+  FOOD_ENTRY: ['อาหาร', '🍽️ อาหาร'],
+  /** Rich Menu 🧠 โค้ช — entry hint only; never Daily / AI. */
+  COACH_ENTRY: ['โค้ช', '🧠 โค้ช'],
   PROFILE: ['โปรไฟล์', '👤 โปรไฟล์', 'เป้าหมาย', '🎯 เป้าหมาย'],
   WEIGHT: ['น้ำหนัก', '⚖️ น้ำหนัก'],
   HISTORY: ['ประวัติ', '📋 ประวัติ'],
@@ -116,6 +125,15 @@ export const FOOD_COMMANDS = {
   REPLACE_OLD: 'ยกเลิกรายการเดิม',
   KEEP_PENDING: 'กลับไปยืนยัน',
 } as const;
+
+/** Exact Rich Menu / shortcut command (trim only — no partial match). */
+export function isExactFoodCommand(
+  text: string,
+  list: readonly string[],
+): boolean {
+  const t = text.trim();
+  return list.includes(t);
+}
 
 @Injectable()
 export class FoodLoggingService {
@@ -187,22 +205,33 @@ export class FoodLoggingService {
       return 'handled';
     }
 
-    if ((FOOD_COMMANDS.TODAY as readonly string[]).includes(normalized)) {
+    if (isExactFoodCommand(normalized, FOOD_COMMANDS.TODAY)) {
       await this.replyTodaySummary(user, replyToken);
       return 'handled';
     }
 
-    if ((FOOD_COMMANDS.PROFILE as readonly string[]).includes(normalized)) {
+    // Rich Menu entry points — must run before Food AI / classify / coach NL.
+    if (isExactFoodCommand(normalized, FOOD_COMMANDS.FOOD_ENTRY)) {
+      await this.lineService.replyText(replyToken, LOG_FOOD_HINT_TEXT);
+      return 'handled';
+    }
+
+    if (isExactFoodCommand(normalized, FOOD_COMMANDS.COACH_ENTRY)) {
+      await this.lineService.replyText(replyToken, COACH_ENTRY_TEXT);
+      return 'handled';
+    }
+
+    if (isExactFoodCommand(normalized, FOOD_COMMANDS.PROFILE)) {
       await this.replyProfile(user.id, replyToken);
       return 'handled';
     }
 
-    if ((FOOD_COMMANDS.WEIGHT as readonly string[]).includes(normalized)) {
+    if (isExactFoodCommand(normalized, FOOD_COMMANDS.WEIGHT)) {
       await this.replyWeightOverview(user.id, replyToken);
       return 'handled';
     }
 
-    if ((FOOD_COMMANDS.HISTORY as readonly string[]).includes(normalized)) {
+    if (isExactFoodCommand(normalized, FOOD_COMMANDS.HISTORY)) {
       await this.replyHistory(user.id, replyToken);
       return 'handled';
     }
@@ -223,14 +252,12 @@ export class FoodLoggingService {
       return 'handled';
     }
 
-    if (
-      (FOOD_COMMANDS.LOG_FOOD_HINT as readonly string[]).includes(normalized)
-    ) {
+    if (isExactFoodCommand(normalized, FOOD_COMMANDS.LOG_FOOD_HINT)) {
       await this.lineService.replyText(replyToken, LOG_FOOD_HINT_TEXT);
       return 'handled';
     }
 
-    if ((FOOD_COMMANDS.START as readonly string[]).includes(normalized)) {
+    if (isExactFoodCommand(normalized, FOOD_COMMANDS.START)) {
       return 'not_command';
     }
 
@@ -615,6 +642,8 @@ export class FoodLoggingService {
             },
           ],
         });
+        const meta = usageFromOpenAiCompletion(completion, 'gpt-4o-mini');
+        if (meta) reportAiTokenUsage(meta);
         return (
           completion.choices[0]?.message?.content?.trim() ||
           deterministic.join('\n') ||

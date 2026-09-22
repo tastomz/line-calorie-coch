@@ -5,6 +5,7 @@ import { AiQuotaExceededError } from './membership.errors';
 describe('AiGatewayService', () => {
   const aiUsage = {
     consumeAiUsage: jest.fn(),
+    recordTokenUsage: jest.fn(),
   };
 
   const service = new AiGatewayService(aiUsage as unknown as AiUsageService);
@@ -12,6 +13,7 @@ describe('AiGatewayService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     aiUsage.consumeAiUsage.mockResolvedValue(undefined);
+    aiUsage.recordTokenUsage.mockResolvedValue(undefined);
   });
 
   it('consumes quota then runs work', async () => {

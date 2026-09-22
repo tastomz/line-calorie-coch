@@ -864,13 +864,119 @@ describe('FoodLoggingService', () => {
     );
 
     expect(dailySummaryService.getDailySummary).toHaveBeenCalledWith('user-a');
+    expect(healthDashboard.buildToday).toHaveBeenCalled();
     expect(messageClassifyService.classify).not.toHaveBeenCalled();
     expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
     expect(foodAnalysisService.analyzeImage).not.toHaveBeenCalled();
+    expect(aiGateway.run).not.toHaveBeenCalled();
     expect(lineService.replyText).toHaveBeenCalledWith(
       'token',
       expect.stringMatching(/📊 วันนี้[\s\S]*1,250 \/ 2,000 kcal[\s\S]*💡/),
     );
+  });
+
+  it('handles อาหาร as FOOD_ENTRY hint with zero AI and no FoodLog', async () => {
+    await service.handleCompletedText(completedUser as never, 'token', 'อาหาร');
+
+    expect(lineService.replyText).toHaveBeenCalledWith(
+      'token',
+      expect.stringMatching(/🍽️ บันทึกอาหาร[\s\S]*ข้าวมันไก่ 1 จาน/),
+    );
+    expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
+    expect(foodAnalysisService.analyzeImage).not.toHaveBeenCalled();
+    expect(messageClassifyService.classify).not.toHaveBeenCalled();
+    expect(aiGateway.run).not.toHaveBeenCalled();
+    expect(foodLogService.createFromAnalysis).not.toHaveBeenCalled();
+    expect(pendingFoodService.upsertPending).not.toHaveBeenCalled();
+    expect(dailySummaryService.getDailySummary).not.toHaveBeenCalled();
+    expect(healthDashboard.buildToday).not.toHaveBeenCalled();
+  });
+
+  it('handles whitespace-padded อาหาร as FOOD_ENTRY', async () => {
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      ' อาหาร ',
+    );
+
+    expect(lineService.replyText).toHaveBeenCalledWith(
+      'token',
+      expect.stringContaining('🍽️ บันทึกอาหาร'),
+    );
+    expect(aiGateway.run).not.toHaveBeenCalled();
+    expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
+  });
+
+  it('handles โค้ช as COACH_ENTRY welcome with zero AI and no Daily', async () => {
+    await service.handleCompletedText(completedUser as never, 'token', 'โค้ช');
+
+    expect(lineService.replyText).toHaveBeenCalledWith(
+      'token',
+      expect.stringMatching(/🧠 Kcal Coach[\s\S]*มีอะไรอยากถามผมไหม/),
+    );
+    expect(dailySummaryService.getDailySummary).not.toHaveBeenCalled();
+    expect(healthDashboard.buildToday).not.toHaveBeenCalled();
+    expect(messageClassifyService.classify).not.toHaveBeenCalled();
+    expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
+    expect(aiGateway.run).not.toHaveBeenCalled();
+  });
+
+  it('handles whitespace-padded โค้ช as COACH_ENTRY', async () => {
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      ' โค้ช ',
+    );
+
+    expect(lineService.replyText).toHaveBeenCalledWith(
+      'token',
+      expect.stringContaining('🧠 Kcal Coach'),
+    );
+    expect(dailySummaryService.getDailySummary).not.toHaveBeenCalled();
+    expect(aiGateway.run).not.toHaveBeenCalled();
+  });
+
+  it('does not treat natural-language อาหาร/โค้ช/วันนี้ phrases as exact commands', async () => {
+    messageClassifyService.classify.mockResolvedValue({
+      type: 'coach',
+      weightKg: null,
+      weightQuery: null,
+      coachHint: 'meal_recommendation',
+    });
+    dailySummaryService.getDailySummary.mockResolvedValue(sampleSummary);
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'อาหารเช้านี้กินอะไรดี',
+    );
+    expect(lineService.replyText).not.toHaveBeenCalledWith(
+      'token',
+      expect.stringMatching(/^🍽️ บันทึกอาหาร/),
+    );
+    expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
+
+    lineService.replyText.mockClear();
+    healthDashboard.buildToday.mockClear();
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'โค้ชช่วยดูน้ำหนักให้หน่อย',
+    );
+    expect(lineService.replyText).not.toHaveBeenCalledWith(
+      'token',
+      expect.stringMatching(/^🧠 Kcal Coach/),
+    );
+    expect(healthDashboard.buildToday).not.toHaveBeenCalled();
+
+    lineService.replyText.mockClear();
+    healthDashboard.buildToday.mockClear();
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'วันนี้กินอะไรดี',
+    );
+    expect(healthDashboard.buildToday).not.toHaveBeenCalled();
   });
 
   it('handles ประวัติ command with today FoodLogs only for that user', async () => {

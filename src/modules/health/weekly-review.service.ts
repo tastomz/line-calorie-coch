@@ -4,6 +4,10 @@ import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiGatewayService } from '../membership/ai-gateway.service';
 import {
+  reportAiTokenUsage,
+  usageFromOpenAiCompletion,
+} from '../membership/ai-token-capture';
+import {
   ActivityLogService,
   ExerciseLogService,
   HydrationLogService,
@@ -209,6 +213,8 @@ export class WeeklyReviewService {
                 },
               ],
             });
+            const meta = usageFromOpenAiCompletion(completion, 'gpt-4o-mini');
+            if (meta) reportAiTokenUsage(meta);
             const raw = completion.choices[0]?.message?.content ?? '{}';
             return JSON.parse(raw.replace(/```json|```/g, '').trim()) as {
               summary?: string;
@@ -334,6 +340,8 @@ export class BodyScanAnalysisService {
           },
         ],
       });
+      const meta = usageFromOpenAiCompletion(completion, 'gpt-4o-mini');
+      if (meta) reportAiTokenUsage(meta);
       const raw = completion.choices[0]?.message?.content ?? '{}';
       return JSON.parse(raw) as BodyScanDraft;
     });

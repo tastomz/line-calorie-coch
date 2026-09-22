@@ -7,7 +7,14 @@ import { join } from 'path';
 export class AdminPagesController {
   private readonly root = join(process.cwd(), 'public', 'admin');
 
-  @Get(['admin', 'admin/', 'admin/login', 'admin/dashboard', 'admin/promos'])
+  @Get([
+    'admin',
+    'admin/',
+    'admin/login',
+    'admin/dashboard',
+    'admin/promos',
+    'admin/ai-usage',
+  ])
   serve(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
     const path = (req.path.replace(/\/$/, '') || '/admin').toLowerCase();
     const map: Record<string, string> = {
@@ -15,6 +22,7 @@ export class AdminPagesController {
       '/admin/login': 'login.html',
       '/admin/dashboard': 'dashboard.html',
       '/admin/promos': 'promos.html',
+      '/admin/ai-usage': 'ai-usage.html',
     };
     const file = map[path];
     if (!file) return next();

@@ -4,6 +4,10 @@ import OpenAI from 'openai';
 import { openAiCircuitBreaker } from '../../common/openai-circuit-breaker';
 import { OPENAI_CALL_TIMEOUT_MS, withTimeout } from '../../common/with-timeout';
 import { AiGatewayService } from '../membership/ai-gateway.service';
+import {
+  reportAiTokenUsage,
+  usageFromOpenAiCompletion,
+} from '../membership/ai-token-capture';
 import { DailyCoachSummary, MacroTotals } from './daily-summary.service';
 import {
   buildDeterministicCoachTip,
@@ -182,6 +186,8 @@ export class DailyCoachService {
         this.logger.log(
           `OpenAI coach usage prompt=${usage.prompt_tokens} completion=${usage.completion_tokens} total=${usage.total_tokens}`,
         );
+        const meta = usageFromOpenAiCompletion(completion, COACH_MODEL);
+        if (meta) reportAiTokenUsage(meta);
       }
 
       openAiCircuitBreaker.recordSuccess();

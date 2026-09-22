@@ -19,6 +19,10 @@ import {
   FoodAnalysisValidationError,
   parseFoodAnalysisJson,
 } from './food-analysis.validator';
+import {
+  reportAiTokenUsage,
+  usageFromOpenAiCompletion,
+} from '../membership/ai-token-capture';
 
 export class FoodAnalysisError extends Error {
   constructor(message: string) {
@@ -176,6 +180,8 @@ export class FoodAnalysisService {
         this.logger.log(
           `OpenAI usage prompt=${usage.prompt_tokens} completion=${usage.completion_tokens} total=${usage.total_tokens}`,
         );
+        const meta = usageFromOpenAiCompletion(completion, FOOD_ANALYSIS_MODEL);
+        if (meta) reportAiTokenUsage(meta);
       }
 
       const content = completion.choices[0]?.message?.content;

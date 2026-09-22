@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AiTokenUsageMeta } from './ai-token-capture';
 import { AiQuotaExceededError } from './membership.errors';
 import { AiOperation } from './plan.config';
 import { SubscriptionEntitlementService } from './subscription-entitlement.service';
 
 /**
- * Atomic daily AI usage tracking.
+ * Atomic daily AI usage tracking + per-call token ledger.
  *
  * Behavior on OpenAI failure after a real request was sent:
  * quota is already reserved (consumed) — we do not refund automatically,
@@ -86,6 +87,31 @@ export class AiUsageService {
           : limit;
         throw new AiQuotaExceededError(operation, plan, used, limit);
       }
+    });
+  }
+
+  /** Persist one OpenAI call's token metadata (no prompts/responses). */
+  async recordTokenUsage(
+    userId: string,
+    operation: AiOperation,
+    meta: AiTokenUsageMeta,
+    now = new Date(),
+  ): Promise<void> {
+    const usageDate = this.entitlement.usageDateKey(now);
+    const inputTokens = Math.max(0, Math.floor(meta.inputTokens));
+    const outputTokens = Math.max(0, Math.floor(meta.outputTokens));
+    const totalTokens = inputTokens + outputTokens;
+    const model = (meta.model ?? '').trim() || 'unknown';
+    await this.prisma.aiCallLog.create({
+      data: {
+        userId,
+        operation,
+        model,
+        inputTokens,
+        outputTokens,
+        totalTokens,
+        usageDate,
+      },
     });
   }
 }

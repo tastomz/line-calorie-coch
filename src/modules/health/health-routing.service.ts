@@ -10,6 +10,10 @@ import {
 import { LineOutboundError } from '../line/line-outbound.error';
 import { LineService } from '../line/line.service';
 import { AiGatewayService } from '../membership/ai-gateway.service';
+import {
+  reportAiTokenUsage,
+  usageFromOpenAiCompletion,
+} from '../membership/ai-token-capture';
 import { AiQuotaExceededError } from '../membership/membership.errors';
 import { buildQuotaExceededMessage } from '../membership/membership.messages';
 import { NutritionProfileService } from '../users/nutrition-profile.service';
@@ -487,6 +491,8 @@ export class HealthRoutingService {
               },
             ],
           });
+          const meta = usageFromOpenAiCompletion(completion, 'gpt-4o-mini');
+          if (meta) reportAiTokenUsage(meta);
           return (
             completion.choices[0]?.message?.content?.trim() ||
             'ยังนึกเมนูไม่ออกครับ ลองระบุงบแคลอรี่มาอีกครั้ง'

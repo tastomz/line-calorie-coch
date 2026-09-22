@@ -2,9 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { AiQuotaExceededError } from './membership.errors';
 import { AiOperation } from './plan.config';
 import { AiUsageService } from './ai-usage.service';
+import { AiTokenUsageMeta, runWithAiTokenCapture } from './ai-token-capture';
 
 /**
- * Central AI gateway: entitlement/quota → consume → OpenAI work.
+ * Central AI gateway: entitlement/quota → consume → OpenAI work → token log.
  * Deterministic features must NOT call this.
  */
 @Injectable()
@@ -15,9 +16,8 @@ export class AiGatewayService {
 
   /**
    * Reserve quota then run `work`.
-   * Consumption happens before the OpenAI call so concurrent requests cannot
-   * oversell the daily limit. If `work` throws before/during the call, the
-   * slot stays consumed (see docs/MEMBERSHIP.md).
+   * OpenAI callers should invoke `reportAiTokenUsage(...)` inside `work`
+   * so tokens are persisted centrally after a successful call.
    */
   async run<T>(
     userId: string,
@@ -28,8 +28,15 @@ export class AiGatewayService {
       throw new Error('userId is required for AI gateway');
     }
     await this.aiUsage.consumeAiUsage(userId, operation);
+    let captured: AiTokenUsageMeta | undefined;
     try {
-      return await work();
+      const result = await runWithAiTokenCapture((meta) => {
+        captured = meta;
+      }, work);
+      if (captured) {
+        await this.aiUsage.recordTokenUsage(userId, operation, captured);
+      }
+      return result;
     } catch (error) {
       if (error instanceof AiQuotaExceededError) {
         throw error;

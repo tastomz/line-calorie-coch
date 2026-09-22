@@ -10,11 +10,20 @@ const FOOD_SIGNAL =
   /ข้าว|กะเพรา|ผัด|ต้มยำ|ต้มข่า|แกง|ก๋วยเตี๋ยว|บะหมี่|เส้น|สลัด|ไก่|หมู|เนื้อ|ปลา|กุ้ง|ไข่|ซูชิ|พิซซ่า|เบอร์เกอร์|แซนด์วิช|ขนม|ผลไม้|โยเกิร์ต|นม|กาแฟ|ชา|น้ำผลไม้|ส้มตำ|ลาบ|ยำ|จาน|ชิ้น|ชาม|ถ้วย|bowl|rice|chicken|pork|beef|fish|salad|noodle|soup|curry|sushi|pizza|burger/i;
 
 const NON_FOOD =
-  /สวัสดี|ขอบคุณ|ช่วยด้วย|ตั้งค่า|โปรไฟล์|เมนู|help|hello|thanks/i;
+  /สวัสดี|ขอบคุณ|ช่วยด้วย|ตั้งค่า|โปรไฟล์|เมนู|help|hello|thanks|^อาหาร$|^โค้ช$/i;
 
 export function isLikelyFoodText(text: string): boolean {
   const raw = text.trim();
   if (!raw || raw.length > 160) {
+    return false;
+  }
+  // Exact Rich Menu entry commands are never food logs.
+  if (
+    raw === 'อาหาร' ||
+    raw === '🍽️ อาหาร' ||
+    raw === 'โค้ช' ||
+    raw === '🧠 โค้ช'
+  ) {
     return false;
   }
   if (/^\d+(?:\.\d+)?$/.test(raw)) {

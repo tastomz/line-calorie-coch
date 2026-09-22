@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Usage</title>
+  <link rel="stylesheet" href="/admin/assets/style.css" />
+  <style>
+    .range { display:flex; gap:8px; flex-wrap:wrap; margin:12px 0 16px; }
+    .range button.active { outline:2px solid #222; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; }
+    .stat { background:#f6f6f6; padding:12px; border-radius:8px; }
+    .stat span { display:block; font-size:12px; opacity:.7; }
+    .stat b { font-size:1.35rem; }
+    h2 { font-size:1.05rem; margin:20px 0 8px; }
+    .muted { opacity:.7; font-size:13px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>📊 AI Usage</h1>
+    <p><a href="/admin">Dashboard</a> · <a href="/admin/promos">Promos</a></p>
+    <div class="range">
+      <button class="btn" data-range="today">วันนี้</button>
+      <button class="btn" data-range="7d">7 วัน</button>
+      <button class="btn" data-range="30d">30 วัน</button>
+    </div>
+    <div id="overview" class="card">Loading...</div>
+    <h2>By Feature</h2>
+    <div class="card" id="feature">Loading...</div>
+    <h2>By Model</h2>
+    <div class="card" id="model">Loading...</div>
+    <h2>By Membership (สถานะปัจจุบัน)</h2>
+    <div class="card" id="membership">Loading...</div>
+    <h2>Daily</h2>
+    <div class="card" id="daily">Loading...</div>
+    <h2>Users (top)</h2>
+    <div class="card" id="users">Loading...</div>
+  </div>
+  <script>
+    let range = '7d';
+    async function api(path) {
+      const res = await fetch(path, { credentials: 'include' });
+      if (res.status === 401) { location.href = '/admin/login'; throw new Error('auth'); }
+      if (res.status === 403) {
+        document.body.innerHTML = '<div class="wrap"><div class="card"><h1>ไม่มีสิทธิ์ Admin</h1></div></div>';
+        throw new Error('forbidden');
+      }
+      return res.json();
+    }
+    function fmt(n) {
+      if (n == null) return '—';
+      return Number(n).toLocaleString('th-TH');
+    }
+    function money(n) {
+      if (n == null) return '—';
+      return '฿' + Number(n).toLocaleString('th-TH', { maximumFractionDigits: 4 });
+    }
+    function costCell(row) {
+      if (row.estimatedCostThb == null || row.costKnown === false) return '<span class="muted">ยังไม่มีราคา</span>';
+      return money(row.estimatedCostThb);
+    }
+    async function load() {
+      document.querySelectorAll('.range button').forEach(b => {
+        b.classList.toggle('active', b.dataset.range === range);
+      });
+      const q = '?range=' + encodeURIComponent(range);
+      const [summary, feature, model, membership, daily, users] = await Promise.all([
+        api('/admin/api/ai-usage/summary' + q),
+        api('/admin/api/ai-usage/by-feature' + q),
+        api('/admin/api/ai-usage/by-model' + q),
+        api('/admin/api/ai-usage/by-membership' + q),
+        api('/admin/api/ai-usage/by-day' + q),
+        api('/admin/api/ai-usage/by-user' + q + '&limit=30'),
+      ]);
+
+      const ec = summary.estimatedCost;
+      let costHtml = '';
+      if (ec.available) {
+        costHtml = `<div class="stat"><span>💰 Estimated Cost</span><b>${money(ec.totalCostThb)}</b>
+          <div class="muted">${ec.note}<br>Input ${money(ec.inputCostThb)} · Output ${money(ec.outputCostThb)}</div></div>`;
+      } else {
+        costHtml = `<div class="stat"><span>💰 Estimated Cost</span><b class="muted">${ec.message || '—'}</b>
+          ${ec.partialCostThb != null ? `<div class="muted">บางส่วนที่รู้ราคา: ${money(ec.partialCostThb)}</div>` : ''}
+          ${ec.unknownRequests ? `<div class="muted">unknown model calls: ${ec.unknownRequests}</div>` : ''}
+        </div>`;
+      }
+
+      document.getElementById('overview').innerHTML = `
+        <div class="muted">${summary.fromDate} → ${summary.toDate}</div>
+        <div class="grid" style="margin-top:10px">
+          <div class="stat"><span>👥 Active Users</span><b>${fmt(summary.activeUsers)}</b></div>
+          <div class="stat"><span>🤖 AI Requests</span><b>${fmt(summary.requests)}</b></div>
+          <div class="stat"><span>🔤 Input Tokens</span><b>${fmt(summary.inputTokens)}</b></div>
+          <div class="stat"><span>💬 Output Tokens</span><b>${fmt(summary.outputTokens)}</b></div>
+          <div class="stat"><span>🧮 Total Tokens</span><b>${fmt(summary.totalTokens)}</b></div>
+          ${costHtml}
+        </div>`;
+
+      document.getElementById('feature').innerHTML = `<table class="table">
+        <tr><th>Feature</th><th>Calls</th><th>Input</th><th>Output</th><th>Total</th><th>Est. Cost</th></tr>
+        ${(feature.rows||[]).map(r => `<tr>
+          <td>${r.feature}</td><td>${fmt(r.requests)}</td><td>${fmt(r.inputTokens)}</td>
+          <td>${fmt(r.outputTokens)}</td><td>${fmt(r.totalTokens)}</td><td>${costCell(r)}</td>
+        </tr>`).join('') || '<tr><td colspan="6" class="muted">ไม่มีข้อมูล</td></tr>'}
+      </table>`;
+
+      document.getElementById('model').innerHTML = `<table class="table">
+        <tr><th>Model</th><th>Calls</th><th>Tokens</th><th>Est. Cost</th></tr>
+        ${(model.rows||[]).map(r => `<tr>
+          <td>${r.model}${r.priced ? '' : ' <span class="muted">(unknown price)</span>'}</td>
+          <td>${fmt(r.requests)}</td><td>${fmt(r.totalTokens)}</td><td>${costCell(r)}</td>
+        </tr>`).join('') || '<tr><td colspan="4" class="muted">ไม่มีข้อมูล</td></tr>'}
+      </table>`;
+
+      const f = membership.FREE || {};
+      const p = membership.PRO || {};
+      document.getElementById('membership').innerHTML = `
+        <p class="muted">${membership.note || ''}</p>
+        <table class="table">
+          <tr><th></th><th>Users</th><th>Calls</th><th>Tokens</th><th>Est. Cost</th></tr>
+          <tr><td>FREE</td><td>${fmt(f.users)}</td><td>${fmt(f.requests)}</td><td>${fmt(f.totalTokens)}</td>
+            <td>${f.estimatedCostThb == null ? '—' : money(f.estimatedCostThb)}</td></tr>
+          <tr><td>PRO</td><td>${fmt(p.users)}</td><td>${fmt(p.requests)}</td><td>${fmt(p.totalTokens)}</td>
+            <td>${p.estimatedCostThb == null ? '—' : money(p.estimatedCostThb)}</td></tr>
+        </table>`;
+
+      document.getElementById('daily').innerHTML = `<table class="table">
+        <tr><th>Date</th><th>Calls</th><th>Input</th><th>Output</th><th>Total</th><th>Est. Cost</th></tr>
+        ${(daily.rows||[]).map(r => `<tr>
+          <td>${r.date}</td><td>${fmt(r.requests)}</td><td>${fmt(r.inputTokens)}</td>
+          <td>${fmt(r.outputTokens)}</td><td>${fmt(r.totalTokens)}</td><td>${costCell(r)}</td>
+        </tr>`).join('') || '<tr><td colspan="6" class="muted">ไม่มีข้อมูล</td></tr>'}
+      </table>`;
+
+      document.getElementById('users').innerHTML = `<table class="table">
+        <tr><th>User</th><th>Plan</th><th>Calls</th><th>Tokens</th></tr>
+        ${(users.rows||[]).map(r => `<tr>
+          <td>${r.displayName || r.lineUserId || r.userId.slice(0,8)}</td>
+          <td>${r.membership}</td><td>${fmt(r.requests)}</td><td>${fmt(r.totalTokens)}</td>
+        </tr>`).join('') || '<tr><td colspan="4" class="muted">ไม่มีข้อมูล</td></tr>'}
+      </table>`;
+    }
+    document.querySelectorAll('.range button').forEach(b => {
+      b.onclick = () => { range = b.dataset.range; load().catch(e => alert(e.message)); };
+    });
+    load().catch(e => {
+      document.getElementById('overview').innerHTML = `<div class="err">${e.message}</div>`;
+    });
+  </script>
+</body>
+</html>

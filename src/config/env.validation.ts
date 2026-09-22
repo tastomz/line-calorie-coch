@@ -28,6 +28,7 @@ export type AppEnv = {
   ENABLE_DEV_MEMBERSHIP_TOOLS: string;
   ENABLE_MEMBERSHIP_CHECKOUT: string;
   ADMIN_BOOTSTRAP_LINE_USER_IDS: string;
+  OPENAI_USD_THB_RATE: string;
 };
 
 export class EnvValidationError extends Error {
@@ -105,6 +106,7 @@ export function validateEnv(raw: NodeJS.ProcessEnv = process.env): AppEnv {
     raw,
     'ADMIN_BOOTSTRAP_LINE_USER_IDS',
   );
+  const OPENAI_USD_THB_RATE = read(raw, 'OPENAI_USD_THB_RATE');
 
   const trialRaw = read(raw, 'TRIAL_DEFAULT_DAYS') || '7';
   const TRIAL_DEFAULT_DAYS = Number(trialRaw);
@@ -245,5 +247,6 @@ export function validateEnv(raw: NodeJS.ProcessEnv = process.env): AppEnv {
     ENABLE_DEV_MEMBERSHIP_TOOLS,
     ENABLE_MEMBERSHIP_CHECKOUT,
     ADMIN_BOOTSTRAP_LINE_USER_IDS,
+    OPENAI_USD_THB_RATE,
   };
 }

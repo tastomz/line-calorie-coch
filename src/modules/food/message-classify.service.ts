@@ -12,6 +12,10 @@ import {
   MESSAGE_CLASSIFY_MODEL,
   MESSAGE_CLASSIFY_SYSTEM_PROMPT,
 } from './message-classify.types';
+import {
+  reportAiTokenUsage,
+  usageFromOpenAiCompletion,
+} from '../membership/ai-token-capture';
 
 export class MessageClassifyError extends Error {
   constructor(message: string) {
@@ -81,6 +85,11 @@ export class MessageClassifyService {
         this.logger.log(
           `Classify usage prompt=${usage.prompt_tokens} completion=${usage.completion_tokens} total=${usage.total_tokens}`,
         );
+        const meta = usageFromOpenAiCompletion(
+          completion,
+          MESSAGE_CLASSIFY_MODEL,
+        );
+        if (meta) reportAiTokenUsage(meta);
       }
 
       const content = completion.choices[0]?.message?.content;

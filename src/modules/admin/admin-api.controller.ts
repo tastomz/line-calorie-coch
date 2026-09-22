@@ -17,6 +17,7 @@ import type { Response } from 'express';
 import { isAllowedPromoDays } from '../membership/promo-code.generator';
 import { membershipRateLimiter } from '../membership/membership-rate-limiter';
 import { ADMIN_SESSION_COOKIE, AdminAuthService } from './admin-auth.service';
+import { AdminAiUsageService } from './admin-ai-usage.service';
 import { AdminDashboardService } from './admin-dashboard.service';
 import { AdminId } from './admin-session.decorator';
 import { AdminSessionGuard } from './admin-session.guard';
@@ -26,6 +27,7 @@ export class AdminApiController {
   constructor(
     private readonly auth: AdminAuthService,
     private readonly dashboard: AdminDashboardService,
+    private readonly aiUsage: AdminAiUsageService,
     private readonly config: ConfigService,
   ) {}
 
@@ -201,5 +203,119 @@ export class AdminApiController {
       body,
     );
     return promo;
+  }
+
+  private parseAiRange(
+    range?: string,
+    from?: string,
+    to?: string,
+  ): { fromDate: string; toDate: string } {
+    const r = (range ?? '7d').toLowerCase();
+    const allowed = new Set(['today', '7d', '30d', 'custom']);
+    if (!allowed.has(r)) {
+      throw new BadRequestException('range must be today|7d|30d|custom');
+    }
+    if (r === 'custom' && (!from || !to)) {
+      throw new BadRequestException(
+        'custom range requires from and to (YYYY-MM-DD)',
+      );
+    }
+    return this.aiUsage.resolveDateRange(
+      r as 'today' | '7d' | '30d' | 'custom',
+      from,
+      to,
+    );
+  }
+
+  @Get('ai-usage/summary')
+  @UseGuards(AdminSessionGuard)
+  async aiUsageSummary(
+    @Query('range') range?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    const { fromDate, toDate } = this.parseAiRange(range, from, to);
+    return this.aiUsage.summary(fromDate, toDate);
+  }
+
+  @Get('ai-usage/by-feature')
+  @UseGuards(AdminSessionGuard)
+  async aiUsageByFeature(
+    @Query('range') range?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    const { fromDate, toDate } = this.parseAiRange(range, from, to);
+    return {
+      fromDate,
+      toDate,
+      rows: await this.aiUsage.byFeature(fromDate, toDate),
+    };
+  }
+
+  @Get('ai-usage/by-day')
+  @UseGuards(AdminSessionGuard)
+  async aiUsageByDay(
+    @Query('range') range?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    const { fromDate, toDate } = this.parseAiRange(range, from, to);
+    return {
+      fromDate,
+      toDate,
+      rows: await this.aiUsage.byDay(fromDate, toDate),
+    };
+  }
+
+  @Get('ai-usage/by-model')
+  @UseGuards(AdminSessionGuard)
+  async aiUsageByModel(
+    @Query('range') range?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    const { fromDate, toDate } = this.parseAiRange(range, from, to);
+    return {
+      fromDate,
+      toDate,
+      rows: await this.aiUsage.byModel(fromDate, toDate),
+    };
+  }
+
+  @Get('ai-usage/by-membership')
+  @UseGuards(AdminSessionGuard)
+  async aiUsageByMembership(
+    @Query('range') range?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    const { fromDate, toDate } = this.parseAiRange(range, from, to);
+    return {
+      fromDate,
+      toDate,
+      ...(await this.aiUsage.byMembership(fromDate, toDate)),
+    };
+  }
+
+  @Get('ai-usage/by-user')
+  @UseGuards(AdminSessionGuard)
+  async aiUsageByUser(
+    @Query('range') range?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const { fromDate, toDate } = this.parseAiRange(range, from, to);
+    const n = Number(limit ?? '50');
+    return {
+      fromDate,
+      toDate,
+      rows: await this.aiUsage.byUser(
+        fromDate,
+        toDate,
+        Number.isFinite(n) ? n : 50,
+      ),
+    };
   }
 }
