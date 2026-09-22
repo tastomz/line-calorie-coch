@@ -91,6 +91,13 @@ export class NutritionProfileService {
     return profile;
   }
 
+  /** Soft lookup for account/web — does not throw when onboarding incomplete. */
+  async findOptionalByUserId(userId: string) {
+    return this.prisma.nutritionProfile.findUnique({
+      where: { userId },
+    });
+  }
+
   async upsert(userId: string, dto: CreateNutritionProfileDto) {
     const existing = await this.prisma.nutritionProfile.findUnique({
       where: { userId },

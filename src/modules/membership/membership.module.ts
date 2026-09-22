@@ -10,6 +10,7 @@ import { MembershipBillingService } from './membership-billing.service';
 import { MembershipPagesController } from './membership-pages.controller';
 import { MembershipSessionGuard } from './membership-session.guard';
 import { MembershipService } from './membership.service';
+import { AuthLiffController } from './auth-liff.controller';
 import { PAYMENT_PROVIDER } from './membership.tokens';
 import { MockPaymentProvider } from './mock.payment-provider';
 import {
@@ -27,6 +28,7 @@ import { SubscriptionEntitlementService } from './subscription-entitlement.servi
     MembershipApiController,
     MembershipPagesController,
     StripeWebhookController,
+    AuthLiffController,
   ],
   providers: [
     SubscriptionEntitlementService,

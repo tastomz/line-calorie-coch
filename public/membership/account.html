@@ -3,40 +3,87 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>บัญชีสมาชิก</title>
+  <title>Kcal Coach — โปรไฟล์</title>
   <link rel="stylesheet" href="/membership/assets/style.css" />
 </head>
 <body>
   <div class="wrap">
-    <div class="brand">บัญชีสมาชิก</div>
-    <div id="content" class="muted">กำลังโหลด...</div>
+    <div class="brand">Kcal Coach</div>
+    <div class="sub">👤 บัญชีของฉัน</div>
+    <div id="content" class="muted">กำลังเข้าสู่ระบบ Kcal Coach...</div>
   </div>
   <script src="/membership/assets/app.js"></script>
   <script>
     async function load() {
       const el = document.getElementById('content');
+      el.className = 'muted';
+      el.textContent = 'กำลังเข้าสู่ระบบ Kcal Coach...';
       try {
-        const m = await api('/api/membership');
+        const m = await ensureMembershipSession(el);
+        if (!m) return; // LIFF redirect in progress
+
         const u = m.usage;
         const L = m.limits;
         const isFree = !m.hasProAccess;
+        const expiry = fmtDateShort(m.periodEnd);
+
+        let membershipHtml = `
+          <div class="card">
+            <h3>สมาชิก</h3>
+            <div class="price" style="font-size:1.5rem">${planLabel(m)}
+              <span class="badge">${statusLabelTh(m.status)}</span>
+            </div>
+            <div class="muted">${m.displayName || 'ผู้ใช้ LINE'}</div>
+            ${
+              m.hasProAccess && expiry
+                ? `<div class="muted">ใช้งานถึง ${expiry}</div>`
+                : isFree
+                  ? `<div class="muted">แพ็กเกจ FREE</div>`
+                  : ''
+            }
+          </div>`;
 
         let redeemHtml = '';
         if (isFree) {
           redeemHtml = `
             <div class="card">
-              <h3>🎁 ใช้โค้ดโปรโมชั่น</h3>
+              <h3>🎁 Redeem Code</h3>
               <div class="row">
-                <input class="input" id="promo" placeholder="TASTOM-XXXXXX" />
-                <button class="btn" style="width:auto;margin:0" id="redeem">ใช้โค้ด</button>
+                <input class="input" id="promo" placeholder="TASTOM-XXXXXX" autocomplete="off" />
+                <button class="btn" style="width:auto;margin:0" id="redeem">Redeem</button>
               </div>
               <div id="promoMsg" class="muted"></div>
             </div>`;
         } else {
           redeemHtml = `
             <div class="card">
-              <h3>🎁 โค้ดโปรโมชั่น</h3>
-              <p class="muted">คุณมี Pro อยู่แล้ว — ไม่ต้องใช้โค้ดเพิ่ม</p>
+              <h3>🎁 Redeem Code</h3>
+              <p class="muted">คุณเป็น PRO แล้ว${expiry ? ` · ถึง ${expiry}` : ''}</p>
+            </div>`;
+        }
+
+        let goalsHtml = '';
+        if (m.nutrition) {
+          const n = m.nutrition;
+          goalsHtml = `
+            <div class="card">
+              <h3>🎯 เป้าหมายของฉัน</h3>
+              <div class="price" style="font-size:1.2rem">
+                ${fmtNum(n.currentWeightKg, 1)} kg → ${fmtNum(n.targetWeightKg, 1)} kg
+              </div>
+              <div>${fmtNum(n.dailyCalories)} kcal/วัน</div>
+              <div class="muted">
+                Protein ${fmtNum(n.dailyProteinG)}g ·
+                Carb ${fmtNum(n.dailyCarbsG)}g ·
+                Fat ${fmtNum(n.dailyFatG)}g
+              </div>
+              <p class="muted" style="margin-top:12px">แก้ไขเป้าหมายในแชท LINE ได้โดยพิมพ์คำว่า <b>เป้าหมาย</b></p>
+            </div>`;
+        } else {
+          goalsHtml = `
+            <div class="card">
+              <h3>🎯 เป้าหมายของฉัน</h3>
+              <p class="muted">ยังไม่มีโปรไฟล์โภชนาการ — ตั้งค่าในแชท LINE ได้ครับ</p>
             </div>`;
         }
 
@@ -53,38 +100,25 @@
           } else {
             actionsHtml = `<button class="btn secondary" id="cancel">ยกเลิกสมาชิก</button>`;
           }
-        } else {
-          actionsHtml = `<p class="muted">การชำระเงินยังไม่เปิด — ใช้โค้ดโปรโมชั่นได้ถ้ามี</p>`;
-          if (m.status === 'CANCELED' && m.hasProAccess) {
-            actionsHtml += `<p class="muted">สิทธิ์ Pro ใช้ได้ถึง ${fmtDate(m.periodEnd)}</p>`;
-          }
         }
 
         el.innerHTML = `
-          <div class="card">
-            <div>${m.displayName || 'ผู้ใช้ LINE'}</div>
-            <div class="price" style="font-size:1.4rem">${planLabel(m)}
-              <span class="badge">${statusLabelTh(m.status)}</span>
-            </div>
-            <div class="muted">แพ็กเกจ: ${m.plan}</div>
-            <div class="muted">วันหมดอายุ / สิ้นรอบ: ${fmtDate(m.periodEnd)}</div>
-            <div class="muted">ราคา Pro: ฿${m.priceThbMonthly}/เดือน</div>
-          </div>
+          ${membershipHtml}
+          ${redeemHtml}
+          ${goalsHtml}
           <div class="card">
             <h3>AI วันนี้</h3>
-            <div>🍚 ข้อความ ${u.foodTextCalls}/${L.FOOD_TEXT}</div>
-            <div>📸 รูป ${u.visionCalls}/${L.FOOD_VISION}</div>
-            <div>🔧 แก้ไข ${u.adjustmentCalls}/${L.COMPOSITION_ADJUSTMENT}</div>
-            <div>🤖 Coach ${u.coachCalls}/${L.COACH}</div>
-            ${L.BODY_SCAN != null ? `<div>🧍 Body Scan ${u.bodyScanCalls ?? 0}/${L.BODY_SCAN}</div>` : ''}
-            ${L.MEAL_PLAN != null ? `<div>🍱 Meal ${u.mealPlanCalls ?? 0}/${L.MEAL_PLAN}</div>` : ''}
-            ${L.WEEKLY_REVIEW != null ? `<div>📈 Weekly ${u.weeklyReviewCalls ?? 0}/${L.WEEKLY_REVIEW}</div>` : ''}
+            <div>ข้อความ ${u.foodTextCalls}/${L.FOOD_TEXT}</div>
+            <div>รูป ${u.visionCalls}/${L.FOOD_VISION}</div>
+            <div>แก้ไข ${u.adjustmentCalls}/${L.COMPOSITION_ADJUSTMENT}</div>
+            <div>Coach ${u.coachCalls}/${L.COACH}</div>
+            ${L.BODY_SCAN != null ? `<div>Body Scan ${u.bodyScanCalls ?? 0}/${L.BODY_SCAN}</div>` : ''}
+            ${L.MEAL_PLAN != null ? `<div>Meal ${u.mealPlanCalls ?? 0}/${L.MEAL_PLAN}</div>` : ''}
+            ${L.WEEKLY_REVIEW != null ? `<div>Weekly ${u.weeklyReviewCalls ?? 0}/${L.WEEKLY_REVIEW}</div>` : ''}
           </div>
-          ${redeemHtml}
-          <div class="card" id="actions">${actionsHtml}</div>
+          ${actionsHtml ? `<div class="card" id="actions">${actionsHtml}</div>` : ''}
           <div class="card">
             <button class="btn secondary" id="logout">ออกจากระบบ</button>
-            <a class="btn secondary" href="/membership">หน้าสมาชิก</a>
           </div>
         `;
 
@@ -99,9 +133,13 @@
             msg.textContent = `สำเร็จ! Pro ฟรี ${r.trialDays} วัน · หมดอายุ ${fmtDate(r.expiresAt)}`;
             setTimeout(load, 600);
           } catch (e) {
-            if (redirectToLoginIfUnauthorized(e)) return;
+            if (e.status === 401) {
+              el.textContent = 'กำลังเข้าสู่ระบบ Kcal Coach...';
+              load();
+              return;
+            }
             msg.className = 'err';
-            msg.textContent = e.message;
+            msg.textContent = redeemErrorTh(e.message);
           }
         });
         document.getElementById('cancel')?.addEventListener('click', async () => {
@@ -110,7 +148,6 @@
             await api('/api/membership/cancel', { method: 'POST', body: '{}' });
             load();
           } catch (e) {
-            if (redirectToLoginIfUnauthorized(e)) return;
             alert(e.message);
           }
         });
@@ -119,18 +156,22 @@
             await api('/api/membership/resume', { method: 'POST', body: '{}' });
             load();
           } catch (e) {
-            if (redirectToLoginIfUnauthorized(e)) return;
             alert(e.message);
           }
         });
         document.getElementById('logout')?.addEventListener('click', async () => {
           await api('/api/membership/logout', { method: 'POST', body: '{}' });
-          location.replace(LOGIN_PATH);
+          try {
+            if (window.liff && window.liff.isLoggedIn()) window.liff.logout();
+          } catch {}
+          location.replace(PROFILE_PATH);
         });
       } catch (e) {
-        if (redirectToLoginIfUnauthorized(e)) return;
-        el.innerHTML = `<div class="card"><div class="err">${e.message}</div>
-          <a class="btn" href="${LOGIN_PATH}">เข้าสู่ระบบ</a></div>`;
+        el.innerHTML = `<div class="card"><div class="err">${
+          e.message || 'ไม่สามารถเข้าสู่ระบบผ่าน LINE ได้ กรุณาลองใหม่อีกครั้ง'
+        }</div>
+          <button class="btn" id="retry">ลองอีกครั้ง</button></div>`;
+        document.getElementById('retry')?.addEventListener('click', load);
       }
     }
     load();

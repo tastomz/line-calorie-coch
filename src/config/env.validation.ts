@@ -17,6 +17,7 @@ export type AppEnv = {
   STRIPE_PRICE_ID: string;
   LINE_LOGIN_CHANNEL_ID: string;
   LINE_LOGIN_CHANNEL_SECRET: string;
+  LIFF_ID: string;
   ADMIN_SESSION_SECRET: string;
   ADMIN_USERNAME: string;
   ADMIN_PASSWORD: string;
@@ -92,6 +93,7 @@ export function validateEnv(raw: NodeJS.ProcessEnv = process.env): AppEnv {
   const STRIPE_PRICE_ID = read(raw, 'STRIPE_PRICE_ID');
   const LINE_LOGIN_CHANNEL_ID = read(raw, 'LINE_LOGIN_CHANNEL_ID');
   const LINE_LOGIN_CHANNEL_SECRET = read(raw, 'LINE_LOGIN_CHANNEL_SECRET');
+  const LIFF_ID = read(raw, 'LIFF_ID');
   const ADMIN_SESSION_SECRET = read(raw, 'ADMIN_SESSION_SECRET');
   const ADMIN_USERNAME = read(raw, 'ADMIN_USERNAME');
   const ADMIN_PASSWORD = read(raw, 'ADMIN_PASSWORD');
@@ -232,6 +234,7 @@ export function validateEnv(raw: NodeJS.ProcessEnv = process.env): AppEnv {
     STRIPE_PRICE_ID,
     LINE_LOGIN_CHANNEL_ID,
     LINE_LOGIN_CHANNEL_SECRET,
+    LIFF_ID,
     ADMIN_SESSION_SECRET,
     ADMIN_USERNAME,
     ADMIN_PASSWORD,

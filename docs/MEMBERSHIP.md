@@ -18,6 +18,27 @@ PAYMENT_MODE=STRIPE → StripePaymentProvider → /webhooks/stripe
 Prisma (User.role, Subscription, Promo*, AIUsage, PaymentEvent, …)
 ```
 
+## LIFF profile auth
+
+LIFF endpoint: `/profile` (also `/account`).
+
+1. Frontend: `liff.init` → `getIDToken()` → `POST /auth/liff` `{ idToken }`
+2. Backend: LINE `oauth2/v2.1/verify` with `LINE_LOGIN_CHANNEL_ID` (checks iss/aud/exp)
+3. `findOrCreateByLineUserId(sub)` → set HttpOnly `membership_session`
+4. `GET /api/membership` loads account + membership + nutrition goals for that session only
+
+Env:
+
+```bash
+LINE_LOGIN_CHANNEL_ID=<LINE Login channel id>
+LINE_LOGIN_CHANNEL_SECRET=<server only; optional for verify>
+LIFF_ID=2011695705-l6K9TEPR
+MEMBERSHIP_SESSION_SECRET=<long random>
+MEMBERSHIP_WEB_URL=https://your.domain
+```
+
+Never send LINE userId from the client as identity.
+
 ## Web routes & auth
 
 | Route | Access |

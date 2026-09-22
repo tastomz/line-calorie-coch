@@ -131,7 +131,7 @@ export class MembershipAuthService {
 
   /**
    * Verify LINE Login / LIFF ID token via LINE verify endpoint.
-   * Requires LINE_LOGIN_CHANNEL_ID.
+   * Requires LINE_LOGIN_CHANNEL_ID (audience). Never trusts client-supplied userId.
    */
   async verifyLineIdToken(idToken: string): Promise<string> {
     const channelId = (
@@ -142,31 +142,57 @@ export class MembershipAuthService {
         'LINE Login ยังไม่ได้ตั้งค่า (LINE_LOGIN_CHANNEL_ID)',
       );
     }
+    const trimmed = idToken.trim();
+    if (!trimmed) {
+      throw new UnauthorizedException('ยืนยันตัวตน LINE ไม่สำเร็จ');
+    }
 
     const body = new URLSearchParams({
-      id_token: idToken,
+      id_token: trimmed,
       client_id: channelId,
     });
 
-    const res = await fetch('https://api.line.me/oauth2/v2.1/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
-    });
+    let res: Response;
+    try {
+      res = await fetch('https://api.line.me/oauth2/v2.1/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `LINE ID token verify network error: ${
+          error instanceof Error ? error.message : 'unknown'
+        }`,
+      );
+      throw new UnauthorizedException('ยืนยันตัวตน LINE ไม่สำเร็จ');
+    }
     if (!res.ok) {
       this.logger.warn(`LINE ID token verify failed status=${res.status}`);
       throw new UnauthorizedException('ยืนยันตัวตน LINE ไม่สำเร็จ');
     }
     const data = (await res.json()) as {
+      iss?: string;
       sub?: string;
+      aud?: string;
       name?: string;
       picture?: string;
       exp?: number;
     };
+
+    // Defense-in-depth: LINE verify already checks aud when client_id is sent.
+    if (data.iss && data.iss !== 'https://access.line.me') {
+      this.logger.warn(`LINE ID token unexpected iss=${data.iss}`);
+      throw new UnauthorizedException('ยืนยันตัวตน LINE ไม่สำเร็จ');
+    }
+    if (data.aud && data.aud !== channelId) {
+      this.logger.warn('LINE ID token audience mismatch');
+      throw new UnauthorizedException('ยืนยันตัวตน LINE ไม่สำเร็จ');
+    }
     if (!data.sub) {
       throw new UnauthorizedException('ยืนยันตัวตน LINE ไม่สำเร็จ');
     }
-    if (data.exp && data.exp * 1000 < Date.now()) {
+    if (typeof data.exp === 'number' && data.exp * 1000 < Date.now()) {
       throw new UnauthorizedException('โทเคน LINE หมดอายุ');
     }
 

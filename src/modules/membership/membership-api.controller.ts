@@ -12,6 +12,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 import { UsersService } from '../users/users.service';
+import { NutritionProfileService } from '../users/nutrition-profile.service';
 import { PromoRedeemError } from './membership.errors';
 import {
   MEMBERSHIP_SESSION_COOKIE,
@@ -41,6 +42,7 @@ export class MembershipApiController {
     private readonly billing: MembershipBillingService,
     private readonly promo: PromoCodeService,
     private readonly users: UsersService,
+    private readonly nutritionProfiles: NutritionProfileService,
     private readonly config: ConfigService,
     private readonly mockPayments: MockPaymentProvider,
   ) {}
@@ -241,10 +243,12 @@ export class MembershipApiController {
       checkoutEnabled: this.checkoutEnabled(),
       lineLoginChannelId:
         (this.config.get<string>('LINE_LOGIN_CHANNEL_ID') ?? '').trim() || null,
+      liffId: (this.config.get<string>('LIFF_ID') ?? '').trim() || null,
       membershipWebUrl:
         (this.config.get<string>('MEMBERSHIP_WEB_URL') ?? '').trim() || null,
       loginPath: '/login',
       accountPath: '/account',
+      profilePath: '/profile',
     };
   }
 
@@ -273,9 +277,10 @@ export class MembershipApiController {
 
   private async buildAccountPayload(userId: string) {
     const user = await this.users.findByIdOrThrow(userId);
-    const [ent, usage] = await Promise.all([
+    const [ent, usage, nutrition] = await Promise.all([
       this.entitlement.getEntitlement(userId),
       this.entitlement.getDailyUsage(userId),
+      this.nutritionProfiles.findOptionalByUserId(userId),
     ]);
     const limits = limitsForPlan(ent.plan);
     return {
@@ -292,6 +297,17 @@ export class MembershipApiController {
             canceledAt: ent.subscription.canceledAt,
             provider: ent.subscription.provider,
             // Never expose providerCustomerId / providerSubscriptionId to client
+          }
+        : null,
+      nutrition: nutrition
+        ? {
+            currentWeightKg: nutrition.currentWeightKg,
+            targetWeightKg: nutrition.targetWeightKg,
+            dailyCalories: nutrition.dailyCalories,
+            dailyProteinG: nutrition.dailyProteinG,
+            dailyCarbsG: nutrition.dailyCarbsG,
+            dailyFatG: nutrition.dailyFatG,
+            goal: nutrition.goal,
           }
         : null,
       usage,

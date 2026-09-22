@@ -31,6 +31,7 @@ describe('MembershipApiController checkout gate', () => {
       billing as never,
       {} as never,
       {} as never,
+      {} as never,
       config as never,
       {} as never,
     );
@@ -76,5 +77,6 @@ describe('MembershipApiController checkout gate', () => {
     expect(cfg.checkoutEnabled).toBe(false);
     expect(cfg.loginPath).toBe('/login');
     expect(cfg.accountPath).toBe('/account');
+    expect(cfg.profilePath).toBe('/profile');
   });
 });
