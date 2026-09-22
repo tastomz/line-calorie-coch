@@ -118,6 +118,7 @@ FREE + PRO (**50 THB/month**). Promo Free PRO codes **10/15/30 days** (`TASTOM-X
 ## Reliability / security docs
 
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — production runbook
+- [docs/ENVIRONMENTS.md](docs/ENVIRONMENTS.md) — SIT / UAT / PRD branch + Railway environment strategy
 - [docs/API_RESILIENCE.md](docs/API_RESILIENCE.md) — timeouts / circuit breaker
 - [docs/SECURITY.md](docs/SECURITY.md) — Phase 9 review
 - [docs/SMOKE_TEST.md](docs/SMOKE_TEST.md) — production smoke checklist
