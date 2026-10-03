@@ -88,58 +88,51 @@ export type WorkoutScreenshot = {
   workoutName: string | null;
 };
 
-/** Photo schema = food schema + what kind of image it is (+ workout numbers). */
-export const FOOD_PHOTO_JSON_SCHEMA = {
-  name: 'food_photo_estimate',
+/** Cheap pre-check: what is in the photo (before any expensive analysis). */
+export const PHOTO_KIND_MODEL = 'gpt-4o-mini';
+export const PHOTO_KIND_MAX_TOKENS = 20;
+
+export const PHOTO_KIND_PROMPT =
+  'Classify the image. food = meal, drink, snack or packaged food product. workout = screenshot of a smartwatch or fitness-app workout summary (duration, calories burned, heart rate). other = anything else. If unsure choose food. JSON only.';
+
+export const PHOTO_KIND_JSON_SCHEMA = {
+  name: 'photo_kind',
+  strict: true,
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['kind'],
+    properties: {
+      kind: { type: 'string', enum: ['food', 'workout', 'other'] },
+    },
+  },
+} as const;
+
+export const WORKOUT_EXTRACT_PROMPT =
+  'Read this workout summary screenshot. Use ONLY numbers visible on screen, null for anything not shown. durationMinutes = workout/exercise time in minutes; caloriesBurned = kcal shown; avgHeartRate = average heart rate. exerciseType: RUNNING|WALKING|CYCLING|SWIMMING|STRENGTH|SPORTS|MOBILITY|OTHER (OTHER for Freestyle/unknown). JSON only.';
+
+export const WORKOUT_JSON_SCHEMA = {
+  name: 'workout_screenshot',
   strict: true,
   schema: {
     type: 'object',
     additionalProperties: false,
     required: [
-      ...FOOD_ANALYSIS_JSON_SCHEMA.schema.required,
-      'imageKind',
-      'workout',
+      'exerciseType',
+      'durationMinutes',
+      'caloriesBurned',
+      'avgHeartRate',
+      'workoutName',
     ],
     properties: {
-      ...FOOD_ANALYSIS_JSON_SCHEMA.schema.properties,
-      imageKind: { type: 'string', enum: ['food', 'workout', 'other'] },
-      workout: {
-        anyOf: [
-          {
-            type: 'object',
-            additionalProperties: false,
-            required: [
-              'exerciseType',
-              'durationMinutes',
-              'caloriesBurned',
-              'avgHeartRate',
-              'workoutName',
-            ],
-            properties: {
-              exerciseType: {
-                type: 'string',
-                enum: [...WORKOUT_EXERCISE_TYPES],
-              },
-              durationMinutes: { type: ['number', 'null'] },
-              caloriesBurned: { type: ['number', 'null'] },
-              avgHeartRate: { type: ['number', 'null'] },
-              workoutName: { type: ['string', 'null'] },
-            },
-          },
-          { type: 'null' },
-        ],
-      },
+      exerciseType: { type: 'string', enum: [...WORKOUT_EXERCISE_TYPES] },
+      durationMinutes: { type: ['number', 'null'] },
+      caloriesBurned: { type: ['number', 'null'] },
+      avgHeartRate: { type: ['number', 'null'] },
+      workoutName: { type: ['string', 'null'] },
     },
   },
 } as const;
-
-/** Appended to the food prompt for PHOTOS only (text input has no image kind). */
-export const FOOD_PHOTO_KIND_RULES = `
-PHOTO KIND (set imageKind):
-- "food": a meal, drink, snack or packaged food. workout=null. Follow all food rules above.
-- "workout": a screenshot of a smartwatch / fitness-app workout summary (duration, calories burned, heart rate). Fill workout using ONLY numbers visible on the screen: durationMinutes from the workout/exercise time, caloriesBurned from the kcal shown, avgHeartRate from the average heart rate; use null for anything not shown. exerciseType: RUNNING|WALKING|CYCLING|SWIMMING|STRENGTH|SPORTS|MOBILITY|OTHER (use OTHER for "Freestyle"/unknown). Burned kcal is NOT food.
-- "other": anything else (people, screenshots, documents). workout=null.
-- When imageKind is not "food": foodName "-", all nutrition values 0, confidence 0, estimatedQuantity 1, quantityUnit item, assumptions [] (the 0-kcal rule applies to real food only).`;
 
 /** Keep prompts short to reduce input tokens. */
 export const FOOD_ANALYSIS_SYSTEM_PROMPT = `You estimate ONE meal's nutrition. Output JSON only.

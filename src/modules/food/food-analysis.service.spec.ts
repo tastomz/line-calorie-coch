@@ -232,7 +232,7 @@ describe('FoodAnalysisService', () => {
 
     function systemPrompt(create: jest.Mock): string {
       const calls = create.mock.calls as unknown[][];
-      const arg = calls[0][0] as SystemCall;
+      const arg = calls[calls.length - 1][0] as SystemCall;
       return String(arg.messages.find((m) => m.role === 'system')?.content);
     }
 
@@ -250,81 +250,124 @@ describe('FoodAnalysisService', () => {
       expect(systemPrompt(create)).toContain('MUST be in Thai');
     });
 
-    function photoResponse(extra: Record<string, unknown>) {
+    function kindResponse(kind: string) {
+      return { choices: [{ message: { content: JSON.stringify({ kind }) } }] };
+    }
+
+    function workoutResponse(workout: Record<string, unknown>) {
       return {
-        choices: [
-          {
-            message: {
-              content: JSON.stringify({
-                foodName: '-',
-                estimatedCalories: 0,
-                proteinG: 0,
-                carbsG: 0,
-                fatG: 0,
-                confidence: 0,
-                assumptions: [],
-                estimatedQuantity: 1,
-                quantityUnit: 'item',
-                ...extra,
-              }),
-            },
-          },
-        ],
+        choices: [{ message: { content: JSON.stringify(workout) } }],
       };
     }
 
-    it('analyzePhoto asks for the image kind with the photo schema and rules', async () => {
-      const create = jest.fn().mockResolvedValue(okResponse('อกไก่ย่าง'));
-      await serviceWith(create).analyzePhoto({
+    type CallBody = {
+      model: string;
+      max_tokens?: number;
+      response_format: { json_schema: { name: string } };
+      messages: Array<{ role: string; content: unknown }>;
+    };
+
+    function callBody(create: jest.Mock, index: number): CallBody {
+      return (create.mock.calls[index] as unknown[])[0] as CallBody;
+    }
+
+    it('checks the photo kind first with a cheap low-detail mini call', async () => {
+      const create = jest
+        .fn()
+        .mockResolvedValueOnce(kindResponse('food'))
+        .mockResolvedValueOnce(okResponse('อกไก่ย่าง'));
+      const result = await serviceWith(create).analyzePhoto({
         imageBytes: Buffer.from([1, 2, 3]),
       });
-      const body = (create.mock.calls[0] as unknown[])[0] as {
-        response_format: { json_schema: { name: string } };
-      };
-      expect(body.response_format.json_schema.name).toBe('food_photo_estimate');
-      expect(systemPrompt(create)).toContain('PHOTO KIND');
+      expect(result.kind).toBe('food');
+      expect(create).toHaveBeenCalledTimes(2);
+      const check = callBody(create, 0);
+      expect(check.model).toBe('gpt-4o-mini');
+      expect(check.max_tokens).toBe(20);
+      expect(check.response_format.json_schema.name).toBe('photo_kind');
+      const parts = check.messages[1].content as Array<{
+        image_url?: { detail?: string };
+      }>;
+      expect(parts.find((p) => p.image_url)?.image_url?.detail).toBe('low');
     });
 
-    it('text analysis never uses the photo schema or kind rules', async () => {
-      const create = jest.fn().mockResolvedValue(okResponse('ข้าว'));
-      await serviceWith(create).analyzeText('ข้าว');
-      const body = (create.mock.calls[0] as unknown[])[0] as {
-        response_format: { json_schema: { name: string } };
-      };
-      expect(body.response_format.json_schema.name).toBe(
-        'food_nutrition_estimate',
-      );
-      expect(systemPrompt(create)).not.toContain('PHOTO KIND');
-    });
-
-    it('returns workout numbers for a smartwatch screenshot instead of a 0 kcal error', async () => {
-      const create = jest.fn().mockResolvedValue(
-        photoResponse({
-          imageKind: 'workout',
-          workout: {
+    it('does not run the expensive meal analysis for a workout screenshot', async () => {
+      const create = jest
+        .fn()
+        .mockResolvedValueOnce(kindResponse('workout'))
+        .mockResolvedValueOnce(
+          workoutResponse({
             exerciseType: 'OTHER',
             durationMinutes: 59,
             caloriesBurned: 400,
             avgHeartRate: 135,
             workoutName: 'Freestyle',
-          },
-        }),
-      );
-      const result = await serviceWith(create).analyzePhoto({
-        imageBytes: Buffer.from([1, 2, 3]),
-      });
+          }),
+        );
+      const result = await serviceWithConfig(create, {
+        FOOD_VISION_MODEL: 'gpt-4o',
+      }).analyzePhoto({ imageBytes: Buffer.from([1, 2, 3]) });
       expect(result).toMatchObject({
         kind: 'workout',
         workout: { durationMinutes: 59, caloriesBurned: 400 },
       });
+      expect(create).toHaveBeenCalledTimes(2);
+      expect(callBody(create, 1).model).toBe('gpt-4o-mini');
+      expect(callBody(create, 1).response_format.json_schema.name).toBe(
+        'workout_screenshot',
+      );
+    });
+
+    it('stops after the cheap check for images that are neither food nor a workout', async () => {
+      const create = jest.fn().mockResolvedValue(kindResponse('other'));
+      const result = await serviceWith(create).analyzePhoto({
+        imageBytes: Buffer.from([1, 2, 3]),
+      });
+      expect(result).toEqual({ kind: 'other' });
+      expect(create).toHaveBeenCalledTimes(1);
+    });
+
+    it('treats a workout screenshot with an unreadable duration as other', async () => {
+      const create = jest
+        .fn()
+        .mockResolvedValueOnce(kindResponse('workout'))
+        .mockResolvedValueOnce(
+          workoutResponse({
+            exerciseType: 'RUNNING',
+            durationMinutes: null,
+            caloriesBurned: 400,
+            avgHeartRate: null,
+            workoutName: null,
+          }),
+        );
+      const result = await serviceWith(create).analyzePhoto({
+        imageBytes: Buffer.from([1, 2, 3]),
+      });
+      expect(result).toEqual({ kind: 'other' });
+    });
+
+    it('falls back to the food analysis when the cheap check fails', async () => {
+      const create = jest
+        .fn()
+        .mockRejectedValueOnce(new Error('boom'))
+        .mockResolvedValueOnce(okResponse('อกไก่ย่าง'));
+      const result = await serviceWith(create).analyzePhoto({
+        imageBytes: Buffer.from([1, 2, 3]),
+      });
+      expect(result.kind).toBe('food');
+    });
+
+    it('text analysis never runs the photo check', async () => {
+      const create = jest.fn().mockResolvedValue(okResponse('ข้าว'));
+      await serviceWith(create).analyzeText('ข้าว');
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(callBody(create, 0).response_format.json_schema.name).toBe(
+        'food_nutrition_estimate',
+      );
     });
 
     it('analyzeImage still refuses non-food photos', async () => {
-      const create = jest
-        .fn()
-        .mockResolvedValue(
-          photoResponse({ imageKind: 'other', workout: null }),
-        );
+      const create = jest.fn().mockResolvedValue(kindResponse('other'));
       await expect(
         serviceWith(create).analyzeImage({
           imageBytes: Buffer.from([1, 2, 3]),
@@ -345,7 +388,9 @@ describe('FoodAnalysisService', () => {
     });
 
     function imageDetail(create: jest.Mock): string {
-      const call = (create.mock.calls[0] as unknown[])[0] as {
+      const call = (
+        create.mock.calls[create.mock.calls.length - 1] as unknown[]
+      )[0] as {
         messages: Array<{ content: unknown }>;
       };
       const parts = call.messages[1].content as Array<{
@@ -372,8 +417,11 @@ describe('FoodAnalysisService', () => {
     }
 
     function modelOf(create: jest.Mock): string {
-      return ((create.mock.calls[0] as unknown[])[0] as { model: string })
-        .model;
+      return (
+        (create.mock.calls[create.mock.calls.length - 1] as unknown[])[0] as {
+          model: string;
+        }
+      ).model;
     }
 
     it('uses FOOD_VISION_MODEL for photos only', async () => {
@@ -396,10 +444,9 @@ describe('FoodAnalysisService', () => {
       await serviceWithConfig(create, {
         FOOD_VISION_MODEL: 'gpt-5',
       }).analyzeImage({ imageBytes: Buffer.from([1, 2, 3]) });
-      const body = (create.mock.calls[0] as unknown[])[0] as Record<
-        string,
-        unknown
-      >;
+      const body = (
+        create.mock.calls[create.mock.calls.length - 1] as unknown[]
+      )[0] as Record<string, unknown>;
       expect(body.temperature).toBeUndefined();
       expect(body.max_tokens).toBeUndefined();
       expect(body.max_completion_tokens).toBe(2000);
@@ -411,10 +458,9 @@ describe('FoodAnalysisService', () => {
       await serviceWithConfig(create, {
         FOOD_VISION_MODEL: 'gpt-4o',
       }).analyzeImage({ imageBytes: Buffer.from([1, 2, 3]) });
-      const body = (create.mock.calls[0] as unknown[])[0] as Record<
-        string,
-        unknown
-      >;
+      const body = (
+        create.mock.calls[create.mock.calls.length - 1] as unknown[]
+      )[0] as Record<string, unknown>;
       expect(body.temperature).toBe(0);
       expect(body.max_tokens).toBe(220);
       expect(body.reasoning_effort).toBeUndefined();

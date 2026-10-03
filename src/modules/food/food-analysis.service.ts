@@ -9,19 +9,25 @@ import {
 } from '../../common/with-timeout';
 import {
   FOOD_ANALYSIS_JSON_SCHEMA,
-  FOOD_PHOTO_JSON_SCHEMA,
-  FOOD_PHOTO_KIND_RULES,
   FOOD_ANALYSIS_MAX_TOKENS,
   FOOD_ANALYSIS_MODEL,
   FOOD_ANALYSIS_SYSTEM_PROMPT,
   FOOD_COMPOSITION_ADJUST_PROMPT,
+  PHOTO_KIND_JSON_SCHEMA,
+  PHOTO_KIND_MAX_TOKENS,
+  PHOTO_KIND_MODEL,
+  PHOTO_KIND_PROMPT,
+  WORKOUT_EXTRACT_PROMPT,
+  WORKOUT_JSON_SCHEMA,
   FoodAnalysisResult,
+  PhotoKind,
 } from './food-analysis.types';
 import {
   FoodAnalysisValidationError,
   PhotoAnalysisResult,
   parseFoodAnalysisJson,
-  parsePhotoAnalysisJson,
+  parsePhotoKindJson,
+  parseWorkoutJson,
 } from './food-analysis.validator';
 import {
   reportAiTokenUsage,
@@ -118,8 +124,9 @@ export class FoodAnalysisService {
 
   /**
    * Photo → food estimate, workout-screenshot numbers, or "other".
-   * One vision call decides which, so a smartwatch screenshot is never
-   * turned into a made-up meal.
+   * A tiny, cheap check (gpt-4o-mini, low detail, ~20 output tokens) runs
+   * first so a smartwatch screenshot never reaches the expensive meal
+   * analysis. If the check fails or is unsure, the photo is treated as food.
    */
   async analyzePhoto(params: {
     imageBytes: Buffer;
@@ -136,19 +143,45 @@ export class FoodAnalysisService {
     }
 
     const bytes = params.imageBytes;
+    const mime = params.mimeType ?? 'image/jpeg';
+    const imageUrl = `data:${mime};base64,${bytes.toString('base64')}`;
+
+    const kind = await this.checkPhotoKind(imageUrl);
+    if (kind === 'other') {
+      return { kind: 'other' };
+    }
+    if (kind === 'workout') {
+      const workout = await this.requestStructured(
+        [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Workout summary.' },
+              {
+                type: 'image_url',
+                // Small on-screen digits need more detail than a meal photo.
+                image_url: { url: imageUrl, detail: 'high' },
+              },
+            ],
+          },
+        ],
+        WORKOUT_EXTRACT_PROMPT,
+        PHOTO_KIND_MODEL,
+        WORKOUT_JSON_SCHEMA,
+        parseWorkoutJson,
+      );
+      return workout ? { kind: 'workout', workout } : { kind: 'other' };
+    }
 
     this.logger.log(
       `Vision request bytes=${bytes.length} detail=${this.visionDetail} model=${this.visionModel}`,
     );
-
-    const mime = params.mimeType ?? 'image/jpeg';
-    const base64 = bytes.toString('base64');
     const caption = (params.caption?.trim() || 'Estimate this meal.').slice(
       0,
       80,
     );
 
-    const result = await this.requestStructured(
+    const analysis = await this.requestAnalysis(
       [
         {
           role: 'user',
@@ -156,25 +189,49 @@ export class FoodAnalysisService {
             { type: 'text', text: caption },
             {
               type: 'image_url',
-              image_url: {
-                url: `data:${mime};base64,${base64}`,
-                // Low detail drastically reduces vision token cost.
-                detail: this.visionDetail,
-              },
+              // Low detail drastically reduces vision token cost.
+              image_url: { url: imageUrl, detail: this.visionDetail },
             },
           ],
         },
       ],
-      `${FOOD_ANALYSIS_SYSTEM_PROMPT}\n${FOOD_PHOTO_KIND_RULES}`,
+      FOOD_ANALYSIS_SYSTEM_PROMPT,
       this.visionModel,
-      FOOD_PHOTO_JSON_SCHEMA,
-      parsePhotoAnalysisJson,
     );
     // 0 kcal is "nothing read", not a meal: ask for a clearer photo instead.
-    if (result.kind === 'food' && result.analysis.estimatedCalories <= 0) {
+    if (analysis.estimatedCalories <= 0) {
       throw new FoodImageUnreadableError();
     }
-    return result;
+    return { kind: 'food', analysis };
+  }
+
+  /** Cheap image-type check. Any failure falls back to the food path. */
+  private async checkPhotoKind(imageUrl: string): Promise<PhotoKind> {
+    try {
+      return await this.requestStructured(
+        [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image_url',
+                image_url: { url: imageUrl, detail: 'low' },
+              },
+            ],
+          },
+        ],
+        PHOTO_KIND_PROMPT,
+        PHOTO_KIND_MODEL,
+        PHOTO_KIND_JSON_SCHEMA,
+        parsePhotoKindJson,
+        PHOTO_KIND_MAX_TOKENS,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Photo kind check failed, treating as food: ${error instanceof Error ? error.message : 'unknown'}`,
+      );
+      return 'food';
+    }
   }
 
   /** Food-only view of a photo (kept for callers that only handle meals). */
@@ -245,8 +302,9 @@ export class FoodAnalysisService {
     userMessages: OpenAI.Chat.ChatCompletionMessageParam[],
     systemPrompt: string,
     model: string,
-    schema: typeof FOOD_ANALYSIS_JSON_SCHEMA | typeof FOOD_PHOTO_JSON_SCHEMA,
+    schema: { name: string; strict: true; schema: Record<string, unknown> },
     parse: (content: string) => T,
+    maxOutputTokens?: number,
   ): Promise<T> {
     if (!this.client) {
       throw new FoodAnalysisError('OPENAI_API_KEY is not configured');
@@ -261,6 +319,7 @@ export class FoodAnalysisService {
         this.client.chat.completions.create({
           model,
           ...completionLimits(model),
+          ...(maxOutputTokens ? { max_tokens: maxOutputTokens } : {}),
           messages: [
             { role: 'system', content: systemPrompt },
             ...userMessages,

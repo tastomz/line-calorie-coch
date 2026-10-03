@@ -221,32 +221,21 @@ function parseWorkout(raw: unknown): WorkoutScreenshot | null {
   };
 }
 
-/**
- * Photo answer: food (default when imageKind is absent), a workout screenshot
- * with a readable duration, or anything else. A "workout" with no readable
- * duration degrades to "other" instead of being logged.
- */
-export function parsePhotoAnalysisJson(content: string): PhotoAnalysisResult {
-  let parsed: unknown;
+/** Photo-kind answer; anything unexpected counts as food (the safe default). */
+export function parsePhotoKindJson(content: string): PhotoKind {
   try {
-    parsed = JSON.parse(content);
+    const kind = (JSON.parse(content) as { kind?: unknown }).kind;
+    return kind === 'workout' || kind === 'other' ? kind : 'food';
   } catch {
-    throw new FoodAnalysisValidationError('AI response is not valid JSON');
+    return 'food';
   }
-  if (!parsed || typeof parsed !== 'object') {
-    throw new FoodAnalysisValidationError('AI response must be an object');
+}
+
+/** Workout numbers, or null when the duration is not readable. */
+export function parseWorkoutJson(content: string): WorkoutScreenshot | null {
+  try {
+    return parseWorkout(JSON.parse(content));
+  } catch {
+    return null;
   }
-  const data = parsed as Record<string, unknown>;
-  const kind: PhotoKind =
-    data.imageKind === 'workout' || data.imageKind === 'other'
-      ? data.imageKind
-      : 'food';
-  if (kind === 'workout') {
-    const workout = parseWorkout(data.workout);
-    return workout ? { kind: 'workout', workout } : { kind: 'other' };
-  }
-  if (kind === 'other') {
-    return { kind: 'other' };
-  }
-  return { kind: 'food', analysis: validateFoodAnalysisResult(parsed) };
 }
