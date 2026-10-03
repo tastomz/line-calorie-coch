@@ -31,6 +31,35 @@ export class FoodAnalysisError extends Error {
   }
 }
 
+/** The photo gave no usable numbers (e.g. a pack whose label cannot be read). */
+export class FoodImageUnreadableError extends FoodAnalysisError {
+  constructor() {
+    super('image could not be read');
+    this.name = 'FoodImageUnreadableError';
+  }
+}
+
+/**
+ * GPT-5 / o-series models reject `temperature` and `max_tokens`, and spend
+ * part of the budget on reasoning, so they need a larger completion limit.
+ */
+const REASONING_MODEL = /^(gpt-5|o\d)/;
+const REASONING_MAX_COMPLETION_TOKENS = 2000;
+
+export function completionLimits(model: string):
+  | { temperature: number; max_tokens: number }
+  | {
+      max_completion_tokens: number;
+      reasoning_effort: 'low';
+    } {
+  return REASONING_MODEL.test(model)
+    ? {
+        max_completion_tokens: REASONING_MAX_COMPLETION_TOKENS,
+        reasoning_effort: 'low',
+      }
+    : { temperature: 0, max_tokens: FOOD_ANALYSIS_MAX_TOKENS };
+}
+
 /** Reject absurdly large payloads; never silently truncate image bytes. */
 const MAX_IMAGE_BYTES = 4_000_000;
 
@@ -39,11 +68,16 @@ export class FoodAnalysisService {
   private readonly logger = new Logger(FoodAnalysisService.name);
   private readonly client: OpenAI | null;
   private readonly visionDetail: 'low' | 'high' | 'auto';
+  private readonly visionModel: string;
 
   constructor(private readonly configService: ConfigService) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY') ?? '';
     const detail = this.configService.get<string>('FOOD_VISION_DETAIL');
     // 'low' is the cheap default; 'high'/'auto' read small pack labels better.
+    const model = this.configService.get<string>('FOOD_VISION_MODEL')?.trim();
+    // Photos can use a stronger model than text; unset keeps the cheap default.
+    this.visionModel =
+      model && /^[\w.-]+$/.test(model) ? model : FOOD_ANALYSIS_MODEL;
     this.visionDetail = detail === 'high' || detail === 'auto' ? detail : 'low';
     this.client = apiKey ? new OpenAI({ apiKey }) : null;
   }
@@ -83,7 +117,7 @@ export class FoodAnalysisService {
     const bytes = params.imageBytes;
 
     this.logger.log(
-      `Vision request bytes=${bytes.length} detail=${this.visionDetail} model=${FOOD_ANALYSIS_MODEL}`,
+      `Vision request bytes=${bytes.length} detail=${this.visionDetail} model=${this.visionModel}`,
     );
 
     const mime = params.mimeType ?? 'image/jpeg';
@@ -93,22 +127,31 @@ export class FoodAnalysisService {
       80,
     );
 
-    return this.requestAnalysis([
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: caption },
-          {
-            type: 'image_url',
-            image_url: {
-              url: `data:${mime};base64,${base64}`,
-              // Low detail drastically reduces vision token cost.
-              detail: this.visionDetail,
+    const analysis = await this.requestAnalysis(
+      [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: caption },
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:${mime};base64,${base64}`,
+                // Low detail drastically reduces vision token cost.
+                detail: this.visionDetail,
+              },
             },
-          },
-        ],
-      },
-    ]);
+          ],
+        },
+      ],
+      FOOD_ANALYSIS_SYSTEM_PROMPT,
+      this.visionModel,
+    );
+    // 0 kcal is "nothing read", not a meal: ask for a clearer photo instead.
+    if (analysis.estimatedCalories <= 0) {
+      throw new FoodImageUnreadableError();
+    }
+    return analysis;
   }
 
   /**
@@ -151,6 +194,7 @@ export class FoodAnalysisService {
   private async requestAnalysis(
     userMessages: OpenAI.Chat.ChatCompletionMessageParam[],
     systemPrompt: string = FOOD_ANALYSIS_SYSTEM_PROMPT,
+    model: string = FOOD_ANALYSIS_MODEL,
   ): Promise<FoodAnalysisResult> {
     if (!this.client) {
       throw new FoodAnalysisError('OPENAI_API_KEY is not configured');
@@ -163,9 +207,8 @@ export class FoodAnalysisService {
     try {
       const completion = await withTimeout(
         this.client.chat.completions.create({
-          model: FOOD_ANALYSIS_MODEL,
-          temperature: 0,
-          max_tokens: FOOD_ANALYSIS_MAX_TOKENS,
+          model,
+          ...completionLimits(model),
           messages: [
             { role: 'system', content: systemPrompt },
             ...userMessages,
@@ -184,7 +227,7 @@ export class FoodAnalysisService {
         this.logger.log(
           `OpenAI usage prompt=${usage.prompt_tokens} completion=${usage.completion_tokens} total=${usage.total_tokens}`,
         );
-        const meta = usageFromOpenAiCompletion(completion, FOOD_ANALYSIS_MODEL);
+        const meta = usageFromOpenAiCompletion(completion, model);
         if (meta) reportAiTokenUsage(meta);
       }
 

@@ -27,6 +27,9 @@ export const INCOMPLETE_ONBOARDING_CHOICES = [
 export const FOOD_ANALYSIS_FAILED_TEXT =
   'ตอนนี้ระบบวิเคราะห์อาหารมีปัญหาชั่วคราวครับ\nลองใหม่อีกครั้งได้เลย';
 
+export const FOOD_IMAGE_UNREADABLE_TEXT =
+  'อ่านรูปนี้ไม่ชัดครับ 🙏\nลองถ่ายใกล้ๆ ให้เห็นชื่อสินค้ากับตัวเลขพลังงานบนซอง\nหรือพิมพ์ชื่ออาหารมาได้เลย เช่น "อกไก่ย่าง 1 ซอง"';
+
 export const SYSTEM_BUSY_TEXT =
   'ระบบกำลังมีปัญหาชั่วคราวครับ\nลองใหม่อีกครั้งในอีกสักครู่';
 
