@@ -25,6 +25,7 @@ import { FoodLoggingService } from './food-logging.service';
 import { foodEditSessionBuffer } from './food-edit.session';
 import {
   AMBIGUOUS_NUMBER_TEXT,
+  GENERAL_HELP_TEXT,
   COMPLETE_PROFILE_FIRST_TEXT,
   FOOD_RATE_LIMITED_TEXT,
 } from './food.messages';
@@ -969,21 +970,43 @@ describe('FoodLoggingService', () => {
     expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
   });
 
-  it('handles โค้ช as COACH_ENTRY welcome with zero AI and no Daily', async () => {
+  it('โค้ช shows next actions from recorded data with zero AI', async () => {
+    dailySummaryService.getDailySummary.mockResolvedValue(sampleSummary);
+    healthDashboard.buildToday.mockResolvedValueOnce({
+      programLabel: 'W1D1',
+      nutrition: {
+        ...sampleSummary,
+        remaining: { calories: 600, proteinG: 40, carbsG: 50, fatG: 10 },
+      },
+      weightKg: null,
+      sleepMinutes: 5 * 60,
+      exerciseMinutes: 0,
+      steps: null,
+      waterMl: 500,
+      waterTargetMl: 2500,
+      recoveryScore: null,
+      tip: '',
+    });
+
     await service.handleCompletedText(completedUser as never, 'token', 'โค้ช');
 
     expect(lineService.replyText).toHaveBeenCalledWith(
       'token',
-      expect.stringMatching(/🧠 Kcal Coach[\s\S]*มีอะไรอยากถามผมไหม/),
+      expect.stringMatching(
+        /สิ่งที่ควรทำต่อวันนี้[\s\S]*กินให้ถึงเป้า[\s\S]*ออกกำลังกาย[\s\S]*ถามผมได้เลย/,
+      ),
     );
-    expect(dailySummaryService.getDailySummary).not.toHaveBeenCalled();
-    expect(healthDashboard.buildToday).not.toHaveBeenCalled();
     expect(messageClassifyService.classify).not.toHaveBeenCalled();
     expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
     expect(aiGateway.run).not.toHaveBeenCalled();
+    expect(aiGateway.runUnmetered).not.toHaveBeenCalled();
   });
 
-  it('handles whitespace-padded โค้ช as COACH_ENTRY', async () => {
+  it('โค้ช falls back to the question prompt when the profile is missing', async () => {
+    dailySummaryService.getDailySummary.mockRejectedValue(
+      new NutritionProfileMissingError(),
+    );
+
     await service.handleCompletedText(
       completedUser as never,
       'token',
@@ -994,7 +1017,53 @@ describe('FoodLoggingService', () => {
       'token',
       expect.stringContaining('🧠 Kcal Coach'),
     );
-    expect(dailySummaryService.getDailySummary).not.toHaveBeenCalled();
+  });
+
+  it.each(['ดูภาพรวมวันนี้', 'ภาพรวม'])(
+    '%s opens the same overview as วันนี้',
+    async (text) => {
+      dailySummaryService.getDailySummary.mockResolvedValue(sampleSummary);
+      healthDashboard.buildToday.mockResolvedValueOnce({
+        programLabel: 'W1D1',
+        nutrition: sampleSummary,
+        weightKg: null,
+        sleepMinutes: null,
+        exerciseMinutes: 0,
+        steps: null,
+        waterMl: 0,
+        waterTargetMl: 2500,
+        recoveryScore: null,
+        tip: '',
+      });
+
+      await service.handleCompletedText(completedUser as never, 'token', text);
+
+      expect(dailySummaryService.getDailySummary).toHaveBeenCalledWith(
+        'user-a',
+      );
+      expect(messageClassifyService.classify).not.toHaveBeenCalled();
+    },
+  );
+
+  it('อาหาร lists today with edit buttons when something was logged', async () => {
+    foodLogService.listForUserOnDate.mockResolvedValue([
+      {
+        id: 'log-1',
+        userId: 'user-a',
+        foodName: 'ข้าวมันไก่',
+        calories: 600,
+        proteinG: 30,
+        carbsG: 70,
+        fatG: 20,
+        eatenAt: new Date(),
+        createdAt: new Date(),
+      },
+    ]);
+
+    await service.handleCompletedText(completedUser as never, 'token', 'อาหาร');
+
+    expect(lineService.replyFlex).toHaveBeenCalledTimes(1);
+    expect(messageClassifyService.classify).not.toHaveBeenCalled();
     expect(aiGateway.run).not.toHaveBeenCalled();
   });
 
@@ -1499,6 +1568,53 @@ describe('FoodLoggingService', () => {
       'นอน 00:30 ตื่น 07:30',
     );
     expect(messageClassifyService.classify).not.toHaveBeenCalled();
+  });
+
+  it('routes a classified health_coach question to the health coach, not the general help', async () => {
+    messageClassifyService.classify.mockResolvedValue({
+      type: 'health_coach',
+      weightKg: null,
+      weightQuery: null,
+      coachHint: null,
+    });
+    dailySummaryService.getDailySummary.mockResolvedValue(sampleSummary);
+    healthInsights.buildInsights.mockReturnValue([
+      'ก้าววันนี้ยังต่ำกว่า 5,000',
+    ]);
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'ช่วงนี้ควรขยับตัวเยอะแค่ไหนดี',
+    );
+
+    expect(healthDashboard.buildToday).toHaveBeenCalled();
+    expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
+    expect(lineService.replyText).not.toHaveBeenCalledWith(
+      'token',
+      GENERAL_HELP_TEXT,
+    );
+    expect(lineService.replyText).toHaveBeenCalledWith(
+      'token',
+      expect.stringContaining('ก้าววันนี้ยังต่ำกว่า 5,000'),
+    );
+  });
+
+  it('answers ควรไปวิ่งกี่นาทีดี with the health coach without calling the classifier', async () => {
+    dailySummaryService.getDailySummary.mockResolvedValue(sampleSummary);
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'ควรไปวิ่งกี่นาทีดี',
+    );
+
+    expect(messageClassifyService.classify).not.toHaveBeenCalled();
+    expect(healthDashboard.buildToday).toHaveBeenCalled();
+    expect(lineService.replyText).not.toHaveBeenCalledWith(
+      'token',
+      GENERAL_HELP_TEXT,
+    );
   });
 
   it('rate-limits expensive food analysis with a friendly message', async () => {

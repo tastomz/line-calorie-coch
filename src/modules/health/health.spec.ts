@@ -2,6 +2,7 @@ import { BodyScan } from '@prisma/client';
 import { BodyScanService } from './body-scan.service';
 import {
   isExactHealthCommand,
+  isHealthCoachQuestion,
   parseExerciseCommand,
   parseHydrationCommand,
   parseRecoveryCommand,
@@ -51,6 +52,24 @@ describe('health-commands parsers', () => {
     expect(isExactHealthCommand('ร่างกาย', ['ร่างกาย', 'body'])).toBe(true);
     expect(isExactHealthCommand('สรุปสัปดาห์', ['สรุปสัปดาห์'])).toBe(true);
   });
+});
+
+describe('isHealthCoachQuestion', () => {
+  it.each([
+    'ควรไปวิ่งกี่นาทีดี',
+    'ออกกำลังกายนานแค่ไหนดี',
+    'วันนี้ควรออกกำลังกายไหม',
+    'ทำไมน้ำหนักไม่ลง',
+  ])('matches %s', (text) => {
+    expect(isHealthCoachQuestion(text)).toBe(true);
+  });
+
+  it.each(['ข้าวมันไก่ 1 จาน', 'วิ่ง 30 นาที', 'น้ำหนัก 84.2'])(
+    'does not match %s',
+    (text) => {
+      expect(isHealthCoachQuestion(text)).toBe(false);
+    },
+  );
 });
 
 describe('BodyScanService.compareProgress', () => {
