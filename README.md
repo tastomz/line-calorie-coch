@@ -114,12 +114,6 @@ FREE + PRO (**50 THB/month**). Promo Free PRO codes (`TASTOM-XXXXXX`) with admin
 
 **PAYMENT LIVE = NOT ACTIVE.**
 
-## Thai food reference table (optional)
-
-Exact-match lookup of common Thai dishes before the AI call. Ships empty (no data in
-the repo); import a licensed CSV with `npm run import:thai-food`. See
-[docs/THAI_FOOD_DB.md](docs/THAI_FOOD_DB.md) for sources, licensing and format.
-
 ## Google Sheets (optional)
 
 [docs/SHEETS_ACL.md](docs/SHEETS_ACL.md). Formula injection sanitized.

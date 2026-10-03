@@ -3,7 +3,6 @@ import { HealthModule } from '../health/health.module';
 import { LineModule } from '../line/line.module';
 import { MembershipModule } from '../membership/membership.module';
 import { SheetsModule } from '../sheets/sheets.module';
-import { ThaiFoodModule } from '../thai-food/thai-food.module';
 import { UsersModule } from '../users/users.module';
 import { WeightModule } from '../weight/weight.module';
 import { DailyCoachService } from './daily-coach.service';
@@ -23,7 +22,6 @@ import { PendingFoodService } from './pending-food.service';
     SheetsModule,
     MembershipModule,
     HealthModule,
-    ThaiFoodModule,
   ],
   providers: [
     FoodAnalysisService,
