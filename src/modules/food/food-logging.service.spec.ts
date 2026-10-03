@@ -1,3 +1,4 @@
+import { MessageClassifyError } from './message-classify.service';
 import {
   FoodEstimateEmptyError,
   FoodImageUnreadableError,
@@ -113,6 +114,10 @@ describe('FoodLoggingService', () => {
       async (_userId: string, _op: string, work: () => Promise<unknown>) =>
         work(),
     ),
+    runUnmetered: jest.fn(
+      async (_userId: string, _op: string, work: () => Promise<unknown>) =>
+        work(),
+    ),
   };
   const membershipService = {
     buildStatusText: jest.fn(),
@@ -216,6 +221,10 @@ describe('FoodLoggingService', () => {
       async (_userId: string, _op: string, work: () => Promise<unknown>) =>
         work(),
     );
+    aiGateway.runUnmetered.mockImplementation(
+      async (_userId: string, _op: string, work: () => Promise<unknown>) =>
+        work(),
+    );
     messageClassifyService.classify.mockResolvedValue({
       type: 'food',
       weightKg: null,
@@ -273,7 +282,7 @@ describe('FoodLoggingService', () => {
       undefined,
       undefined,
     );
-    expect(messageClassifyService.classify).not.toHaveBeenCalled();
+    expect(messageClassifyService.classify).toHaveBeenCalledTimes(1);
     expect(foodAnalysisService.analyzeText).toHaveBeenCalledTimes(1);
     expect(lineService.replyButtonsOrPush).toHaveBeenCalled();
     expect(foodLogService.createFromAnalysis).not.toHaveBeenCalled();
@@ -375,7 +384,18 @@ describe('FoodLoggingService', () => {
       'FOOD_TEXT',
       expect.any(Function),
     );
-    expect(messageClassifyService.classify).not.toHaveBeenCalled();
+    // Free text is typed by the cheap classifier first, outside plan quota.
+    expect(messageClassifyService.classify).toHaveBeenCalledTimes(1);
+    expect(aiGateway.runUnmetered).toHaveBeenCalledWith(
+      'user-a',
+      'CLASSIFY',
+      expect.any(Function),
+    );
+    expect(aiGateway.run).not.toHaveBeenCalledWith(
+      'user-a',
+      'CLASSIFY',
+      expect.any(Function),
+    );
     expect(foodAnalysisService.analyzeText).toHaveBeenCalledTimes(1);
     expect(foodAnalysisService.analyzeText).toHaveBeenCalledWith(
       'ข้าวกะเพราไก่',
@@ -1087,8 +1107,14 @@ describe('FoodLoggingService', () => {
     );
   });
 
-  it('meal recommendation uses template without OpenAI', async () => {
+  it('meal recommendation uses the template after classify (no food analysis)', async () => {
     dailySummaryService.getDailySummary.mockResolvedValue(sampleSummary);
+    messageClassifyService.classify.mockResolvedValue({
+      type: 'coach',
+      weightKg: null,
+      weightQuery: null,
+      coachHint: 'meal_recommendation',
+    });
 
     await service.handleCompletedText(
       completedUser as never,
@@ -1097,7 +1123,7 @@ describe('FoodLoggingService', () => {
     );
 
     expect(dailySummaryService.getDailySummary).toHaveBeenCalledWith('user-a');
-    expect(messageClassifyService.classify).not.toHaveBeenCalled();
+    expect(messageClassifyService.classify).toHaveBeenCalledTimes(1);
     expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
     expect(lineService.replyText).toHaveBeenCalledWith(
       'token',
@@ -1418,6 +1444,61 @@ describe('FoodLoggingService', () => {
       'token',
       expect.stringContaining('อ่านรูปนี้ไม่ชัด'),
     );
+  });
+
+  it('uses keyword rules instead of failing when the classify bucket is full', async () => {
+    for (let i = 0; i < 20; i++) {
+      aiRateLimiter.tryConsume('U-line-a', 'classify');
+    }
+    dailySummaryService.getDailySummary.mockResolvedValue(sampleSummary);
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'มื้อเย็นกินอะไรดี',
+    );
+
+    expect(messageClassifyService.classify).not.toHaveBeenCalled();
+    expect(lineService.replyText).not.toHaveBeenCalledWith(
+      'token',
+      FOOD_RATE_LIMITED_TEXT,
+    );
+    expect(dailySummaryService.getDailySummary).toHaveBeenCalledWith('user-a');
+  });
+
+  it('falls back to keyword rules when the classifier is unavailable', async () => {
+    messageClassifyService.classify.mockRejectedValue(
+      new MessageClassifyError('classify unavailable'),
+    );
+    dailySummaryService.getDailySummary.mockResolvedValue(sampleSummary);
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'มื้อเย็นกินอะไรดี',
+    );
+
+    expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
+    expect(dailySummaryService.getDailySummary).toHaveBeenCalledWith('user-a');
+  });
+
+  it('keeps strict inputs off the classifier (weight number, sleep, pending adjustment)', async () => {
+    weightLogService.createForUser.mockResolvedValue({
+      weightKg: 84.2,
+      recordedAt: new Date('2026-09-19T10:00:00.000Z'),
+    });
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'น้ำหนัก 84.2',
+    );
+    healthRouting.tryHandleText.mockResolvedValueOnce(true);
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'นอน 00:30 ตื่น 07:30',
+    );
+    expect(messageClassifyService.classify).not.toHaveBeenCalled();
   });
 
   it('rate-limits expensive food analysis with a friendly message', async () => {

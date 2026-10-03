@@ -71,7 +71,6 @@ import {
 } from './food-analysis.service';
 import { FoodAnalysisValidationError } from './food-analysis.validator';
 import { FoodLogService } from './food-log.service';
-import { isLikelyFoodText } from './food-text-heuristic';
 import {
   AMBIGUOUS_NUMBER_TEXT,
   buildFoodEstimateMessage,
@@ -363,13 +362,6 @@ export class FoodLoggingService {
       }
     }
 
-    // Deterministic coach NL (DB facts) — no classify.
-    const coachIntent = detectCoachIntent(normalized);
-    if (coachIntent !== 'none' && coachIntent !== 'medical') {
-      await this.handleCoachIntent(user.id, replyToken, coachIntent);
-      return 'handled';
-    }
-
     // Bare number without pending context is ambiguous (weight vs quantity).
     if (/^\d+(?:\.\d+)?$/.test(normalized)) {
       await this.lineService.replyText(replyToken, AMBIGUOUS_NUMBER_TEXT);
@@ -389,20 +381,17 @@ export class FoodLoggingService {
 
     const lineUserId = user.lineUserId ?? user.id;
 
-    // High-confidence food text → analyze once (skip classify).
-    if (isLikelyFoodText(normalized)) {
-      await this.offerReplaceOrAnalyze(
+    // Everything strict (commands, edit/pending context, health formats, medical
+    // gate, weight numbers) was handled above. What is left is free text: let a
+    // tiny AI call pick the type first, then fall back to the keyword rules
+    // whenever that call is unavailable or rate limited.
+    if (!aiRateLimiter.tryConsume(lineUserId, 'classify')) {
+      await this.routeWithoutClassify(
         user.id,
         replyToken,
-        { kind: 'text', text: normalized },
+        normalized,
         lineUserId,
       );
-      return 'handled';
-    }
-
-    // Ambiguous free text → cheap AI classify fallback.
-    if (!aiRateLimiter.tryConsume(lineUserId, 'classify')) {
-      await this.lineService.replyText(replyToken, FOOD_RATE_LIMITED_TEXT);
       return 'handled';
     }
     await this.routeByClassification(
@@ -421,8 +410,11 @@ export class FoodLoggingService {
     lineUserId: string,
   ): Promise<void> {
     try {
-      const classified = await this.aiGateway.run(userId, 'CLASSIFY', () =>
-        this.messageClassifyService.classify(text),
+      // Routing call: not charged to the user's daily plan quota.
+      const classified = await this.aiGateway.runUnmetered(
+        userId,
+        'CLASSIFY',
+        () => this.messageClassifyService.classify(text),
       );
       this.logger.log(
         `Classified type=${classified.type} weightKg=${classified.weightKg ?? '-'} query=${classified.weightQuery ?? '-'} coach=${classified.coachHint ?? '-'}`,
@@ -518,6 +510,7 @@ export class FoodLoggingService {
       await this.handleCoachIntent(userId, replyToken, coachIntent);
       return;
     }
+    // Keyword food check first; unknown text is still offered as food (old behaviour).
     await this.offerReplaceOrAnalyze(
       userId,
       replyToken,
