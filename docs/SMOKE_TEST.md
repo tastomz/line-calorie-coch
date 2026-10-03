@@ -45,8 +45,7 @@ Run on SIT first. Use a user with a completed profile.
 - [ ] `ย้อนหลัง` → 7-day card; tap a day → that day's detail (chat shows "📅 <วัน>", not `foodday:N`); tapping วันนี้ opens the editable list
 - [ ] `2 วันก่อน`, `ย้อนหลัง 3` work; `เมื่อวาน น้ำหนัก 84` / `เมื่อวาน นอน 00:30 ตื่น 07:30` are **not** logged as food
 - [ ] Past-day entries appear in Google Sheets under the right date (if Sheets enabled)
-- [ ] Reference table (only after a licensed CSV is imported): a listed dish returns "ค่ามาตรฐาน … · <source>" with **no** OpenAI call in logs; an unlisted dish still goes to AI; `<dish> 1 ชาม` when data is per plate goes to AI
-- [ ] Migrations `pending_eaten_at` and `thai_food_reference` applied (deploy log shows `prisma migrate deploy` success; `/health/ready` 200)
+- [ ] Migration `pending_eaten_at` applied (deploy log shows `prisma migrate deploy` success; `/health/ready` 200)
 
 ## Sign-off
 

@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { openAiCircuitBreaker } from '../../common/openai-circuit-breaker';
 import {
   FoodAnalysisError,
+  FoodEstimateEmptyError,
   FoodImageUnreadableError,
   FoodAnalysisService,
 } from './food-analysis.service';
@@ -249,15 +250,15 @@ describe('FoodAnalysisService', () => {
       expect(systemPrompt(create)).toContain('MUST be in Thai');
     });
 
-    it('tells the model to read printed nutrition labels on packaged food', async () => {
+    it('tells photos of packaged food to be named and never 0 kcal', async () => {
       const create = jest.fn().mockResolvedValue(okResponse('อกไก่ย่าง'));
       await serviceWith(create).analyzeImage({
         imageBytes: Buffer.from([1, 2, 3]),
       });
       const prompt = systemPrompt(create);
-      expect(prompt).toContain('printed nutrition label');
-      expect(prompt).toContain('labelKcal MUST be null unless');
-      expect(prompt).toContain('ตามฉลาก');
+      expect(prompt).toContain('packaged product');
+      expect(prompt).toContain('Never output 0 kcal');
+      expect(prompt).not.toContain('labelKcal');
     });
 
     function imageDetail(create: jest.Mock): string {
@@ -344,6 +345,18 @@ describe('FoodAnalysisService', () => {
         }).analyzeImage({ imageBytes: Buffer.from([1, 2, 3]) });
         expect(modelOf(create)).toBe('gpt-4o-mini');
       }
+    });
+
+    it('rejects a text answer of 0 kcal instead of offering a 0 kcal meal', async () => {
+      const zero = okResponse('สันในไก่ย่าง');
+      zero.choices[0].message.content = JSON.stringify({
+        ...JSON.parse(zero.choices[0].message.content),
+        estimatedCalories: 0,
+      });
+      const create = jest.fn().mockResolvedValue(zero);
+      await expect(
+        serviceWith(create).analyzeText('สันในไก่ย่าง cp 1 ซอง'),
+      ).rejects.toBeInstanceOf(FoodEstimateEmptyError);
     });
 
     it('rejects a photo that yields 0 kcal instead of offering a 0 kcal meal', async () => {
