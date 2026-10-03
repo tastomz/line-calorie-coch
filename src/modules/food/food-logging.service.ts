@@ -402,21 +402,17 @@ export class FoodLoggingService {
       );
       return 'handled';
     }
-    await this.routeByClassification(
-      user.id,
-      replyToken,
-      normalized,
-      lineUserId,
-    );
+    await this.routeByClassification(user, replyToken, normalized, lineUserId);
     return 'handled';
   }
 
   private async routeByClassification(
-    userId: string,
+    user: User,
     replyToken: string,
     text: string,
     lineUserId: string,
   ): Promise<void> {
+    const userId = user.id;
     try {
       // Routing call: not charged to the user's daily plan quota.
       const classified = await this.aiGateway.runUnmetered(
@@ -454,6 +450,11 @@ export class FoodLoggingService {
           return;
         }
         await this.replyTodaySummary(userId, replyToken);
+        return;
+      }
+
+      if (classified.type === 'health_coach') {
+        await this.replyCrossHealthCoach(user, replyToken, text);
         return;
       }
 
@@ -691,7 +692,7 @@ export class FoodLoggingService {
             {
               role: 'system',
               content:
-                'You are Tastom personal health coach. Use only provided facts. Thai, short, practical. No diagnosis, no medication. Distinguish measured vs estimated.',
+                'You are Tastom personal health coach. Use only provided facts. Thai, short, practical. No diagnosis, no medication. Distinguish measured vs estimated. For "how long/how much" exercise questions give a modest range (e.g. 20-40 minutes of easy cardio) with one reason from the facts (sleep, steps, calories left, recovery) and say when data is missing. Advise stopping if pain or dizziness.',
             },
             {
               role: 'user',

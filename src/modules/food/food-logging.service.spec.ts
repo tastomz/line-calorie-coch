@@ -25,6 +25,7 @@ import { FoodLoggingService } from './food-logging.service';
 import { foodEditSessionBuffer } from './food-edit.session';
 import {
   AMBIGUOUS_NUMBER_TEXT,
+  GENERAL_HELP_TEXT,
   COMPLETE_PROFILE_FIRST_TEXT,
   FOOD_RATE_LIMITED_TEXT,
 } from './food.messages';
@@ -1567,6 +1568,53 @@ describe('FoodLoggingService', () => {
       'นอน 00:30 ตื่น 07:30',
     );
     expect(messageClassifyService.classify).not.toHaveBeenCalled();
+  });
+
+  it('routes a classified health_coach question to the health coach, not the general help', async () => {
+    messageClassifyService.classify.mockResolvedValue({
+      type: 'health_coach',
+      weightKg: null,
+      weightQuery: null,
+      coachHint: null,
+    });
+    dailySummaryService.getDailySummary.mockResolvedValue(sampleSummary);
+    healthInsights.buildInsights.mockReturnValue([
+      'ก้าววันนี้ยังต่ำกว่า 5,000',
+    ]);
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'ช่วงนี้ควรขยับตัวเยอะแค่ไหนดี',
+    );
+
+    expect(healthDashboard.buildToday).toHaveBeenCalled();
+    expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
+    expect(lineService.replyText).not.toHaveBeenCalledWith(
+      'token',
+      GENERAL_HELP_TEXT,
+    );
+    expect(lineService.replyText).toHaveBeenCalledWith(
+      'token',
+      expect.stringContaining('ก้าววันนี้ยังต่ำกว่า 5,000'),
+    );
+  });
+
+  it('answers ควรไปวิ่งกี่นาทีดี with the health coach without calling the classifier', async () => {
+    dailySummaryService.getDailySummary.mockResolvedValue(sampleSummary);
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'ควรไปวิ่งกี่นาทีดี',
+    );
+
+    expect(messageClassifyService.classify).not.toHaveBeenCalled();
+    expect(healthDashboard.buildToday).toHaveBeenCalled();
+    expect(lineService.replyText).not.toHaveBeenCalledWith(
+      'token',
+      GENERAL_HELP_TEXT,
+    );
   });
 
   it('rate-limits expensive food analysis with a friendly message', async () => {
