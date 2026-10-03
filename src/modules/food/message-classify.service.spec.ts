@@ -42,6 +42,34 @@ describe('MessageClassifyService', () => {
     expect(firstCall?.[0].max_tokens).toBe(60);
   });
 
+  it('accepts the health_coach type for exercise / sleep advice questions', async () => {
+    const create = jest.fn().mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              type: 'health_coach',
+              weightKg: null,
+              weightQuery: null,
+              coachHint: null,
+            }),
+          },
+        },
+      ],
+    });
+    const service = new MessageClassifyService({
+      get: jest.fn().mockReturnValue('sk-test'),
+    } as unknown as ConfigService);
+    (
+      service as unknown as {
+        client: { chat: { completions: { create: typeof create } } };
+      }
+    ).client = { chat: { completions: { create } } };
+
+    const result = await service.classify('ควรไปวิ่งกี่นาทีดี');
+    expect(result.type).toBe('health_coach');
+  });
+
   it('throws when API key missing', async () => {
     const config = { get: jest.fn().mockReturnValue('') };
     const service = new MessageClassifyService(
