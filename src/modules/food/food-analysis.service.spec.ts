@@ -255,8 +255,43 @@ describe('FoodAnalysisService', () => {
       });
       const prompt = systemPrompt(create);
       expect(prompt).toContain('printed nutrition label');
-      expect(prompt).toContain('Never contradict printed numbers');
+      expect(prompt).toContain('labelKcal MUST be null unless');
       expect(prompt).toContain('ตามฉลาก');
+    });
+
+    function imageDetail(create: jest.Mock): string {
+      const call = (create.mock.calls[0] as unknown[])[0] as {
+        messages: Array<{ content: unknown }>;
+      };
+      const parts = call.messages[1].content as Array<{
+        image_url?: { detail?: string };
+      }>;
+      return parts.find((p) => p.image_url)?.image_url?.detail ?? '';
+    }
+
+    it.each([
+      ['', 'low'],
+      ['bogus', 'low'],
+      ['high', 'high'],
+      ['auto', 'auto'],
+    ])('FOOD_VISION_DETAIL=%j sends detail=%s', async (setting, expected) => {
+      const create = jest.fn().mockResolvedValue(okResponse('อกไก่ย่าง'));
+      const config = {
+        get: (key: string) =>
+          key === 'OPENAI_API_KEY'
+            ? 'test-key'
+            : key === 'FOOD_VISION_DETAIL'
+              ? setting
+              : '',
+      } as unknown as ConfigService;
+      const service = new FoodAnalysisService(config);
+      (
+        service as unknown as {
+          client: { chat: { completions: { create: typeof create } } };
+        }
+      ).client = { chat: { completions: { create } } };
+      await service.analyzeImage({ imageBytes: Buffer.from([1, 2, 3]) });
+      expect(imageDetail(create)).toBe(expected);
     });
 
     it('tells the model to keep composition re-estimates in Thai', async () => {

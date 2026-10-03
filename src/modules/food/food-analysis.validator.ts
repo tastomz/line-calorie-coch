@@ -31,6 +31,10 @@ function assertPositive(field: string, value: unknown): number {
 const MAX_CALORIES = 10000;
 const MAX_MACRO_G = 2000;
 
+const LABEL_CLAIM = 'ตามฉลาก';
+const LABEL_UNREADABLE = 'อ่านฉลากไม่ชัด ค่าที่ได้เป็นการประมาณ';
+const LABEL_UNVERIFIED_MAX_CONFIDENCE = 0.5;
+
 const ALLOWED_UNITS = new Set<string>(FOOD_QUANTITY_UNITS);
 
 /**
@@ -158,14 +162,40 @@ export function validateFoodAnalysisResult(raw: unknown): FoodAnalysisResult {
     .map((item) => item.trim())
     .filter(Boolean);
 
+  const labelKcal =
+    typeof data.labelKcal === 'number' &&
+    Number.isFinite(data.labelKcal) &&
+    data.labelKcal > 0 &&
+    data.labelKcal <= MAX_CALORIES
+      ? data.labelKcal
+      : null;
+  const claimsLabel = assumptions.some((item) => item.includes(LABEL_CLAIM));
+  let finalCalories = estimatedCalories;
+  let finalConfidence = confidence;
+  let finalAssumptions = assumptions;
+  if (labelKcal !== null) {
+    // A number actually read from the pack beats any estimate.
+    finalCalories = labelKcal;
+    if (!claimsLabel) {
+      finalAssumptions = [LABEL_CLAIM, ...assumptions].slice(0, 3);
+    }
+  } else if (claimsLabel) {
+    // "ตามฉลาก" without a quoted printed number is an unverified claim.
+    finalAssumptions = [
+      ...assumptions.filter((item) => !item.includes(LABEL_CLAIM)),
+      LABEL_UNREADABLE,
+    ].slice(0, 3);
+    finalConfidence = Math.min(confidence, LABEL_UNVERIFIED_MAX_CONFIDENCE);
+  }
+
   return {
     foodName,
-    estimatedCalories,
+    estimatedCalories: finalCalories,
     proteinG,
     carbsG,
     fatG,
-    confidence,
-    assumptions,
+    confidence: finalConfidence,
+    assumptions: finalAssumptions,
     estimatedQuantity,
     quantityUnit: quantityUnitRaw as FoodQuantityUnit,
   };
