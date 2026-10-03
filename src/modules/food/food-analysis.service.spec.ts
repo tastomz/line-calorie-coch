@@ -257,6 +257,9 @@ describe('FoodAnalysisService', () => {
       });
       const prompt = systemPrompt(create);
       expect(prompt).toContain('packaged product');
+      expect(prompt).toContain(
+        'printed on the pack, use exactly those numbers',
+      );
       expect(prompt).toContain('Never output 0 kcal');
       expect(prompt).not.toContain('labelKcal');
     });
