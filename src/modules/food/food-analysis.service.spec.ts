@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { openAiCircuitBreaker } from '../../common/openai-circuit-breaker';
 import {
   FoodAnalysisError,
+  FoodImageUnreadableError,
   FoodAnalysisService,
 } from './food-analysis.service';
 
@@ -268,6 +269,67 @@ describe('FoodAnalysisService', () => {
       }>;
       return parts.find((p) => p.image_url)?.image_url?.detail ?? '';
     }
+
+    function serviceWithConfig(
+      create: jest.Mock,
+      extra: Record<string, string>,
+    ): FoodAnalysisService {
+      const config = {
+        get: (key: string) =>
+          key === 'OPENAI_API_KEY' ? 'test-key' : (extra[key] ?? ''),
+      } as unknown as ConfigService;
+      const service = new FoodAnalysisService(config);
+      (
+        service as unknown as {
+          client: { chat: { completions: { create: typeof create } } };
+        }
+      ).client = { chat: { completions: { create } } };
+      return service;
+    }
+
+    function modelOf(create: jest.Mock): string {
+      return ((create.mock.calls[0] as unknown[])[0] as { model: string })
+        .model;
+    }
+
+    it('uses FOOD_VISION_MODEL for photos only', async () => {
+      const create = jest.fn().mockResolvedValue(okResponse('อกไก่ย่าง'));
+      const service = serviceWithConfig(create, {
+        FOOD_VISION_MODEL: 'gpt-4o',
+      });
+      await service.analyzeImage({ imageBytes: Buffer.from([1, 2, 3]) });
+      expect(modelOf(create)).toBe('gpt-4o');
+
+      const textCreate = jest.fn().mockResolvedValue(okResponse('ข้าว'));
+      await serviceWithConfig(textCreate, {
+        FOOD_VISION_MODEL: 'gpt-4o',
+      }).analyzeText('ข้าว');
+      expect(modelOf(textCreate)).toBe('gpt-4o-mini');
+    });
+
+    it('falls back to the default model when FOOD_VISION_MODEL is unset or odd', async () => {
+      for (const value of ['', 'bad model!']) {
+        const create = jest.fn().mockResolvedValue(okResponse('อกไก่ย่าง'));
+        await serviceWithConfig(create, {
+          FOOD_VISION_MODEL: value,
+        }).analyzeImage({ imageBytes: Buffer.from([1, 2, 3]) });
+        expect(modelOf(create)).toBe('gpt-4o-mini');
+      }
+    });
+
+    it('rejects a photo that yields 0 kcal instead of offering a 0 kcal meal', async () => {
+      const zero = okResponse('เกี๊ยวซ่า');
+      zero.choices[0].message.content = JSON.stringify({
+        ...JSON.parse(zero.choices[0].message.content),
+        estimatedCalories: 0,
+      });
+      const create = jest.fn().mockResolvedValue(zero);
+      await expect(
+        serviceWith(create).analyzeImage({
+          imageBytes: Buffer.from([1, 2, 3]),
+        }),
+      ).rejects.toBeInstanceOf(FoodImageUnreadableError);
+    });
 
     it.each([
       ['', 'low'],

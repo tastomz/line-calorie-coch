@@ -1,3 +1,4 @@
+import { FoodImageUnreadableError } from './food-analysis.service';
 import { OnboardingState } from '@prisma/client';
 import { aiRateLimiter } from '../../common/ai-rate-limiter';
 import { LineOutboundError } from '../line/line-outbound.error';
@@ -1382,6 +1383,24 @@ describe('FoodLoggingService', () => {
     expect(foodAnalysisService.analyzeImage).toHaveBeenCalledTimes(1);
     expect(messageClassifyService.classify).not.toHaveBeenCalled();
     expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
+  });
+
+  it('asks for a clearer photo when the image cannot be read (no 0 kcal card)', async () => {
+    lineService.getMessageContentPreviewBytes.mockResolvedValue(
+      Buffer.from('fake-image'),
+    );
+    foodAnalysisService.analyzeImage.mockRejectedValue(
+      new FoodImageUnreadableError(),
+    );
+
+    await service.handleImage(completedUser as never, 'token', 'msg-img-2');
+
+    expect(pendingFoodService.upsertPending).not.toHaveBeenCalled();
+    expect(lineService.replyButtonsOrPush).not.toHaveBeenCalled();
+    expect(lineService.replyText).toHaveBeenCalledWith(
+      'token',
+      expect.stringContaining('อ่านรูปนี้ไม่ชัด'),
+    );
   });
 
   it('rate-limits expensive food analysis with a friendly message', async () => {
