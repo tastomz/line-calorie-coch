@@ -162,4 +162,76 @@ describe('DailySummaryService', () => {
     expect(summaryA.consumed.calories).toBe(500);
     expect(summaryB.consumed.calories).toBe(999);
   });
+
+  describe('getRecentDays', () => {
+    // 2026-10-03 15:00 Bangkok
+    const now = new Date('2026-10-03T08:00:00.000Z');
+
+    it('buckets logs per local day, newest first, with empty days kept', async () => {
+      foodLogs.push(
+        {
+          userId: 'user-a',
+          eatenAt: new Date('2026-10-03T05:00:00.000Z'),
+          calories: 400,
+          proteinG: 20,
+          carbsG: 40,
+          fatG: 10,
+        },
+        {
+          userId: 'user-a',
+          // 23:30 Bangkok on Oct 2 → yesterday
+          eatenAt: new Date('2026-10-02T16:30:00.000Z'),
+          calories: 700,
+          proteinG: 30,
+          carbsG: 80,
+          fatG: 25,
+        },
+        {
+          userId: 'user-a',
+          // 00:00 Bangkok on Oct 3 → today, not yesterday
+          eatenAt: new Date('2026-10-02T17:00:00.000Z'),
+          calories: 100,
+          proteinG: 1,
+          carbsG: 2,
+          fatG: 3,
+        },
+        {
+          userId: 'user-a',
+          eatenAt: new Date('2026-09-30T05:00:00.000Z'),
+          calories: 900,
+          proteinG: 50,
+          carbsG: 90,
+          fatG: 30,
+        },
+        {
+          userId: 'user-b',
+          eatenAt: new Date('2026-10-02T05:00:00.000Z'),
+          calories: 5000,
+          proteinG: 1,
+          carbsG: 1,
+          fatG: 1,
+        },
+      );
+
+      const result = await service.getRecentDays('user-a', 5, now);
+
+      expect(result.days.map((d) => d.daysAgo)).toEqual([0, 1, 2, 3, 4]);
+      expect(result.days.map((d) => d.mealCount)).toEqual([2, 1, 0, 1, 0]);
+      expect(result.days.map((d) => d.consumed.calories)).toEqual([
+        500, 700, 0, 900, 0,
+      ]);
+      expect(result.target).toEqual({
+        calories: 2000,
+        proteinG: 140,
+        carbsG: 220,
+        fatG: 55,
+      });
+    });
+
+    it('returns null target when the user has no profile', async () => {
+      const result = await service.getRecentDays('user-no-profile', 3, now);
+      expect(result.target).toBeNull();
+      expect(result.days).toHaveLength(3);
+    });
+  });
 });

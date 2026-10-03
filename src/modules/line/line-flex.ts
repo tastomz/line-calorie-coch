@@ -88,6 +88,7 @@ export type FlexAction = {
   text?: string;
   uri?: string;
   data?: string;
+  displayText?: string;
 };
 
 export type FlexComponent =
@@ -150,6 +151,25 @@ export function messageAction(label: string, text: string): FlexAction {
   return { type: 'message', label: label.slice(0, 40), text };
 }
 
+/**
+ * Postback action: `data` goes to the webhook invisibly — LINE does not
+ * echo it into the chat. `displayText` (optional, max 300 chars) shows a
+ * short human-readable bubble instead, so internal command strings like
+ * `foodedit:menu:<id>` never appear in the user's chat history.
+ */
+export function postbackAction(
+  label: string,
+  data: string,
+  displayText?: string,
+): FlexAction {
+  return {
+    type: 'postback',
+    label: label.slice(0, 40),
+    data,
+    ...(displayText ? { displayText: displayText.slice(0, 300) } : {}),
+  };
+}
+
 export function primaryButton(label: string, text: string): FlexButton {
   return {
     type: 'button',
@@ -179,6 +199,50 @@ export function linkButton(label: string, text: string): FlexButton {
     color: FlexTheme.textSecondary,
     flex: 1,
     action: messageAction(label, text),
+  };
+}
+
+export function primaryPostbackButton(
+  label: string,
+  data: string,
+  displayText?: string,
+): FlexButton {
+  return {
+    type: 'button',
+    style: 'primary',
+    color: FlexTheme.primaryBtn,
+    height: 'sm',
+    action: postbackAction(label, data, displayText),
+  };
+}
+
+export function secondaryPostbackButton(
+  label: string,
+  data: string,
+  displayText?: string,
+): FlexButton {
+  return {
+    type: 'button',
+    style: 'secondary',
+    color: FlexTheme.accent,
+    height: 'sm',
+    flex: 1,
+    action: postbackAction(label, data, displayText),
+  };
+}
+
+export function linkPostbackButton(
+  label: string,
+  data: string,
+  displayText?: string,
+): FlexButton {
+  return {
+    type: 'button',
+    style: 'link',
+    height: 'sm',
+    color: FlexTheme.textSecondary,
+    flex: 1,
+    action: postbackAction(label, data, displayText),
   };
 }
 
