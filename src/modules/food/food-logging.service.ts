@@ -65,6 +65,7 @@ import {
 import { DailyTotalsService } from './daily-totals.service';
 import {
   FoodAnalysisError,
+  FoodEstimateEmptyError,
   FoodImageUnreadableError,
   FoodAnalysisService,
 } from './food-analysis.service';
@@ -79,6 +80,7 @@ import {
   buildQuantityAdjustedMessage,
   COMPLETE_PROFILE_FIRST_TEXT,
   FOOD_ANALYSIS_FAILED_TEXT,
+  FOOD_ESTIMATE_EMPTY_TEXT,
   FOOD_IMAGE_UNREADABLE_TEXT,
   FOOD_CANCELLED_TEXT,
   FOOD_CONFIRM_CHOICES,
@@ -1710,6 +1712,10 @@ export class FoodLoggingService {
       }
       if (error instanceof LineOutboundError) {
         throw error;
+      }
+      if (error instanceof FoodEstimateEmptyError) {
+        await this.lineService.replyText(replyToken, FOOD_ESTIMATE_EMPTY_TEXT);
+        return;
       }
       if (error instanceof FoodImageUnreadableError) {
         await this.lineService.replyText(

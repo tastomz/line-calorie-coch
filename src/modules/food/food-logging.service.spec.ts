@@ -1,4 +1,7 @@
-import { FoodImageUnreadableError } from './food-analysis.service';
+import {
+  FoodEstimateEmptyError,
+  FoodImageUnreadableError,
+} from './food-analysis.service';
 import { OnboardingState } from '@prisma/client';
 import { aiRateLimiter } from '../../common/ai-rate-limiter';
 import { LineOutboundError } from '../line/line-outbound.error';
@@ -224,6 +227,25 @@ describe('FoodLoggingService', () => {
       weightQuery: null,
       coachHint: null,
     });
+  });
+
+  it('asks for more detail when a text estimate comes back empty (no 0 kcal card)', async () => {
+    foodAnalysisService.analyzeText.mockRejectedValue(
+      new FoodEstimateEmptyError(),
+    );
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'สันในไก่ย่างถ่าน cp 1 ซอง',
+    );
+
+    expect(pendingFoodService.upsertPending).not.toHaveBeenCalled();
+    expect(lineService.replyButtonsOrPush).not.toHaveBeenCalled();
+    expect(lineService.replyText).toHaveBeenCalledWith(
+      'token',
+      expect.stringContaining('ประเมินแคลอรี่จากข้อความนี้ไม่ได้'),
+    );
   });
 
   it('analyzes text food and asks for confirmation without saving', async () => {
