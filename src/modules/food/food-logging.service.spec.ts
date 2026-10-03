@@ -61,6 +61,8 @@ describe('FoodLoggingService', () => {
   };
   const dailySummaryService = {
     getDailySummary: jest.fn(),
+    getDailySummaryOrNull: jest.fn(),
+    getRecentDays: jest.fn(),
   };
   const weightLogService = {
     createForUser: jest.fn(),
@@ -239,6 +241,7 @@ describe('FoodLoggingService', () => {
     expect(pendingFoodService.upsertPending).toHaveBeenCalledWith(
       'user-a',
       expect.objectContaining({ foodName: 'ข้าวกะเพราไก่ไข่ดาว' }),
+      undefined,
       undefined,
     );
     expect(messageClassifyService.classify).not.toHaveBeenCalled();
@@ -1730,6 +1733,294 @@ describe('FoodLoggingService', () => {
         expect.stringContaining('ไม่พบมื้ออาหาร'),
       );
       expect(foodLogService.updateNutritionForUserToday).not.toHaveBeenCalled();
+    });
+  });
+  describe('past-day food (เมื่อวาน / ย้อนหลัง)', () => {
+    /** Typed access to a jest mock call argument (mock.calls is any[][]). */
+    function callArg(fn: jest.Mock, call: number, arg: number): unknown {
+      const calls = fn.mock.calls as unknown[][];
+      return calls[call][arg];
+    }
+
+    const analysis = {
+      foodName: 'ข้าวมันไก่',
+      estimatedCalories: 600,
+      proteinG: 30,
+      carbsG: 70,
+      fatG: 20,
+      confidence: 0.8,
+      assumptions: [],
+      estimatedQuantity: 1,
+      quantityUnit: 'plate',
+    };
+
+    it('logs "เมื่อวาน <อาหาร>" as a pending entry dated yesterday', async () => {
+      foodAnalysisService.analyzeText.mockResolvedValue(analysis);
+      pendingFoodService.upsertPending.mockResolvedValue({
+        originalQuantity: 1,
+        consumedQuantity: 1,
+        quantityUnit: 'plate',
+        eatenAt: new Date(),
+      });
+      const before = Date.now();
+
+      const result = await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'เมื่อวานกินข้าวมันไก่',
+      );
+
+      expect(result).toBe('handled');
+      expect(foodAnalysisService.analyzeText).toHaveBeenCalledWith(
+        'ข้าวมันไก่',
+      );
+      expect(messageClassifyService.classify).not.toHaveBeenCalled();
+      const eatenAt = callArg(pendingFoodService.upsertPending, 0, 3) as Date;
+      expect(eatenAt).toBeInstanceOf(Date);
+      const hoursAgo = (before - eatenAt.getTime()) / 3_600_000;
+      expect(hoursAgo).toBeGreaterThan(23);
+      expect(hoursAgo).toBeLessThan(25);
+      expect(foodLogService.createFromAnalysis).not.toHaveBeenCalled();
+    });
+
+    it('keeps the yesterday date when the user replaces a pending entry', async () => {
+      pendingFoodService.getActiveForUser.mockResolvedValue({
+        id: 'p1',
+        userId: 'user-a',
+      });
+      foodAnalysisService.analyzeText.mockResolvedValue(analysis);
+      pendingFoodService.upsertPending.mockResolvedValue({
+        originalQuantity: 1,
+        consumedQuantity: 1,
+        quantityUnit: 'plate',
+      });
+
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'เมื่อวาน ข้าวมันไก่',
+      );
+      expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
+
+      pendingFoodService.getActiveForUser.mockResolvedValue(null);
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'ยกเลิกรายการเดิม',
+      );
+
+      expect(foodAnalysisService.analyzeText).toHaveBeenCalledWith(
+        'ข้าวมันไก่',
+      );
+      expect(callArg(pendingFoodService.upsertPending, 0, 3)).toBeInstanceOf(
+        Date,
+      );
+    });
+
+    it('does not date a normal food message', async () => {
+      foodAnalysisService.analyzeText.mockResolvedValue(analysis);
+      pendingFoodService.upsertPending.mockResolvedValue({
+        originalQuantity: 1,
+        consumedQuantity: 1,
+        quantityUnit: 'plate',
+      });
+
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'ข้าวมันไก่ 1 จาน',
+      );
+
+      expect(callArg(pendingFoodService.upsertPending, 0, 3)).toBeUndefined();
+    });
+
+    it("confirms a yesterday entry with that day's totals and label", async () => {
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      pendingFoodService.confirmPendingAtomic.mockResolvedValue({
+        foodLog: {
+          id: 'food-y',
+          userId: 'user-a',
+          eatenAt: yesterday,
+          foodName: 'ข้าวมันไก่',
+          calories: 600,
+        },
+        analysis,
+        pendingId: 'pending-y',
+      });
+      dailyTotalsService.getSummaryForUser.mockResolvedValue({
+        totals: { calories: 600, proteinG: 30, carbsG: 70, fatG: 20 },
+        targets: {
+          dailyCalories: 2000,
+          dailyProteinG: 140,
+          dailyCarbsG: 220,
+          dailyFatG: 60,
+        },
+      });
+
+      sheetsSync.appendFoodLog.mockResolvedValue(undefined);
+      sheetsSync.updateDailySummary.mockResolvedValue(undefined);
+
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'บันทึก',
+      );
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(dailyTotalsService.getSummaryForUser).toHaveBeenCalledWith(
+        'user-a',
+        yesterday,
+      );
+      const message = callArg(lineService.replyTextOrPush, 0, 2) as string;
+      expect(message).toContain('บันทึกแล้ว (เมื่อวาน)');
+      expect(message).toContain('📊 เมื่อวาน');
+      expect(sheetsSync.updateDailySummary).toHaveBeenCalledWith(
+        'user-a',
+        yesterday,
+      );
+    });
+
+    it('keeps today wording when confirming a normal entry', async () => {
+      pendingFoodService.confirmPendingAtomic.mockResolvedValue({
+        foodLog: {
+          id: 'food-t',
+          userId: 'user-a',
+          eatenAt: new Date(),
+          foodName: 'ข้าวมันไก่',
+          calories: 600,
+        },
+        analysis,
+        pendingId: 'pending-t',
+      });
+      dailyTotalsService.getSummaryForUser.mockResolvedValue({
+        totals: { calories: 600, proteinG: 30, carbsG: 70, fatG: 20 },
+        targets: {
+          dailyCalories: 2000,
+          dailyProteinG: 140,
+          dailyCarbsG: 220,
+          dailyFatG: 60,
+        },
+      });
+
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'บันทึก',
+      );
+
+      expect(dailyTotalsService.getSummaryForUser).toHaveBeenCalledWith(
+        'user-a',
+        undefined,
+      );
+      const message = callArg(lineService.replyTextOrPush, 0, 2) as string;
+      expect(message).toContain('✅ บันทึกแล้ว\n');
+      expect(message).toContain('📊 วันนี้');
+    });
+
+    it('shows yesterday read-only with zero AI calls', async () => {
+      foodLogService.listForUserOnDate.mockResolvedValue([
+        {
+          eatenAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+          foodName: 'ผัดไทย',
+          calories: 700,
+        },
+      ]);
+      dailySummaryService.getDailySummaryOrNull.mockResolvedValue({
+        date: new Date(),
+        consumed: { calories: 700, proteinG: 25, carbsG: 90, fatG: 25 },
+        target: {
+          calories: 2000,
+          proteinG: 140,
+          carbsG: 220,
+          dailyFatG: 0,
+          fatG: 55,
+        },
+        remaining: { calories: 1300, proteinG: 115, carbsG: 130, fatG: 30 },
+      });
+
+      const result = await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'เมื่อวาน',
+      );
+
+      expect(result).toBe('handled');
+      expect(foodLogService.listForUserOnDate).toHaveBeenCalledWith(
+        'user-a',
+        expect.any(Date),
+      );
+      const text = callArg(lineService.replyText, 0, 1) as string;
+      expect(text).toContain('📅 เมื่อวาน');
+      expect(text).toContain('ผัดไทย');
+      expect(text).toContain('700 / 2,000 kcal');
+      expect(aiGateway.run).not.toHaveBeenCalled();
+      expect(pendingFoodService.upsertPending).not.toHaveBeenCalled();
+    });
+
+    it('shows the 7-day overview as a tappable flex with text fallback', async () => {
+      const days = Array.from({ length: 7 }, (_, daysAgo) => ({
+        daysAgo,
+        date: new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000),
+        mealCount: daysAgo === 1 ? 2 : 0,
+        consumed: {
+          calories: daysAgo === 1 ? 1500 : 0,
+          proteinG: 0,
+          carbsG: 0,
+          fatG: 0,
+        },
+      }));
+      dailySummaryService.getRecentDays.mockResolvedValue({
+        target: { calories: 2000, proteinG: 140, carbsG: 220, fatG: 55 },
+        days,
+      });
+
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'ย้อนหลัง',
+      );
+
+      expect(dailySummaryService.getRecentDays).toHaveBeenCalledWith(
+        'user-a',
+        7,
+      );
+      expect(lineService.replyFlex).toHaveBeenCalledTimes(1);
+      const flexJson = JSON.stringify(callArg(lineService.replyFlex, 0, 1));
+      expect(flexJson).toContain('foodday:1');
+      expect(flexJson).toContain('foodday:0');
+      // flex is mocked to reject in unit tests → falls back to text
+      const text = callArg(lineService.replyText, 0, 1) as string;
+      expect(text).toContain('ย้อนหลัง 7 วัน');
+      expect(text).toContain('1,500 / 2,000 kcal');
+      expect(aiGateway.run).not.toHaveBeenCalled();
+    });
+
+    it('opens a tapped day via the foodday postback payload', async () => {
+      foodLogService.listForUserOnDate.mockResolvedValue([]);
+      dailySummaryService.getDailySummaryOrNull.mockResolvedValue(null);
+
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'foodday:3',
+      );
+
+      expect(foodLogService.listForUserOnDate).toHaveBeenCalledTimes(1);
+      const text = callArg(lineService.replyText, 0, 1) as string;
+      expect(text).toContain('ยังไม่มีรายการอาหาร');
+    });
+
+    it('postback for today opens the editable list instead', async () => {
+      foodLogService.listForUserOnDate.mockResolvedValue([]);
+
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'foodday:0',
+      );
+
+      expect(dailySummaryService.getDailySummaryOrNull).not.toHaveBeenCalled();
+      expect(lineService.replyFlex).toHaveBeenCalledTimes(1);
     });
   });
 });

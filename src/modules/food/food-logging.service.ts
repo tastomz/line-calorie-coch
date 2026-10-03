@@ -104,6 +104,17 @@ import {
 } from './food.messages';
 import { parseFoodEdit } from './food-edit';
 import {
+  describeDayTh,
+  localDaysAgo,
+  shiftDaysAgoKeepingTime,
+} from './day-bounds';
+import { FoodDayCommand, parseFoodDayCommand } from './food-day';
+import {
+  buildDayRangeFlex,
+  buildDayRangeText,
+  buildPastDayMessage,
+} from './food-day.messages';
+import {
   parseFoodEditCommand,
   FOOD_EDIT_CANCEL_TEXT,
   foodEditDelOkText,
@@ -308,6 +319,13 @@ export class FoodLoggingService {
 
     if (isExactFoodCommand(normalized, FOOD_COMMANDS.START)) {
       return 'not_command';
+    }
+
+    // Past-day food: "เมื่อวาน <อาหาร>" logs, "เมื่อวาน"/"ย้อนหลัง" view.
+    const dayCommand = parseFoodDayCommand(normalized);
+    if (dayCommand) {
+      await this.handleFoodDayCommand(user, replyToken, dayCommand);
+      return 'handled';
     }
 
     // Health trackers / body / sleep / etc. (deterministic-first).
@@ -833,6 +851,89 @@ export class FoodLoggingService {
     } catch (error) {
       this.logger.error(
         `History failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+      );
+      await this.lineService.replyText(replyToken, DAILY_SUMMARY_ERROR_TEXT);
+    }
+  }
+
+  private async handleFoodDayCommand(
+    user: User,
+    replyToken: string,
+    cmd: FoodDayCommand,
+  ): Promise<void> {
+    if (cmd.kind === 'log_past') {
+      await this.offerReplaceOrAnalyze(
+        user.id,
+        replyToken,
+        { kind: 'text', text: cmd.text, daysAgo: cmd.daysAgo },
+        user.lineUserId ?? user.id,
+      );
+      return;
+    }
+    if (cmd.kind === 'view_range') {
+      await this.replyDayRange(user.id, replyToken, cmd.days);
+      return;
+    }
+    if (cmd.daysAgo === 0) {
+      await this.replyHistory(user.id, replyToken);
+      return;
+    }
+    await this.replyPastDay(user.id, replyToken, cmd.daysAgo);
+  }
+
+  private async replyPastDay(
+    userId: string,
+    replyToken: string,
+    daysAgo: number,
+  ): Promise<void> {
+    try {
+      const day = shiftDaysAgoKeepingTime(daysAgo);
+      const [logs, summary] = await Promise.all([
+        this.foodLogService.listForUserOnDate(userId, day),
+        this.dailySummaryService.getDailySummaryOrNull(userId, day),
+      ]);
+      await this.lineService.replyText(
+        replyToken,
+        buildPastDayMessage({ day, daysAgo, logs, summary }),
+      );
+    } catch (error) {
+      if (error instanceof LineOutboundError) {
+        throw error;
+      }
+      this.logger.error(
+        `Past day view failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+      );
+      await this.lineService.replyText(replyToken, DAILY_SUMMARY_ERROR_TEXT);
+    }
+  }
+
+  private async replyDayRange(
+    userId: string,
+    replyToken: string,
+    days: number,
+  ): Promise<void> {
+    try {
+      const range = await this.dailySummaryService.getRecentDays(userId, days);
+      try {
+        await this.lineService.replyFlex(
+          replyToken,
+          buildDayRangeFlex(range.days, range.target),
+        );
+      } catch (error) {
+        if (error instanceof LineOutboundError) {
+          throw error;
+        }
+        await this.lineService.replyText(
+          replyToken,
+          buildDayRangeText(range.days, range.target),
+        );
+      }
+    } catch (error) {
+      if (error instanceof LineOutboundError) {
+        throw error;
+      }
+      this.logger.error(
+        `Day range view failed: ${error instanceof Error ? error.message : 'unknown error'}`,
       );
       await this.lineService.replyText(replyToken, DAILY_SUMMARY_ERROR_TEXT);
     }
@@ -1436,7 +1537,8 @@ export class FoodLoggingService {
     userId: string,
     replyToken: string,
     input:
-      { kind: 'text'; text: string } | { kind: 'image'; messageId: string },
+      | { kind: 'text'; text: string; daysAgo?: number }
+      | { kind: 'image'; messageId: string },
     lineUserId: string,
   ): Promise<void> {
     const pending = await this.pendingFoodService.getActiveForUser(userId);
@@ -1455,7 +1557,7 @@ export class FoodLoggingService {
       await this.analyzeAndAskConfirmation(
         userId,
         replyToken,
-        { kind: 'text', text: input.text },
+        { kind: 'text', text: input.text, daysAgo: input.daysAgo },
         lineUserId,
       );
       return;
@@ -1492,7 +1594,7 @@ export class FoodLoggingService {
       await this.analyzeAndAskConfirmation(
         user.id,
         replyToken,
-        { kind: 'text', text: buffered.text },
+        { kind: 'text', text: buffered.text, daysAgo: buffered.daysAgo },
         lineUserId,
       );
       return;
@@ -1542,7 +1644,7 @@ export class FoodLoggingService {
     userId: string,
     replyToken: string,
     input:
-      | { kind: 'text'; text: string }
+      | { kind: 'text'; text: string; daysAgo?: number }
       | { kind: 'image'; imageBytes: Buffer; imageUrl?: string },
     lineUserId?: string,
   ): Promise<void> {
@@ -1575,6 +1677,9 @@ export class FoodLoggingService {
         userId,
         analysis,
         input.kind === 'image' ? input.imageUrl : undefined,
+        input.kind === 'text' && input.daysAgo
+          ? shiftDaysAgoKeepingTime(input.daysAgo)
+          : undefined,
       );
 
       await this.lineService.replyButtonsOrPush(
@@ -1653,8 +1758,16 @@ export class FoodLoggingService {
 
     // Mutation is durable — reply failures must not undo or re-run confirm.
     try {
-      const summary = await this.dailyTotalsService.getSummaryForUser(userId);
-      const message = buildFoodSavedMessage(analysis, summary);
+      const pastDay = localDaysAgo(foodLog.eatenAt) > 0;
+      const summary = await this.dailyTotalsService.getSummaryForUser(
+        userId,
+        pastDay ? foodLog.eatenAt : undefined,
+      );
+      const message = buildFoodSavedMessage(
+        analysis,
+        summary,
+        pastDay ? describeDayTh(foodLog.eatenAt) : undefined,
+      );
       if (lineUserId) {
         await this.lineService.replyTextOrPush(replyToken, lineUserId, message);
       } else {

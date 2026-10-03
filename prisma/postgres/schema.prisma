@@ -183,6 +183,7 @@ model PendingFoodAnalysis {
   originalProteinG   Float?
   originalCarbsG     Float?
   originalFatG       Float?
+  eatenAt            DateTime?
   expiresAt          DateTime
   createdAt          DateTime @default(now())
 
