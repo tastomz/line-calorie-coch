@@ -48,13 +48,15 @@ reading the printed label in the vision prompt; this data helps typed product na
 The sandbox cannot reach openfoodfacts.org, so the data is prepared on a developer
 machine:
 
-1. Download the **JSONL** product export (not the MongoDB dump) from
-   <https://world.openfoodfacts.org/data> — a large file (several GB, gzip). The
-   file name is expected to be `openfoodfacts-products.jsonl.gz`; check the page.
-2. Reduce it to Thai 7-11 / CP / Ezygo products (add `--all-thailand` for every Thai product):
+1. Download the product export from <https://world.openfoodfacts.org/data>: the
+   tab-separated **CSV** (`en.openfoodfacts.org.products.csv`, optionally `.gz`) or
+   the **JSONL** file. Not the MongoDB dump. These are large files (GB).
+2. Reduce it to Thai 7-11 / CP / Ezygo products (add `--all-thailand` for every Thai
+   product). The mode is chosen from the file name; the CSV header is checked and
+   the script stops with the column names it found if the ones it needs are missing:
 
    ```bash
-   node tools/off-extract-thailand.mjs ~/Downloads/openfoodfacts-products.jsonl.gz off-thailand.jsonl
+   node tools/off-extract-thailand.mjs ~/Desktop/en.openfoodfacts.org.products.csv off-thailand.jsonl
    ```
 
 3. The result is a small file of public data. A converter from it to the import CSV
