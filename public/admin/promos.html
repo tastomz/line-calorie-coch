@@ -5,18 +5,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Admin Promos</title>
   <link rel="stylesheet" href="/admin/assets/style.css" />
+  <style>
+    label { display: block; color: var(--muted); font-size: 0.92rem; }
+    label .input { display: block; width: 100%; margin-top: 6px; font-size: 1rem; }
+  </style>
 </head>
 <body>
   <div class="wrap">
     <h1>🎁 Free PRO Codes</h1>
     <p><a href="/admin">Dashboard</a></p>
-    <div class="card">
-      <p>สร้าง Code (10 / 15 / 30 วัน · max 1 คน · server-generated TASTOM-XXXXXX)</p>
-      <button class="btn" data-d="10">10 วัน</button>
-      <button class="btn" data-d="15">15 วัน</button>
-      <button class="btn" data-d="30">30 วัน</button>
+    <form class="card" id="gen" novalidate>
+      <p>สร้าง Code Free PRO · server-generated TASTOM-XXXXXX</p>
+      <div class="grid">
+        <label>จำนวนวัน (1–365)
+          <input class="input" id="days" type="number" min="1" max="365" step="1" value="30" required />
+        </label>
+        <label>ใช้ได้กี่คน (1–1000)
+          <input class="input" id="max" type="number" min="1" max="1000" step="1" value="1" required />
+        </label>
+      </div>
+      <div style="margin-top:12px">
+        <button class="btn" id="submit" type="submit">สร้าง Code</button>
+      </div>
+      <div id="formerr" class="err" role="alert" style="margin-top:8px"></div>
       <div id="created" style="margin-top:12px"></div>
-    </div>
+    </form>
     <div class="card" id="list">Loading...</div>
   </div>
   <script>
@@ -31,17 +44,39 @@
       if (!res.ok) throw new Error(data.message || 'error');
       return data;
     }
-    async function gen(days) {
+    function intInRange(raw, min, max) {
+      const n = Number(raw);
+      return raw !== '' && Number.isInteger(n) && n >= min && n <= max ? n : null;
+    }
+    async function gen(trialDays, maxRedemptions) {
       const promo = await api('/admin/api/promos/generate', {
         method: 'POST',
-        body: JSON.stringify({ trialDays: days, maxRedemptions: 1 }),
+        body: JSON.stringify({ trialDays, maxRedemptions }),
       });
       document.getElementById('created').innerHTML = `
         <div>Code: <b>${promo.code}</b>
-        <button class="btn" onclick="navigator.clipboard.writeText('${promo.code}')">Copy</button></div>
+        <button type="button" class="btn" onclick="navigator.clipboard.writeText('${promo.code}')">Copy</button></div>
         <div>PRO: ${promo.trialDays} วัน · ใช้ได้: ${promo.maxRedemptions} คน · Status: Active</div>`;
       load();
     }
+    document.getElementById('gen').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = document.getElementById('formerr');
+      const button = document.getElementById('submit');
+      err.textContent = '';
+      const trialDays = intInRange(document.getElementById('days').value.trim(), 1, 365);
+      const maxRedemptions = intInRange(document.getElementById('max').value.trim(), 1, 1000);
+      if (trialDays === null) { err.textContent = 'จำนวนวันต้องเป็นเลขจำนวนเต็ม 1–365'; return; }
+      if (maxRedemptions === null) { err.textContent = 'จำนวนคนที่ใช้ได้ต้องเป็นเลขจำนวนเต็ม 1–1000'; return; }
+      button.disabled = true;
+      try {
+        await gen(trialDays, maxRedemptions);
+      } catch (error) {
+        if (error.message !== 'auth' && error.message !== 'forbidden') err.textContent = error.message;
+      } finally {
+        button.disabled = false;
+      }
+    });
     async function load() {
       const promos = await api('/admin/api/promos');
       document.getElementById('list').innerHTML = `<table class="table">
@@ -57,7 +92,6 @@
         load();
       });
     }
-    document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => gen(Number(b.dataset.d)));
     load().catch(e => document.getElementById('list').textContent = e.message);
   </script>
 </body>

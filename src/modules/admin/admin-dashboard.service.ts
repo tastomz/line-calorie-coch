@@ -3,7 +3,7 @@ import { SubscriptionStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   generateTastomPromoCode,
-  isAllowedPromoDays,
+  parsePromoParams,
 } from '../membership/promo-code.generator';
 import { SubscriptionEntitlementService } from '../membership/subscription-entitlement.service';
 
@@ -182,19 +182,16 @@ export class AdminDashboardService {
     description?: string;
     expiresAt?: Date | null;
   }) {
-    if (!isAllowedPromoDays(params.trialDays)) {
-      throw new Error('trialDays must be 10, 15, or 30');
-    }
+    const { trialDays, maxRedemptions } = parsePromoParams(params);
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const code = generateTastomPromoCode();
       try {
         return await this.prisma.promoCode.create({
           data: {
             code,
-            description:
-              params.description ?? `Free PRO ${params.trialDays} days`,
-            trialDays: params.trialDays,
-            maxRedemptions: params.maxRedemptions ?? 1,
+            description: params.description ?? `Free PRO ${trialDays} days`,
+            trialDays,
+            maxRedemptions,
             expiresAt: params.expiresAt ?? null,
             active: true,
           },

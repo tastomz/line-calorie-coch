@@ -75,7 +75,7 @@ Plus optional env operator login: `ADMIN_USERNAME` + `ADMIN_PASSWORD_HASH`.
 ## Plans & quotas
 
 FREE ฿0 · PRO **฿50/mo** · limits in `plan.config.ts`  
-Promo Free PRO codes: **10 / 15 / 30 days only** (`TASTOM-XXXXXX`).
+Promo Free PRO codes (`TASTOM-XXXXXX`): the admin types the **number of days (whole number 1–365)** and **how many people can redeem it (1–1,000)** in `/admin/promos`. Defaults when omitted: 30 days, 1 person. The server validates both values; anything else is rejected with 400.
 
 ## Local QA tools (`/dev/*`)
 
@@ -118,7 +118,7 @@ Live keys (`sk_live_`) remain blocked.
 
 ## Admin Free PRO codes
 
-`POST /admin/api/promos/generate` `{ "trialDays": 10|15|30, "maxRedemptions": 1 }`  
+`POST /admin/api/promos/generate` `{ "trialDays": 1..365, "maxRedemptions": 1..1000 }` (whole numbers; both optional)  
 → `TASTOM-XXXXXX`, provider NONE + TRIALING on redeem.
 
 ## AI gateway audit
