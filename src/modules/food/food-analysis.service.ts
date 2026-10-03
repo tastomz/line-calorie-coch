@@ -39,6 +39,27 @@ export class FoodImageUnreadableError extends FoodAnalysisError {
   }
 }
 
+/**
+ * GPT-5 / o-series models reject `temperature` and `max_tokens`, and spend
+ * part of the budget on reasoning, so they need a larger completion limit.
+ */
+const REASONING_MODEL = /^(gpt-5|o\d)/;
+const REASONING_MAX_COMPLETION_TOKENS = 2000;
+
+export function completionLimits(model: string):
+  | { temperature: number; max_tokens: number }
+  | {
+      max_completion_tokens: number;
+      reasoning_effort: 'low';
+    } {
+  return REASONING_MODEL.test(model)
+    ? {
+        max_completion_tokens: REASONING_MAX_COMPLETION_TOKENS,
+        reasoning_effort: 'low',
+      }
+    : { temperature: 0, max_tokens: FOOD_ANALYSIS_MAX_TOKENS };
+}
+
 /** Reject absurdly large payloads; never silently truncate image bytes. */
 const MAX_IMAGE_BYTES = 4_000_000;
 
@@ -187,8 +208,7 @@ export class FoodAnalysisService {
       const completion = await withTimeout(
         this.client.chat.completions.create({
           model,
-          temperature: 0,
-          max_tokens: FOOD_ANALYSIS_MAX_TOKENS,
+          ...completionLimits(model),
           messages: [
             { role: 'system', content: systemPrompt },
             ...userMessages,

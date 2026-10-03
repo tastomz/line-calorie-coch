@@ -307,6 +307,35 @@ describe('FoodAnalysisService', () => {
       expect(modelOf(textCreate)).toBe('gpt-4o-mini');
     });
 
+    it('sends GPT-5 style limits (no temperature/max_tokens) for gpt-5 models', async () => {
+      const create = jest.fn().mockResolvedValue(okResponse('อกไก่ย่าง'));
+      await serviceWithConfig(create, {
+        FOOD_VISION_MODEL: 'gpt-5',
+      }).analyzeImage({ imageBytes: Buffer.from([1, 2, 3]) });
+      const body = (create.mock.calls[0] as unknown[])[0] as Record<
+        string,
+        unknown
+      >;
+      expect(body.temperature).toBeUndefined();
+      expect(body.max_tokens).toBeUndefined();
+      expect(body.max_completion_tokens).toBe(2000);
+      expect(body.reasoning_effort).toBe('low');
+    });
+
+    it('keeps temperature 0 and max_tokens for gpt-4o family', async () => {
+      const create = jest.fn().mockResolvedValue(okResponse('อกไก่ย่าง'));
+      await serviceWithConfig(create, {
+        FOOD_VISION_MODEL: 'gpt-4o',
+      }).analyzeImage({ imageBytes: Buffer.from([1, 2, 3]) });
+      const body = (create.mock.calls[0] as unknown[])[0] as Record<
+        string,
+        unknown
+      >;
+      expect(body.temperature).toBe(0);
+      expect(body.max_tokens).toBe(220);
+      expect(body.reasoning_effort).toBeUndefined();
+    });
+
     it('falls back to the default model when FOOD_VISION_MODEL is unset or odd', async () => {
       for (const value of ['', 'bad model!']) {
         const create = jest.fn().mockResolvedValue(okResponse('อกไก่ย่าง'));
