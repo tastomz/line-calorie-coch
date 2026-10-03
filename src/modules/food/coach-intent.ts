@@ -10,6 +10,22 @@ export type CoachIntent =
   | 'none';
 
 /**
+ * Medical-safety gate. Thai has no spaces, so a bare "ยา" substring matched
+ * food names like ยากิโซบะ. Match medication words (ยา + a known suffix, or a
+ * verb before ยา) and standalone "ยา" tokens instead.
+ */
+const MEDICAL_COMPACT =
+  /โรค|แพทย์|(?<!ปลา)หมอ|diagnose|medication|prescription|diabetes|เบาหวาน|ความดัน|ยา(?:รักษา|แก้|ลด|คุม|เม็ด|น้ำ|ฉีด|ปฏิชีวนะ|นอนหลับ|เบาหวาน|ความดัน|ที่|อะไร)|(?:กิน|ทาน|หยุด|ใช้|เริ่ม|เพิ่ม|ลด|ซื้อ)ยา(?!กิ)/;
+const MEDICAL_STANDALONE = /(?:^|\s)ยา(?:\s|$|\d)/;
+
+function isMedicalText(original: string, compact: string): boolean {
+  return (
+    MEDICAL_COMPACT.test(compact) ||
+    MEDICAL_STANDALONE.test(original.trim().toLowerCase())
+  );
+}
+
+/**
  * Cheap deterministic intent detection for completed-user questions.
  * Unknown / food-log text returns 'none' so the existing food analyzer runs.
  */
@@ -20,11 +36,7 @@ export function detectCoachIntent(text: string): CoachIntent {
     return 'none';
   }
 
-  if (
-    /โรค|ยา|แพทย์|หมอ|diagnose|medication|prescription|diabetes|เบาหวาน|ความดัน/.test(
-      t,
-    )
-  ) {
+  if (isMedicalText(text, t)) {
     return 'medical';
   }
 

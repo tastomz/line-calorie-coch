@@ -25,7 +25,7 @@ export const MESSAGE_CLASSIFY_MODEL = 'gpt-4o-mini';
 export const MESSAGE_CLASSIFY_MAX_TOKENS = 60;
 
 export const MESSAGE_CLASSIFY_SYSTEM_PROMPT = `Classify Thai LINE text for a nutrition bot. JSON only.
-Types: weight_log (user reporting body weight kg), weight_query (ask about weight/trend/progress), food (meal to log), coach (calorie/protein/history/meal advice), health_coach (advice about exercise, running, steps, sleep, water, recovery or what to do today to reach a goal), other.
+Types: weight_log (user reporting body weight kg), weight_query (ask about weight/trend/progress), food (meal to log), coach (calorie/protein/history/meal advice), health_coach (advice about exercise, running, steps, sleep, water, recovery or what to do today to reach a goal; a QUESTION or request for advice only, never a report of what the user already did), other.
 If weight_log: set weightKg (20-300) else null.
 If weight_query: weightQuery one of latest|trend|progress|overview else null.
 If coach: coachHint one of today_summary|history|calories_consumed|calories_remaining|protein_consumed|protein_remaining|meal_recommendation else null.
