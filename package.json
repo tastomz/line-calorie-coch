@@ -27,7 +27,8 @@
     "prisma:studio": "prisma studio",
     "cleanup:retention": "ts-node -r tsconfig-paths/register src/scripts/run-retention-cleanup.ts",
     "cleanup:retention:prod": "node dist/scripts/run-retention-cleanup.js",
-    "import:thai-food": "ts-node -r tsconfig-paths/register src/scripts/import-thai-food.ts"
+    "import:thai-food": "ts-node -r tsconfig-paths/register src/scripts/import-thai-food.ts",
+    "convert:off": "ts-node -r tsconfig-paths/register src/scripts/off-to-thai-food-csv.ts"
   },
   "dependencies": {
     "@line/bot-sdk": "^11.2.0",

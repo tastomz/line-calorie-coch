@@ -59,9 +59,26 @@ machine:
    node tools/off-extract-thailand.mjs ~/Desktop/en.openfoodfacts.org.products.csv off-thailand.jsonl
    ```
 
-3. The result is a small file of public data. A converter from it to the import CSV
-   (per-100 g values × pack weight, pack units) is the next step and is written
-   against real rows, not guessed field names.
+3. Convert it to the import CSV. Per-100 g values are scaled by the pack weight in
+   `quantity` ("72 g"); the unit is one pack (`item`, typed as ซอง/กล่อง/แพ็ก/ขวด…).
+   Products are skipped and counted — never guessed — when the name, pack weight or
+   any of kcal/protein/carbs/fat is missing, the quantity is not in grams (e.g. ml
+   drinks), the same name has different numbers, or the importer's own checks fail:
+
+   ```bash
+   npm run convert:off -- --file off-thailand.jsonl --out thai-food-off.csv
+   ```
+
+4. Validate, then import (SIT first — see "Importing"):
+
+   ```bash
+   npm run import:thai-food -- --file thai-food-off.csv --dry-run
+   npm run import:thai-food -- --file thai-food-off.csv
+   ```
+
+Each row records `source = Open Food Facts` and the ODbL licence text; the source is
+shown on the estimate card. Spot-check a handful of products against the real pack:
+the data is community-contributed.
 
 ## CSV format
 

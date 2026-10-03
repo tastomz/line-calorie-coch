@@ -26,6 +26,10 @@ describe('parseServingRequest', () => {
     ['ทานส้มตำ', 'ส้มตำ', 1, null],
     ['2 จาน ข้าวมันไก่', 'ข้าวมันไก่', 2, 'plate'],
     ['ครึ่งชาม ก๋วยเตี๋ยว', 'ก๋วยเตี๋ยว', 0.5, 'bowl'],
+    ['ไก่ย่างซีพี 1 ซอง', 'ไก่ย่างซีพี', 1, 'item'],
+    ['นมถั่วเหลือง 2 กล่อง', 'นมถั่วเหลือง', 2, 'item'],
+    ['น้ำดื่ม1ขวด', 'น้ำดื่ม', 1, 'item'],
+    ['ขนมปังครึ่งแพ็ก', 'ขนมปัง', 0.5, 'item'],
   ])('parses %s', (text, name, quantity, unit) => {
     expect(parseServingRequest(text)).toEqual({ name, quantity, unit });
   });

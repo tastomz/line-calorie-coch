@@ -23,7 +23,9 @@ export type ServingRequest = {
 
 export const MAX_SERVING_QUANTITY = 10;
 
-const UNIT_WORDS = 'จาน|ชาม|ถ้วย|แก้ว|ชิ้น|อัน|ส่วน';
+const PACK_WORDS = 'ซอง|แพ็ก|แพ็ค|แพค|กล่อง|ห่อ|ถุง|ขวด|กระป๋อง';
+const UNIT_WORDS = `จาน|ชาม|ถ้วย|แก้ว|ชิ้น|อัน|ส่วน|${PACK_WORDS}`;
+const PACK_WORD_RE = new RegExp(`^(?:${PACK_WORDS})$`);
 const NUMBER_WORDS = '\\d+(?:\\.\\d+)?|ครึ่ง|หนึ่ง|สอง|สาม';
 
 const TRAILING_QTY = new RegExp(
@@ -49,6 +51,10 @@ function toQuantity(raw: string): number | null {
 }
 
 function toUnit(raw: string): FoodQuantityUnit | null {
+  // A packaged product is counted as one "item" (ซอง/กล่อง/ขวด…).
+  if (PACK_WORD_RE.test(raw)) {
+    return 'item';
+  }
   const unit = normalizeQuantityUnit(raw);
   switch (unit) {
     case 'piece':
