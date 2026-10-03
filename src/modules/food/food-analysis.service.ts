@@ -9,6 +9,8 @@ import {
 } from '../../common/with-timeout';
 import {
   FOOD_ANALYSIS_JSON_SCHEMA,
+  FOOD_PHOTO_JSON_SCHEMA,
+  FOOD_PHOTO_KIND_RULES,
   FOOD_ANALYSIS_MAX_TOKENS,
   FOOD_ANALYSIS_MODEL,
   FOOD_ANALYSIS_SYSTEM_PROMPT,
@@ -17,7 +19,9 @@ import {
 } from './food-analysis.types';
 import {
   FoodAnalysisValidationError,
+  PhotoAnalysisResult,
   parseFoodAnalysisJson,
+  parsePhotoAnalysisJson,
 } from './food-analysis.validator';
 import {
   reportAiTokenUsage,
@@ -112,11 +116,16 @@ export class FoodAnalysisService {
     return analysis;
   }
 
-  async analyzeImage(params: {
+  /**
+   * Photo → food estimate, workout-screenshot numbers, or "other".
+   * One vision call decides which, so a smartwatch screenshot is never
+   * turned into a made-up meal.
+   */
+  async analyzePhoto(params: {
     imageBytes: Buffer;
     mimeType?: string;
     caption?: string;
-  }): Promise<FoodAnalysisResult> {
+  }): Promise<PhotoAnalysisResult> {
     if (!params.imageBytes.length) {
       throw new FoodAnalysisValidationError('image bytes are required');
     }
@@ -139,7 +148,7 @@ export class FoodAnalysisService {
       80,
     );
 
-    const analysis = await this.requestAnalysis(
+    const result = await this.requestStructured(
       [
         {
           role: 'user',
@@ -156,14 +165,29 @@ export class FoodAnalysisService {
           ],
         },
       ],
-      FOOD_ANALYSIS_SYSTEM_PROMPT,
+      `${FOOD_ANALYSIS_SYSTEM_PROMPT}\n${FOOD_PHOTO_KIND_RULES}`,
       this.visionModel,
+      FOOD_PHOTO_JSON_SCHEMA,
+      parsePhotoAnalysisJson,
     );
     // 0 kcal is "nothing read", not a meal: ask for a clearer photo instead.
-    if (analysis.estimatedCalories <= 0) {
+    if (result.kind === 'food' && result.analysis.estimatedCalories <= 0) {
       throw new FoodImageUnreadableError();
     }
-    return analysis;
+    return result;
+  }
+
+  /** Food-only view of a photo (kept for callers that only handle meals). */
+  async analyzeImage(params: {
+    imageBytes: Buffer;
+    mimeType?: string;
+    caption?: string;
+  }): Promise<FoodAnalysisResult> {
+    const result = await this.analyzePhoto(params);
+    if (result.kind !== 'food') {
+      throw new FoodImageUnreadableError();
+    }
+    return result.analysis;
   }
 
   /**
@@ -203,11 +227,27 @@ export class FoodAnalysisService {
     );
   }
 
-  private async requestAnalysis(
+  private requestAnalysis(
     userMessages: OpenAI.Chat.ChatCompletionMessageParam[],
     systemPrompt: string = FOOD_ANALYSIS_SYSTEM_PROMPT,
     model: string = FOOD_ANALYSIS_MODEL,
   ): Promise<FoodAnalysisResult> {
+    return this.requestStructured(
+      userMessages,
+      systemPrompt,
+      model,
+      FOOD_ANALYSIS_JSON_SCHEMA,
+      parseFoodAnalysisJson,
+    );
+  }
+
+  private async requestStructured<T>(
+    userMessages: OpenAI.Chat.ChatCompletionMessageParam[],
+    systemPrompt: string,
+    model: string,
+    schema: typeof FOOD_ANALYSIS_JSON_SCHEMA | typeof FOOD_PHOTO_JSON_SCHEMA,
+    parse: (content: string) => T,
+  ): Promise<T> {
     if (!this.client) {
       throw new FoodAnalysisError('OPENAI_API_KEY is not configured');
     }
@@ -227,7 +267,7 @@ export class FoodAnalysisService {
           ],
           response_format: {
             type: 'json_schema',
-            json_schema: FOOD_ANALYSIS_JSON_SCHEMA,
+            json_schema: schema,
           },
         }),
         OPENAI_CALL_TIMEOUT_MS,
@@ -248,7 +288,7 @@ export class FoodAnalysisService {
         throw new FoodAnalysisValidationError('AI returned an empty response');
       }
 
-      const parsed = parseFoodAnalysisJson(content);
+      const parsed = parse(content);
       openAiCircuitBreaker.recordSuccess();
       return parsed;
     } catch (error) {

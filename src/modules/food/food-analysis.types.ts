@@ -64,6 +64,83 @@ export const FOOD_ANALYSIS_JSON_SCHEMA = {
   },
 } as const;
 
+export type PhotoKind = 'food' | 'workout' | 'other';
+
+export const WORKOUT_EXERCISE_TYPES = [
+  'STRENGTH',
+  'RUNNING',
+  'WALKING',
+  'CYCLING',
+  'SWIMMING',
+  'SPORTS',
+  'MOBILITY',
+  'OTHER',
+] as const;
+
+export type WorkoutExerciseType = (typeof WORKOUT_EXERCISE_TYPES)[number];
+
+/** Numbers read off a fitness-tracker / smartwatch workout summary screenshot. */
+export type WorkoutScreenshot = {
+  exerciseType: WorkoutExerciseType;
+  durationMinutes: number;
+  caloriesBurned: number | null;
+  avgHeartRate: number | null;
+  workoutName: string | null;
+};
+
+/** Photo schema = food schema + what kind of image it is (+ workout numbers). */
+export const FOOD_PHOTO_JSON_SCHEMA = {
+  name: 'food_photo_estimate',
+  strict: true,
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      ...FOOD_ANALYSIS_JSON_SCHEMA.schema.required,
+      'imageKind',
+      'workout',
+    ],
+    properties: {
+      ...FOOD_ANALYSIS_JSON_SCHEMA.schema.properties,
+      imageKind: { type: 'string', enum: ['food', 'workout', 'other'] },
+      workout: {
+        anyOf: [
+          {
+            type: 'object',
+            additionalProperties: false,
+            required: [
+              'exerciseType',
+              'durationMinutes',
+              'caloriesBurned',
+              'avgHeartRate',
+              'workoutName',
+            ],
+            properties: {
+              exerciseType: {
+                type: 'string',
+                enum: [...WORKOUT_EXERCISE_TYPES],
+              },
+              durationMinutes: { type: ['number', 'null'] },
+              caloriesBurned: { type: ['number', 'null'] },
+              avgHeartRate: { type: ['number', 'null'] },
+              workoutName: { type: ['string', 'null'] },
+            },
+          },
+          { type: 'null' },
+        ],
+      },
+    },
+  },
+} as const;
+
+/** Appended to the food prompt for PHOTOS only (text input has no image kind). */
+export const FOOD_PHOTO_KIND_RULES = `
+PHOTO KIND (set imageKind):
+- "food": a meal, drink, snack or packaged food. workout=null. Follow all food rules above.
+- "workout": a screenshot of a smartwatch / fitness-app workout summary (duration, calories burned, heart rate). Fill workout using ONLY numbers visible on the screen: durationMinutes from the workout/exercise time, caloriesBurned from the kcal shown, avgHeartRate from the average heart rate; use null for anything not shown. exerciseType: RUNNING|WALKING|CYCLING|SWIMMING|STRENGTH|SPORTS|MOBILITY|OTHER (use OTHER for "Freestyle"/unknown). Burned kcal is NOT food.
+- "other": anything else (people, screenshots, documents). workout=null.
+- When imageKind is not "food": foodName "-", all nutrition values 0, confidence 0, estimatedQuantity 1, quantityUnit item, assumptions [] (the 0-kcal rule applies to real food only).`;
+
 /** Keep prompts short to reduce input tokens. */
 export const FOOD_ANALYSIS_SYSTEM_PROMPT = `You estimate ONE meal's nutrition. Output JSON only.
 

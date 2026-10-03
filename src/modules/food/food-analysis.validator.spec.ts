@@ -3,6 +3,7 @@ import {
   FOOD_QUANTITY_UNITS,
 } from './food-analysis.types';
 import {
+  parsePhotoAnalysisJson,
   parseFoodAnalysisJson,
   validateFoodAnalysisResult,
   normalizeQuantityUnit,
@@ -120,6 +121,97 @@ describe('food-analysis.validator', () => {
         validateFoodAnalysisResult({ ...valid, quantityUnit: 'whatever' }),
       ).toThrow(FoodAnalysisValidationError);
       expect(normalizeQuantityUnit('whatever')).toBe('whatever');
+    });
+  });
+
+  describe('parsePhotoAnalysisJson', () => {
+    const food = { ...valid };
+
+    it('treats a payload without imageKind as food', () => {
+      const r = parsePhotoAnalysisJson(JSON.stringify(food));
+      expect(r.kind).toBe('food');
+    });
+
+    it('reads a smartwatch workout screenshot', () => {
+      const r = parsePhotoAnalysisJson(
+        JSON.stringify({
+          ...food,
+          imageKind: 'workout',
+          workout: {
+            exerciseType: 'OTHER',
+            durationMinutes: 59.1,
+            caloriesBurned: 400,
+            avgHeartRate: 135,
+            workoutName: 'Freestyle',
+          },
+        }),
+      );
+      expect(r).toEqual({
+        kind: 'workout',
+        workout: {
+          exerciseType: 'OTHER',
+          durationMinutes: 59,
+          caloriesBurned: 400,
+          avgHeartRate: 135,
+          workoutName: 'Freestyle',
+        },
+      });
+    });
+
+    it('does not log a workout whose duration was not readable', () => {
+      const r = parsePhotoAnalysisJson(
+        JSON.stringify({
+          ...food,
+          imageKind: 'workout',
+          workout: {
+            exerciseType: 'RUNNING',
+            durationMinutes: null,
+            caloriesBurned: 400,
+            avgHeartRate: null,
+            workoutName: null,
+          },
+        }),
+      );
+      expect(r.kind).toBe('other');
+    });
+
+    it('drops implausible calories / heart rate instead of storing them', () => {
+      const r = parsePhotoAnalysisJson(
+        JSON.stringify({
+          ...food,
+          imageKind: 'workout',
+          workout: {
+            exerciseType: 'WALKING',
+            durationMinutes: 30,
+            caloriesBurned: 99999,
+            avgHeartRate: 5,
+            workoutName: null,
+          },
+        }),
+      );
+      expect(r).toMatchObject({
+        kind: 'workout',
+        workout: { caloriesBurned: null, avgHeartRate: null },
+      });
+    });
+
+    it('returns other for non-food, non-workout images without validating nutrition', () => {
+      const r = parsePhotoAnalysisJson(
+        JSON.stringify({
+          foodName: '-',
+          estimatedCalories: 0,
+          proteinG: 0,
+          carbsG: 0,
+          fatG: 0,
+          confidence: 0,
+          assumptions: [],
+          estimatedQuantity: 1,
+          quantityUnit: 'item',
+          imageKind: 'other',
+          workout: null,
+        }),
+      );
+      expect(r).toEqual({ kind: 'other' });
     });
   });
 });

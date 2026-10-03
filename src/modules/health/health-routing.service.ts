@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { User } from '@prisma/client';
+import { HealthDataSource, User } from '@prisma/client';
 import OpenAI from 'openai';
 import {
   formatZonedTime,
@@ -370,6 +370,44 @@ export class HealthRoutingService {
       await this.lineService.replyText(
         replyToken,
         'บันทึกการนอนไม่สำเร็จครับ ตรวจสอบเวลาอีกครั้งนะครับ',
+      );
+    }
+  }
+
+  /** Workout summary screenshot (smartwatch / fitness app) → ExerciseLog. */
+  async saveWorkoutScreenshot(
+    userId: string,
+    replyToken: string,
+    workout: import('../food/food-analysis.types').WorkoutScreenshot,
+  ): Promise<void> {
+    const name =
+      workout.workoutName ??
+      workout.exerciseType.charAt(0) +
+        workout.exerciseType.slice(1).toLowerCase();
+    try {
+      await this.exercise.create({
+        userId,
+        type: workout.exerciseType,
+        durationMinutes: workout.durationMinutes,
+        workoutName: name,
+        caloriesBurned: workout.caloriesBurned,
+        heartRate: workout.avgHeartRate,
+        source: HealthDataSource.WEARABLE,
+      });
+      await this.lineService.replyText(
+        replyToken,
+        buildExerciseSavedMessage({
+          name,
+          durationMinutes: workout.durationMinutes,
+          caloriesBurned: workout.caloriesBurned,
+          avgHeartRate: workout.avgHeartRate,
+          fromScreenshot: true,
+        }),
+      );
+    } catch {
+      await this.lineService.replyText(
+        replyToken,
+        'บันทึกออกกำลังกายไม่สำเร็จครับ',
       );
     }
   }

@@ -9,6 +9,7 @@ import {
   parseSleepCommand,
   parseStepsCommand,
 } from './health-commands';
+import { buildExerciseSavedMessage } from './health.messages';
 import { MEAL_ALLOCATION, MealPlanService } from './meal-plan.service';
 import { getProgramWeekDay } from './program-week';
 import { HealthInsightService } from './health-dashboard.service';
@@ -77,6 +78,31 @@ describe('parseExerciseCommand natural sentences', () => {
     'วิ่งมา 0 นาที',
   ])('does not log %s', (text) => {
     expect(parseExerciseCommand(text)).toBeNull();
+  });
+});
+
+describe('buildExerciseSavedMessage', () => {
+  it('shows calories, heart rate and the screenshot note when read from a watch', () => {
+    const text = buildExerciseSavedMessage({
+      name: 'Freestyle',
+      durationMinutes: 59,
+      caloriesBurned: 400,
+      avgHeartRate: 135,
+      fromScreenshot: true,
+    });
+    expect(text).toContain('59 นาที');
+    expect(text).toContain('เผาผลาญ 400 kcal');
+    expect(text).toContain('หัวใจเฉลี่ย 135 bpm');
+    expect(text).toContain('อ่านจากภาพสรุปการออกกำลังกาย');
+  });
+
+  it('keeps the plain message for typed logs', () => {
+    const text = buildExerciseSavedMessage({
+      name: 'Running',
+      durationMinutes: 30,
+    });
+    expect(text).not.toContain('เผาผลาญ');
+    expect(text).not.toContain('อ่านจากภาพ');
   });
 });
 

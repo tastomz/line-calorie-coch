@@ -2,6 +2,10 @@ import {
   FOOD_QUANTITY_UNITS,
   FoodAnalysisResult,
   FoodQuantityUnit,
+  PhotoKind,
+  WORKOUT_EXERCISE_TYPES,
+  WorkoutExerciseType,
+  WorkoutScreenshot,
 } from './food-analysis.types';
 
 export class FoodAnalysisValidationError extends Error {
@@ -179,4 +183,70 @@ export function parseFoodAnalysisJson(content: string): FoodAnalysisResult {
     throw new FoodAnalysisValidationError('AI response is not valid JSON');
   }
   return validateFoodAnalysisResult(parsed);
+}
+
+export type PhotoAnalysisResult =
+  | { kind: 'food'; analysis: FoodAnalysisResult }
+  | { kind: 'workout'; workout: WorkoutScreenshot }
+  | { kind: 'other' };
+
+function finiteOrNull(value: unknown, min: number, max: number): number | null {
+  return typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= min &&
+    value <= max
+    ? value
+    : null;
+}
+
+function parseWorkout(raw: unknown): WorkoutScreenshot | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const w = raw as Record<string, unknown>;
+  const duration = finiteOrNull(w.durationMinutes, 1, 600);
+  if (duration === null) return null;
+  const type = WORKOUT_EXERCISE_TYPES.includes(w.exerciseType as never)
+    ? (w.exerciseType as WorkoutExerciseType)
+    : 'OTHER';
+  const calories = finiteOrNull(w.caloriesBurned, 0, 5000);
+  const heartRate = finiteOrNull(w.avgHeartRate, 30, 230);
+  return {
+    exerciseType: type,
+    durationMinutes: Math.round(duration),
+    caloriesBurned: calories === null ? null : Math.round(calories),
+    avgHeartRate: heartRate === null ? null : Math.round(heartRate),
+    workoutName:
+      typeof w.workoutName === 'string' && w.workoutName.trim()
+        ? w.workoutName.trim().slice(0, 60)
+        : null,
+  };
+}
+
+/**
+ * Photo answer: food (default when imageKind is absent), a workout screenshot
+ * with a readable duration, or anything else. A "workout" with no readable
+ * duration degrades to "other" instead of being logged.
+ */
+export function parsePhotoAnalysisJson(content: string): PhotoAnalysisResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new FoodAnalysisValidationError('AI response is not valid JSON');
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    throw new FoodAnalysisValidationError('AI response must be an object');
+  }
+  const data = parsed as Record<string, unknown>;
+  const kind: PhotoKind =
+    data.imageKind === 'workout' || data.imageKind === 'other'
+      ? data.imageKind
+      : 'food';
+  if (kind === 'workout') {
+    const workout = parseWorkout(data.workout);
+    return workout ? { kind: 'workout', workout } : { kind: 'other' };
+  }
+  if (kind === 'other') {
+    return { kind: 'other' };
+  }
+  return { kind: 'food', analysis: validateFoodAnalysisResult(parsed) };
 }

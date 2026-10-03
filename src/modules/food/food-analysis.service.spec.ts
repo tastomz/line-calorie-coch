@@ -250,6 +250,88 @@ describe('FoodAnalysisService', () => {
       expect(systemPrompt(create)).toContain('MUST be in Thai');
     });
 
+    function photoResponse(extra: Record<string, unknown>) {
+      return {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                foodName: '-',
+                estimatedCalories: 0,
+                proteinG: 0,
+                carbsG: 0,
+                fatG: 0,
+                confidence: 0,
+                assumptions: [],
+                estimatedQuantity: 1,
+                quantityUnit: 'item',
+                ...extra,
+              }),
+            },
+          },
+        ],
+      };
+    }
+
+    it('analyzePhoto asks for the image kind with the photo schema and rules', async () => {
+      const create = jest.fn().mockResolvedValue(okResponse('อกไก่ย่าง'));
+      await serviceWith(create).analyzePhoto({
+        imageBytes: Buffer.from([1, 2, 3]),
+      });
+      const body = (create.mock.calls[0] as unknown[])[0] as {
+        response_format: { json_schema: { name: string } };
+      };
+      expect(body.response_format.json_schema.name).toBe('food_photo_estimate');
+      expect(systemPrompt(create)).toContain('PHOTO KIND');
+    });
+
+    it('text analysis never uses the photo schema or kind rules', async () => {
+      const create = jest.fn().mockResolvedValue(okResponse('ข้าว'));
+      await serviceWith(create).analyzeText('ข้าว');
+      const body = (create.mock.calls[0] as unknown[])[0] as {
+        response_format: { json_schema: { name: string } };
+      };
+      expect(body.response_format.json_schema.name).toBe(
+        'food_nutrition_estimate',
+      );
+      expect(systemPrompt(create)).not.toContain('PHOTO KIND');
+    });
+
+    it('returns workout numbers for a smartwatch screenshot instead of a 0 kcal error', async () => {
+      const create = jest.fn().mockResolvedValue(
+        photoResponse({
+          imageKind: 'workout',
+          workout: {
+            exerciseType: 'OTHER',
+            durationMinutes: 59,
+            caloriesBurned: 400,
+            avgHeartRate: 135,
+            workoutName: 'Freestyle',
+          },
+        }),
+      );
+      const result = await serviceWith(create).analyzePhoto({
+        imageBytes: Buffer.from([1, 2, 3]),
+      });
+      expect(result).toMatchObject({
+        kind: 'workout',
+        workout: { durationMinutes: 59, caloriesBurned: 400 },
+      });
+    });
+
+    it('analyzeImage still refuses non-food photos', async () => {
+      const create = jest
+        .fn()
+        .mockResolvedValue(
+          photoResponse({ imageKind: 'other', workout: null }),
+        );
+      await expect(
+        serviceWith(create).analyzeImage({
+          imageBytes: Buffer.from([1, 2, 3]),
+        }),
+      ).rejects.toBeInstanceOf(FoodImageUnreadableError);
+    });
+
     it('tells photos of packaged food to be named and never 0 kcal', async () => {
       const create = jest.fn().mockResolvedValue(okResponse('อกไก่ย่าง'));
       await serviceWith(create).analyzeImage({
