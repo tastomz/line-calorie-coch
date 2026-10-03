@@ -43,6 +43,20 @@ describe('AiGatewayService', () => {
     expect(aiUsage.consumeAiUsage).toHaveBeenCalledTimes(1);
   });
 
+  it('runUnmetered runs work without consuming plan quota', async () => {
+    const work = jest.fn().mockResolvedValue('type');
+    const result = await service.runUnmetered('user-a', 'CLASSIFY', work);
+    expect(result).toBe('type');
+    expect(aiUsage.consumeAiUsage).not.toHaveBeenCalled();
+    expect(work).toHaveBeenCalled();
+  });
+
+  it('runUnmetered still requires userId', async () => {
+    await expect(
+      service.runUnmetered('', 'CLASSIFY', () => Promise.resolve(1)),
+    ).rejects.toThrow(/userId/);
+  });
+
   it('requires userId', async () => {
     await expect(
       service.run('', 'FOOD_TEXT', () => Promise.resolve(1)),
