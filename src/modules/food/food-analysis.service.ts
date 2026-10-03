@@ -38,9 +38,13 @@ const MAX_IMAGE_BYTES = 4_000_000;
 export class FoodAnalysisService {
   private readonly logger = new Logger(FoodAnalysisService.name);
   private readonly client: OpenAI | null;
+  private readonly visionDetail: 'low' | 'high' | 'auto';
 
   constructor(private readonly configService: ConfigService) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY') ?? '';
+    const detail = this.configService.get<string>('FOOD_VISION_DETAIL');
+    // 'low' is the cheap default; 'high'/'auto' read small pack labels better.
+    this.visionDetail = detail === 'high' || detail === 'auto' ? detail : 'low';
     this.client = apiKey ? new OpenAI({ apiKey }) : null;
   }
 
@@ -79,7 +83,7 @@ export class FoodAnalysisService {
     const bytes = params.imageBytes;
 
     this.logger.log(
-      `Vision request bytes=${bytes.length} detail=low model=${FOOD_ANALYSIS_MODEL}`,
+      `Vision request bytes=${bytes.length} detail=${this.visionDetail} model=${FOOD_ANALYSIS_MODEL}`,
     );
 
     const mime = params.mimeType ?? 'image/jpeg';
@@ -99,7 +103,7 @@ export class FoodAnalysisService {
             image_url: {
               url: `data:${mime};base64,${base64}`,
               // Low detail drastically reduces vision token cost.
-              detail: 'low',
+              detail: this.visionDetail,
             },
           },
         ],
