@@ -172,9 +172,22 @@ OpenAI / Sheets failures must **not** kill liveness.
 **Status:** implemented service + CLI — schedule is **not configured**
 
 ```bash
+# production image / any environment with a build (no ts-node, no src/):
+npm run cleanup:retention:prod
+# optional: LINE_EVENT_RETENTION_DAYS=45 npm run cleanup:retention:prod
+
+# local development (ts-node from source):
 npm run cleanup:retention
-# optional: LINE_EVENT_RETENTION_DAYS=45 npm run cleanup:retention
 ```
+
+The production image ships only `dist/` and production dependencies, so
+`cleanup:retention` (ts-node + `src/`) does **not** work there — use
+`cleanup:retention:prod`. The script boots the whole app context, so a scheduler
+service (e.g. a Railway cron service built from the same Dockerfile, start command
+`npm run cleanup:retention:prod`, schedule `0 19 * * *` UTC = 02:00 Bangkok) needs the
+**same environment variables as the API**, including `DATABASE_URL`. It prints one
+JSON line (`{"ok":true,...}`) and exits `0`; on failure it prints `{"ok":false,...}`
+and exits `1`.
 
 Deletes:
 

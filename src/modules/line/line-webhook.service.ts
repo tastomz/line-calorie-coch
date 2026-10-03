@@ -93,7 +93,9 @@ export class LineWebhookService {
         `webhook event ${eventType}`,
       );
       const result =
-        event.type === 'follow' || event.type === 'message'
+        event.type === 'follow' ||
+        event.type === 'message' ||
+        event.type === 'postback'
           ? 'processed'
           : 'ignored';
       logEvent(this.logger, 'log', {
@@ -135,6 +137,9 @@ export class LineWebhookService {
         return;
       case 'message':
         await this.handleMessage(event);
+        return;
+      case 'postback':
+        await this.handlePostback(event);
         return;
       default:
         this.logger.log(
@@ -234,6 +239,37 @@ export class LineWebhookService {
       lineUserId,
       replyToken,
       event.message.text ?? '',
+    );
+  }
+
+  /**
+   * Postback buttons (e.g. foodedit:* commands) carry their command in
+   * `data`, invisible to the chat — unlike a message action, LINE does not
+   * echo it as a user-typed bubble. Routed through the same text handler
+   * since every command parser (parseFoodEditCommand, etc.) only cares
+   * about the string, not which event type carried it.
+   */
+  private async handlePostback(event: LineWebhookEvent): Promise<void> {
+    const lineUserId = event.source?.userId;
+    const replyToken = event.replyToken;
+    if (!lineUserId || !replyToken) {
+      this.logger.warn('Postback event missing userId or replyToken');
+      return;
+    }
+
+    const data = event.postback?.data ?? '';
+    if (!data) {
+      this.logger.warn('Postback event missing data');
+      return;
+    }
+
+    this.logger.log(
+      `Routing postback eventId=${this.resolveEventId(event)} userIdPresent=true dataLength=${data.length}`,
+    );
+    await this.onboardingService.handleTextMessage(
+      lineUserId,
+      replyToken,
+      data,
     );
   }
 }

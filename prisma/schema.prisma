@@ -183,6 +183,7 @@ model PendingFoodAnalysis {
   originalProteinG   Float?
   originalCarbsG     Float?
   originalFatG       Float?
+  eatenAt            DateTime?
   expiresAt          DateTime
   createdAt          DateTime @default(now())
 
@@ -546,4 +547,40 @@ model WeeklyHealthReview {
 
   @@unique([userId, weekStartDate])
   @@index([userId, weekStartDate])
+}
+
+/// Curated per-serving nutrition for common Thai dishes, imported from a
+/// licensed dataset (see docs/THAI_FOOD_DB.md). An empty table switches the
+/// feature off: every lookup misses and the AI path runs as before.
+model ThaiFoodItem {
+  id           String        @id @default(cuid())
+  nameTh       String
+  nameEn       String?
+  /// FoodQuantityUnit the macros below are expressed per ONE of.
+  servingUnit  String
+  servingDesc  String?
+  servingGrams Float?
+  calories     Float
+  proteinG     Float
+  carbsG       Float
+  fatG         Float
+  /// Dataset name — shown to the user as the data source.
+  source       String
+  sourceRef    String?
+  /// Licence / permission note recorded at import time.
+  license      String
+  keys         ThaiFoodKey[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([source, nameTh])
+}
+
+/// Normalized lookup key (name, Thai/English aliases) -> item. Exact match only.
+model ThaiFoodKey {
+  key    String       @id
+  itemId String
+  item   ThaiFoodItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
 }

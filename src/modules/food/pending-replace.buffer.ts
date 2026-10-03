@@ -3,7 +3,8 @@
  * Holds the next food input until the user confirms replacing the current pending analysis.
  */
 export type BufferedFoodInput =
-  { kind: 'text'; text: string } | { kind: 'image'; messageId: string };
+  | { kind: 'text'; text: string; daysAgo?: number }
+  | { kind: 'image'; messageId: string };
 
 type Entry = {
   input: BufferedFoodInput;

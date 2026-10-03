@@ -119,6 +119,68 @@ export function dayBounds(
   return { start, end };
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Bounds of the local calendar day `daysAgo` days before `now` (0 = today). */
+export function dayBoundsDaysAgo(
+  daysAgo: number,
+  now: Date = new Date(),
+  timeZone: string = APP_TIMEZONE,
+): { start: Date; end: Date } {
+  const { start } = dayBounds(now, timeZone);
+  // Noon of the target day sits safely inside it regardless of offset shifts.
+  const anchor = new Date(start.getTime() - daysAgo * DAY_MS + DAY_MS / 2);
+  return dayBounds(anchor, timeZone);
+}
+
+/** Same local wall-clock time, `daysAgo` days earlier. */
+export function shiftDaysAgoKeepingTime(
+  daysAgo: number,
+  now: Date = new Date(),
+  timeZone: string = APP_TIMEZONE,
+): Date {
+  const timeOfDayMs = now.getTime() - dayBounds(now, timeZone).start.getTime();
+  return new Date(
+    dayBoundsDaysAgo(daysAgo, now, timeZone).start.getTime() + timeOfDayMs,
+  );
+}
+
+/** Whole local calendar days between `instant` and `now` (0 = same day). */
+export function localDaysAgo(
+  instant: Date,
+  now: Date = new Date(),
+  timeZone: string = APP_TIMEZONE,
+): number {
+  const a = dayBounds(instant, timeZone).start.getTime();
+  const b = dayBounds(now, timeZone).start.getTime();
+  return Math.round((b - a) / DAY_MS);
+}
+
+/** Thai short date for day labels, e.g. "ศ. 2 ต.ค.". */
+export function formatThaiShortDate(
+  instant: Date,
+  timeZone: string = APP_TIMEZONE,
+): string {
+  return new Intl.DateTimeFormat('th-TH', {
+    timeZone,
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  }).format(instant);
+}
+
+/** "วันนี้" / "เมื่อวาน" / "ศ. 2 ต.ค." relative to now. */
+export function describeDayTh(
+  instant: Date,
+  now: Date = new Date(),
+  timeZone: string = APP_TIMEZONE,
+): string {
+  const ago = localDaysAgo(instant, now, timeZone);
+  if (ago === 0) return 'วันนี้';
+  if (ago === 1) return 'เมื่อวาน';
+  return formatThaiShortDate(instant, timeZone);
+}
+
 /** Format HH:mm in APP_TIMEZONE for history lines. */
 export function formatZonedTime(
   instant: Date,
