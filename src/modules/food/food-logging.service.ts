@@ -24,6 +24,7 @@ import {
   HealthInsightService,
 } from '../health/health-dashboard.service';
 import { HealthRoutingService } from '../health/health-routing.service';
+import { buildCoachNextActionsText } from './coach-next-actions';
 import { isHealthCoachQuestion } from '../health/health-commands';
 import { buildHealthDashboardFlex } from '../health/health.flex';
 import {
@@ -149,10 +150,17 @@ import {
 
 export const FOOD_COMMANDS = {
   START: ['เริ่ม', 'แก้ไขโปรไฟล์'],
-  TODAY: ['วันนี้', '📊 วันนี้', '🍽️ วันนี้'],
-  /** Rich Menu 🍽️ อาหาร — entry hint only; never Food AI. */
+  TODAY: [
+    'วันนี้',
+    '📊 วันนี้',
+    '🍽️ วันนี้',
+    'ดูภาพรวมวันนี้',
+    'ภาพรวมวันนี้',
+    'ภาพรวม',
+  ],
+  /** Rich Menu 🍽️ อาหาร — today's list (editable) or the logging hint; never Food AI. */
   FOOD_ENTRY: ['อาหาร', '🍽️ อาหาร'],
-  /** Rich Menu 🧠 โค้ช — entry hint only; never Daily / AI. */
+  /** Rich Menu 🧠 โค้ช — deterministic next actions from recorded data; never AI. */
   COACH_ENTRY: ['โค้ช', '🧠 โค้ช'],
   PROFILE: ['โปรไฟล์', '👤 โปรไฟล์', 'เป้าหมาย', '🎯 เป้าหมาย'],
   WEIGHT: ['น้ำหนัก', '⚖️ น้ำหนัก'],
@@ -275,12 +283,12 @@ export class FoodLoggingService {
 
     // Rich Menu entry points — must run before Food AI / classify / coach NL.
     if (isExactFoodCommand(normalized, FOOD_COMMANDS.FOOD_ENTRY)) {
-      await this.lineService.replyText(replyToken, LOG_FOOD_HINT_TEXT);
+      await this.replyFoodEntry(user.id, replyToken);
       return 'handled';
     }
 
     if (isExactFoodCommand(normalized, FOOD_COMMANDS.COACH_ENTRY)) {
-      await this.lineService.replyText(replyToken, COACH_ENTRY_TEXT);
+      await this.replyCoachEntry(user, replyToken);
       return 'handled';
     }
 
@@ -394,21 +402,17 @@ export class FoodLoggingService {
       );
       return 'handled';
     }
-    await this.routeByClassification(
-      user.id,
-      replyToken,
-      normalized,
-      lineUserId,
-    );
+    await this.routeByClassification(user, replyToken, normalized, lineUserId);
     return 'handled';
   }
 
   private async routeByClassification(
-    userId: string,
+    user: User,
     replyToken: string,
     text: string,
     lineUserId: string,
   ): Promise<void> {
+    const userId = user.id;
     try {
       // Routing call: not charged to the user's daily plan quota.
       const classified = await this.aiGateway.runUnmetered(
@@ -446,6 +450,11 @@ export class FoodLoggingService {
           return;
         }
         await this.replyTodaySummary(userId, replyToken);
+        return;
+      }
+
+      if (classified.type === 'health_coach') {
+        await this.replyCrossHealthCoach(user, replyToken, text);
         return;
       }
 
@@ -683,7 +692,7 @@ export class FoodLoggingService {
             {
               role: 'system',
               content:
-                'You are Tastom personal health coach. Use only provided facts. Thai, short, practical. No diagnosis, no medication. Distinguish measured vs estimated.',
+                'You are Tastom personal health coach. Use only provided facts. Thai, short, practical. No diagnosis, no medication. Distinguish measured vs estimated. For "how long/how much" exercise questions give a modest range (e.g. 20-40 minutes of easy cardio) with one reason from the facts (sleep, steps, calories left, recovery) and say when data is missing. Advise stopping if pain or dizziness.',
             },
             {
               role: 'user',
@@ -830,6 +839,53 @@ export class FoodLoggingService {
         `Weight question failed: ${error instanceof Error ? error.message : 'unknown error'}`,
       );
       await this.lineService.replyText(replyToken, WEIGHT_QUERY_ERROR_TEXT);
+    }
+  }
+
+  /** Rich Menu อาหาร: what was eaten today (editable), else how to log. */
+  private async replyFoodEntry(
+    userId: string,
+    replyToken: string,
+  ): Promise<void> {
+    try {
+      const logs = await this.foodLogService.listForUserOnDate(userId);
+      if (logs.length === 0) {
+        await this.lineService.replyText(replyToken, LOG_FOOD_HINT_TEXT);
+        return;
+      }
+      await this.replyTodayFoodList(userId, replyToken);
+    } catch (error) {
+      this.logger.error(
+        `Food entry failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+      );
+      await this.lineService.replyText(replyToken, LOG_FOOD_HINT_TEXT);
+    }
+  }
+
+  /** Rich Menu โค้ช: deterministic next actions; falls back to the prompt. */
+  private async replyCoachEntry(user: User, replyToken: string): Promise<void> {
+    try {
+      const summary = await this.dailySummaryService.getDailySummary(user.id);
+      const todayWeightKg = await this.weightLogService.getTodayAverageKg(
+        user.id,
+      );
+      const snap = await this.healthDashboard.buildToday({
+        userId: user.id,
+        userCreatedAt: user.createdAt,
+        nutrition: summary,
+        todayWeightKg,
+      });
+      await this.lineService.replyText(
+        replyToken,
+        buildCoachNextActionsText(snap),
+      );
+    } catch (error) {
+      if (!(error instanceof NutritionProfileMissingError)) {
+        this.logger.error(
+          `Coach entry failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+        );
+      }
+      await this.lineService.replyText(replyToken, COACH_ENTRY_TEXT);
     }
   }
 

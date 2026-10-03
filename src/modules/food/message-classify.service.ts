@@ -132,6 +132,7 @@ export class MessageClassifyService {
         type === 'weight_query' ||
         type === 'food' ||
         type === 'coach' ||
+        type === 'health_coach' ||
         type === 'other'
           ? type
           : 'other',

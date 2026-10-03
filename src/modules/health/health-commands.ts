@@ -136,7 +136,14 @@ export function isMealSuggestionRequest(text: string): boolean {
 
 export function isHealthCoachQuestion(text: string): boolean {
   const t = text.trim();
-  return /ทำไม.?น้ำหนัก|กินโอเคไหม|ฟื้นตัวช้า|สุขภาพ.?เป็นยังไง|how am i|what should i focus/i.test(
-    t,
+  return (
+    /ทำไม.?น้ำหนัก|กินโอเคไหม|ฟื้นตัวช้า|สุขภาพ.?เป็นยังไง|how am i|what should i focus/i.test(
+      t,
+    ) ||
+    // "ควรไปวิ่งกี่นาทีดี", "ออกกำลังกายนานแค่ไหนดี"
+    /(วิ่ง|เดิน|ออกกำลัง|เวท|ปั่น|ว่ายน้ำ).*(กี่นาที|กี่ชั่วโมง|นานแค่ไหน|นานเท่าไร|นานเท่าไหร่)/.test(
+      t,
+    ) ||
+    /ควร(ไป)?(วิ่ง|ออกกำลัง|เดิน)/.test(t)
   );
 }
