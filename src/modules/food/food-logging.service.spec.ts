@@ -165,9 +165,6 @@ describe('FoodLoggingService', () => {
   const healthInsights = {
     buildInsights: jest.fn().mockReturnValue([]),
   };
-  const thaiFoodLookup = {
-    lookup: jest.fn(),
-  };
 
   const service = new FoodLoggingService(
     foodAnalysisService as unknown as FoodAnalysisService,
@@ -185,7 +182,6 @@ describe('FoodLoggingService', () => {
     healthRouting as unknown as import('../health/health-routing.service').HealthRoutingService,
     healthDashboard as unknown as import('../health/health-dashboard.service').HealthDashboardService,
     healthInsights,
-    thaiFoodLookup as unknown as import('../thai-food/thai-food-lookup.service').ThaiFoodLookupService,
   );
 
   const completedUser = {
@@ -210,7 +206,6 @@ describe('FoodLoggingService', () => {
     healthRouting.tryHandleText.mockResolvedValue(false);
     healthRouting.tryHandleImage.mockResolvedValue(false);
     healthInsights.buildInsights.mockReturnValue([]);
-    thaiFoodLookup.lookup.mockResolvedValue(null);
     weightLogService.getTodayAverageKg.mockResolvedValue(null);
     weightLogService.getRecentDailyAverages.mockResolvedValue([]);
     weightLogService.getSevenDayTrend.mockResolvedValue(null);
@@ -2067,104 +2062,6 @@ describe('FoodLoggingService', () => {
 
       expect(dailySummaryService.getDailySummaryOrNull).not.toHaveBeenCalled();
       expect(lineService.replyFlex).toHaveBeenCalledTimes(1);
-    });
-  });
-  describe('Thai food reference table (lookup before AI)', () => {
-    const referenceAnalysis = {
-      foodName: 'ข้าวมันไก่',
-      estimatedCalories: 1200,
-      proteinG: 60,
-      carbsG: 140,
-      fatG: 40,
-      confidence: 0.9,
-      assumptions: ['ค่ามาตรฐาน 1 จาน · ชุดข้อมูลทดสอบ'],
-      estimatedQuantity: 2,
-      quantityUnit: 'plate',
-    };
-
-    it('uses a reference hit without calling AI or consuming AI limits', async () => {
-      thaiFoodLookup.lookup.mockResolvedValue(referenceAnalysis);
-      pendingFoodService.upsertPending.mockResolvedValue({
-        originalQuantity: 2,
-        consumedQuantity: 2,
-        quantityUnit: 'plate',
-      });
-      // A hit must work even when the user's AI bucket is exhausted.
-      while (aiRateLimiter.tryConsume('U-line-a', 'food_text')) {
-        // drain
-      }
-
-      await service.handleCompletedText(
-        completedUser as never,
-        'token',
-        'ข้าวมันไก่ 2 จาน',
-      );
-
-      expect(thaiFoodLookup.lookup).toHaveBeenCalledWith('ข้าวมันไก่ 2 จาน');
-      expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
-      expect(aiGateway.run).not.toHaveBeenCalled();
-      expect(pendingFoodService.upsertPending).toHaveBeenCalledWith(
-        'user-a',
-        referenceAnalysis,
-        undefined,
-        undefined,
-      );
-      const message = callArg(lineService.replyButtonsOrPush, 0, 2) as string;
-      expect(message).toContain('ข้าวมันไก่');
-      expect(message).toContain('ชุดข้อมูลทดสอบ');
-      expect(lineService.replyText).not.toHaveBeenCalledWith(
-        'token',
-        FOOD_RATE_LIMITED_TEXT,
-      );
-    });
-
-    it('falls back to AI on a miss', async () => {
-      thaiFoodLookup.lookup.mockResolvedValue(null);
-      foodAnalysisService.analyzeText.mockResolvedValue({
-        ...referenceAnalysis,
-        foodName: 'ข้าวมันไก่ (AI)',
-      });
-      pendingFoodService.upsertPending.mockResolvedValue({
-        originalQuantity: 2,
-        consumedQuantity: 2,
-        quantityUnit: 'plate',
-      });
-
-      await service.handleCompletedText(
-        completedUser as never,
-        'token',
-        'ข้าวมันไก่ 2 จาน',
-      );
-
-      expect(foodAnalysisService.analyzeText).toHaveBeenCalledWith(
-        'ข้าวมันไก่ 2 จาน',
-      );
-      expect(aiGateway.run).toHaveBeenCalledTimes(1);
-    });
-
-    it('never looks up images', async () => {
-      await service.handleImage(completedUser as never, 'token', 'msg-1');
-      expect(thaiFoodLookup.lookup).not.toHaveBeenCalled();
-    });
-
-    it('keeps the yesterday date on a reference hit', async () => {
-      thaiFoodLookup.lookup.mockResolvedValue(referenceAnalysis);
-      pendingFoodService.upsertPending.mockResolvedValue({
-        originalQuantity: 2,
-        consumedQuantity: 2,
-        quantityUnit: 'plate',
-      });
-
-      await service.handleCompletedText(
-        completedUser as never,
-        'token',
-        'เมื่อวาน ข้าวมันไก่ 2 จาน',
-      );
-
-      expect(thaiFoodLookup.lookup).toHaveBeenCalledWith('ข้าวมันไก่ 2 จาน');
-      expect(callArg(pendingFoodService.upsertPending, 0, 3)).toBeInstanceOf(
-        Date,
-      );
     });
   });
 });

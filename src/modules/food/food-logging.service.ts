@@ -106,7 +106,6 @@ import {
   REPLACE_PENDING_TEXT,
   SYSTEM_BUSY_TEXT,
 } from './food.messages';
-import { ThaiFoodLookupService } from '../thai-food/thai-food-lookup.service';
 import { parseFoodEdit } from './food-edit';
 import {
   describeDayTh,
@@ -196,7 +195,6 @@ export class FoodLoggingService {
     private readonly healthRouting: HealthRoutingService,
     private readonly healthDashboard: HealthDashboardService,
     private readonly healthInsights: HealthInsightService,
-    private readonly thaiFoodLookup: ThaiFoodLookupService,
   ) {}
 
   isConfirm(text: string): boolean {
@@ -1660,24 +1658,16 @@ export class FoodLoggingService {
       foodEditSessionBuffer.clear(userId);
     }
 
-    // Known dish in the licensed reference table: no AI call, no AI quota or
-    // rate-limit usage. Anything else (or an empty table) falls through to AI.
-    const referenceAnalysis =
-      input.kind === 'text'
-        ? await this.thaiFoodLookup.lookup(input.text)
-        : null;
-
     const rateKey = lineUserId ?? userId;
     const bucket = input.kind === 'image' ? 'food_image' : 'food_text';
-    if (!referenceAnalysis && !aiRateLimiter.tryConsume(rateKey, bucket)) {
+    if (!aiRateLimiter.tryConsume(rateKey, bucket)) {
       await this.lineService.replyText(replyToken, FOOD_RATE_LIMITED_TEXT);
       return;
     }
 
     try {
       const analysis =
-        referenceAnalysis ??
-        (input.kind === 'text'
+        input.kind === 'text'
           ? await this.aiGateway.run(userId, 'FOOD_TEXT', () =>
               this.foodAnalysisService.analyzeText(input.text),
             )
@@ -1685,7 +1675,7 @@ export class FoodLoggingService {
               this.foodAnalysisService.analyzeImage({
                 imageBytes: input.imageBytes,
               }),
-            ));
+            );
 
       const pending = await this.pendingFoodService.upsertPending(
         userId,

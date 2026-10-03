@@ -250,16 +250,15 @@ describe('FoodAnalysisService', () => {
       expect(systemPrompt(create)).toContain('MUST be in Thai');
     });
 
-    it('tells the model to read printed nutrition labels on packaged food', async () => {
+    it('tells photos of packaged food to be named and never 0 kcal', async () => {
       const create = jest.fn().mockResolvedValue(okResponse('อกไก่ย่าง'));
       await serviceWith(create).analyzeImage({
         imageBytes: Buffer.from([1, 2, 3]),
       });
       const prompt = systemPrompt(create);
-      expect(prompt).toContain('printed nutrition label');
-      expect(prompt).toContain('labelKcal MUST be null');
+      expect(prompt).toContain('packaged product');
       expect(prompt).toContain('Never output 0 kcal');
-      expect(prompt).toContain('ตามฉลาก');
+      expect(prompt).not.toContain('labelKcal');
     });
 
     function imageDetail(create: jest.Mock): string {
