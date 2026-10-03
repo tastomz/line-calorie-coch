@@ -63,6 +63,59 @@ const EXERCISE_TYPE_MAP: Record<string, ExerciseType> = {
   other: ExerciseType.OTHER,
 };
 
+/** Activity words usable in plain sentences ("วิ่งมา 30 นาที") → exercise type. */
+const NATURAL_EXERCISE_WORDS: ReadonlyArray<[string, ExerciseType]> = [
+  ['ปั่นจักรยาน', ExerciseType.CYCLING],
+  ['ว่ายน้ำ', ExerciseType.SWIMMING],
+  ['ยกเวท', ExerciseType.STRENGTH],
+  ['เล่นเวท', ExerciseType.STRENGTH],
+  ['วิ่ง', ExerciseType.RUNNING],
+  ['เดิน', ExerciseType.WALKING],
+  ['เวท', ExerciseType.STRENGTH],
+  ['ปั่น', ExerciseType.CYCLING],
+  ['โยคะ', ExerciseType.MOBILITY],
+];
+
+/** Questions about exercise must reach the coach, never be logged. */
+const NATURAL_EXERCISE_QUESTION =
+  /ไหม|มั้ย|หรือเปล่า|ควร|กี่|เท่าไร|เท่าไหร่|\?/;
+
+/**
+ * "วิ่งมา 30 นาที" | "วิ่ง30นาที" | "เดิน 1 ชั่วโมง" | "วันนี้ว่ายน้ำ 20 นาที".
+ * Needs a duration with a unit so a bare "วิ่ง" or a question is never logged.
+ */
+function parseNaturalExercise(t: string): {
+  type: ExerciseType;
+  durationMinutes: number;
+  name: string;
+} | null {
+  if (NATURAL_EXERCISE_QUESTION.test(t)) return null;
+  const word = NATURAL_EXERCISE_WORDS.map(([w]) => w).join('|');
+  const m = t.match(
+    new RegExp(
+      `^(?:วันนี้\\s*)?(?:ได้\\s*)?(${word})(?:มา|ไป|ได้)?\\s*(\\d+(?:\\.\\d+)?)\\s*(นาที|min|mins|ชั่วโมง|ชม\\.?|ชม)$`,
+      'i',
+    ),
+  );
+  if (!m) return null;
+  const type = NATURAL_EXERCISE_WORDS.find(([w]) => w === m[1])![1];
+  const amount = Number(m[2]);
+  const isHours = /^(ชั่วโมง|ชม)/.test(m[3]);
+  const durationMinutes = Math.round(isHours ? amount * 60 : amount);
+  if (
+    !Number.isFinite(durationMinutes) ||
+    durationMinutes <= 0 ||
+    durationMinutes > 600
+  ) {
+    return null;
+  }
+  const name =
+    type === ExerciseType.STRENGTH
+      ? 'Strength Training'
+      : type.charAt(0) + type.slice(1).toLowerCase();
+  return { type, durationMinutes, name };
+}
+
 /** ออกกำลังกาย strength 45 | ออกกำลัง 45 | workout running 30 */
 export function parseExerciseCommand(text: string): {
   type: ExerciseType;
@@ -70,6 +123,8 @@ export function parseExerciseCommand(text: string): {
   name: string;
 } | null {
   const t = text.trim();
+  const natural = parseNaturalExercise(t);
+  if (natural) return natural;
   const m = t.match(
     /^(?:ออกกำลังกาย|ออกกำลัง|exercise|workout)\s+(?:([a-zA-Zก-๙]+)\s+)?(\d{1,3})\s*(?:นาที|min|mins)?$/i,
   );

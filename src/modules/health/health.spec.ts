@@ -54,6 +54,32 @@ describe('health-commands parsers', () => {
   });
 });
 
+describe('parseExerciseCommand natural sentences', () => {
+  it.each([
+    ['วิ่งมา 30 นาที', 'RUNNING', 30],
+    ['วิ่ง30นาที', 'RUNNING', 30],
+    ['เดิน 1 ชั่วโมง', 'WALKING', 60],
+    ['วันนี้ว่ายน้ำ 20 นาที', 'SWIMMING', 20],
+    ['เวท 45 นาที', 'STRENGTH', 45],
+    ['ปั่นจักรยานไป 1.5 ชม.', 'CYCLING', 90],
+  ])('logs %s', (text, type, minutes) => {
+    const r = parseExerciseCommand(text);
+    expect(r?.type).toBe(type);
+    expect(r?.durationMinutes).toBe(minutes);
+  });
+
+  it.each([
+    'ควรไปวิ่งกี่นาทีดี',
+    'วิ่ง 30 นาทีดีไหม',
+    'วิ่ง',
+    'เดินทาง 30 นาที',
+    'วิ่ง 30 กม.',
+    'วิ่งมา 0 นาที',
+  ])('does not log %s', (text) => {
+    expect(parseExerciseCommand(text)).toBeNull();
+  });
+});
+
 describe('isHealthCoachQuestion', () => {
   it.each([
     'ควรไปวิ่งกี่นาทีดี',
