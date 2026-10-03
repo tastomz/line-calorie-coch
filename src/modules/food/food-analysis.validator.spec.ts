@@ -26,6 +26,51 @@ describe('food-analysis.validator', () => {
     expect(validateFoodAnalysisResult(valid)).toEqual(valid);
   });
 
+  describe('printed label (labelKcal)', () => {
+    const pack = {
+      ...valid,
+      foodName: 'อกไก่นุ่มย่างถ่าน',
+      estimatedCalories: 300,
+      quantityUnit: 'item',
+    };
+
+    it('uses the printed kcal over the estimate and keeps the label note', () => {
+      const result = validateFoodAnalysisResult({
+        ...pack,
+        labelKcal: 90,
+        assumptions: ['ตามฉลาก'],
+      });
+      expect(result.estimatedCalories).toBe(90);
+      expect(result.assumptions).toEqual(['ตามฉลาก']);
+    });
+
+    it('adds the label note when a printed value was used', () => {
+      const result = validateFoodAnalysisResult({
+        ...pack,
+        labelKcal: 90,
+        assumptions: ['ทั้งแพ็ค 72 g'],
+      });
+      expect(result.assumptions).toEqual(['ตามฉลาก', 'ทั้งแพ็ค 72 g']);
+    });
+
+    it('drops an unverified "ตามฉลาก" claim and lowers confidence', () => {
+      const result = validateFoodAnalysisResult({
+        ...pack,
+        labelKcal: null,
+        confidence: 0.9,
+        assumptions: ['ตามฉลาก', 'ทั้งแพ็ค'],
+      });
+      expect(result.estimatedCalories).toBe(300);
+      expect(result.confidence).toBe(0.5);
+      expect(result.assumptions.join(' ')).not.toContain('ตามฉลาก');
+      expect(result.assumptions.join(' ')).toContain('อ่านฉลากไม่ชัด');
+    });
+
+    it('leaves non-pack answers untouched when labelKcal is absent', () => {
+      expect(validateFoodAnalysisResult(valid)).toEqual(valid);
+    });
+  });
+
   it('parses JSON content', () => {
     expect(parseFoodAnalysisJson(JSON.stringify(valid)).foodName).toBe(
       valid.foodName,

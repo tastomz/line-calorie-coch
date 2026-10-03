@@ -99,6 +99,7 @@ Multi-stage, non-root, no secrets in the image. Full steps: [docs/DEPLOYMENT.md]
 
 Set `OPENAI_API_KEY`. Cost controls: [docs/AI_COST.md](docs/AI_COST.md).
 Quantity adjustments stay local (no OpenAI).
+`FOOD_VISION_DETAIL` (`low` default, `high`/`auto`) sets photo detail: higher reads small pack labels better at a higher per-image cost.
 
 ## Membership / subscription / AI usage
 
