@@ -248,6 +248,17 @@ describe('FoodAnalysisService', () => {
       expect(systemPrompt(create)).toContain('MUST be in Thai');
     });
 
+    it('tells the model to read printed nutrition labels on packaged food', async () => {
+      const create = jest.fn().mockResolvedValue(okResponse('อกไก่ย่าง'));
+      await serviceWith(create).analyzeImage({
+        imageBytes: Buffer.from([1, 2, 3]),
+      });
+      const prompt = systemPrompt(create);
+      expect(prompt).toContain('printed nutrition label');
+      expect(prompt).toContain('Never contradict printed numbers');
+      expect(prompt).toContain('ตามฉลาก');
+    });
+
     it('tells the model to keep composition re-estimates in Thai', async () => {
       const create = jest.fn().mockResolvedValue(okResponse('ข้าวเปล่า'));
       await serviceWith(create).analyzeCompositionAdjustment({
