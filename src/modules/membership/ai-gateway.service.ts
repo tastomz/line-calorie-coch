@@ -52,13 +52,14 @@ export class AiGatewayService {
     if (metered) {
       await this.aiUsage.consumeAiUsage(userId, operation);
     }
-    let captured: AiTokenUsageMeta | undefined;
+    const captured: AiTokenUsageMeta[] = [];
     try {
       const result = await runWithAiTokenCapture((meta) => {
-        captured = meta;
+        captured.push(meta);
       }, work);
-      if (captured) {
-        await this.aiUsage.recordTokenUsage(userId, operation, captured);
+      // One row per OpenAI call (a photo may use a cheap check + an analysis).
+      for (const meta of captured) {
+        await this.aiUsage.recordTokenUsage(userId, operation, meta);
       }
       return result;
     } catch (error) {

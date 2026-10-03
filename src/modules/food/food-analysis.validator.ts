@@ -2,6 +2,10 @@ import {
   FOOD_QUANTITY_UNITS,
   FoodAnalysisResult,
   FoodQuantityUnit,
+  PhotoKind,
+  WORKOUT_EXERCISE_TYPES,
+  WorkoutExerciseType,
+  WorkoutScreenshot,
 } from './food-analysis.types';
 
 export class FoodAnalysisValidationError extends Error {
@@ -179,4 +183,59 @@ export function parseFoodAnalysisJson(content: string): FoodAnalysisResult {
     throw new FoodAnalysisValidationError('AI response is not valid JSON');
   }
   return validateFoodAnalysisResult(parsed);
+}
+
+export type PhotoAnalysisResult =
+  | { kind: 'food'; analysis: FoodAnalysisResult }
+  | { kind: 'workout'; workout: WorkoutScreenshot }
+  | { kind: 'other' };
+
+function finiteOrNull(value: unknown, min: number, max: number): number | null {
+  return typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= min &&
+    value <= max
+    ? value
+    : null;
+}
+
+function parseWorkout(raw: unknown): WorkoutScreenshot | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const w = raw as Record<string, unknown>;
+  const duration = finiteOrNull(w.durationMinutes, 1, 600);
+  if (duration === null) return null;
+  const type = WORKOUT_EXERCISE_TYPES.includes(w.exerciseType as never)
+    ? (w.exerciseType as WorkoutExerciseType)
+    : 'OTHER';
+  const calories = finiteOrNull(w.caloriesBurned, 0, 5000);
+  const heartRate = finiteOrNull(w.avgHeartRate, 30, 230);
+  return {
+    exerciseType: type,
+    durationMinutes: Math.round(duration),
+    caloriesBurned: calories === null ? null : Math.round(calories),
+    avgHeartRate: heartRate === null ? null : Math.round(heartRate),
+    workoutName:
+      typeof w.workoutName === 'string' && w.workoutName.trim()
+        ? w.workoutName.trim().slice(0, 60)
+        : null,
+  };
+}
+
+/** Photo-kind answer; anything unexpected counts as food (the safe default). */
+export function parsePhotoKindJson(content: string): PhotoKind {
+  try {
+    const kind = (JSON.parse(content) as { kind?: unknown }).kind;
+    return kind === 'workout' || kind === 'other' ? kind : 'food';
+  } catch {
+    return 'food';
+  }
+}
+
+/** Workout numbers, or null when the duration is not readable. */
+export function parseWorkoutJson(content: string): WorkoutScreenshot | null {
+  try {
+    return parseWorkout(JSON.parse(content));
+  } catch {
+    return null;
+  }
 }

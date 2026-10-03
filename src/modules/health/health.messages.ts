@@ -67,13 +67,26 @@ export function buildSleepSavedMessage(params: {
 export function buildExerciseSavedMessage(params: {
   name: string;
   durationMinutes: number;
+  caloriesBurned?: number | null;
+  avgHeartRate?: number | null;
+  fromScreenshot?: boolean;
 }): string {
+  const extra: string[] = [];
+  if (params.caloriesBurned != null) {
+    extra.push(`🔥 เผาผลาญ ${params.caloriesBurned} kcal`);
+  }
+  if (params.avgHeartRate != null) {
+    extra.push(`❤️ หัวใจเฉลี่ย ${params.avgHeartRate} bpm`);
+  }
+  const source = params.fromScreenshot
+    ? '\n\nอ่านจากภาพสรุปการออกกำลังกาย ตรวจตัวเลขอีกครั้งได้เลยครับ'
+    : '';
   return `🏋️ วันนี้ออกกำลังกาย
 
 ${params.name}
-${params.durationMinutes} นาที
+${params.durationMinutes} นาที${extra.length > 0 ? `\n${extra.join('\n')}` : ''}
 
-บันทึกแล้ว`;
+บันทึกแล้ว${source}`;
 }
 
 export function buildStepsMessage(steps: number): string {

@@ -70,6 +70,7 @@ import {
   FoodImageUnreadableError,
   FoodAnalysisService,
 } from './food-analysis.service';
+import { FoodAnalysisResult } from './food-analysis.types';
 import { FoodAnalysisValidationError } from './food-analysis.validator';
 import { FoodLogService } from './food-log.service';
 import {
@@ -82,6 +83,7 @@ import {
   FOOD_ANALYSIS_FAILED_TEXT,
   FOOD_ESTIMATE_EMPTY_TEXT,
   FOOD_IMAGE_UNREADABLE_TEXT,
+  NOT_FOOD_PHOTO_TEXT,
   FOOD_CANCELLED_TEXT,
   FOOD_CONFIRM_CHOICES,
   FOOD_EDIT_CANCELLED_TEXT,
@@ -1715,16 +1717,32 @@ export class FoodLoggingService {
     }
 
     try {
-      const analysis =
-        input.kind === 'text'
-          ? await this.aiGateway.run(userId, 'FOOD_TEXT', () =>
-              this.foodAnalysisService.analyzeText(input.text),
-            )
-          : await this.aiGateway.run(userId, 'FOOD_VISION', () =>
-              this.foodAnalysisService.analyzeImage({
-                imageBytes: input.imageBytes,
-              }),
-            );
+      let analysis: FoodAnalysisResult;
+      if (input.kind === 'text') {
+        analysis = await this.aiGateway.run(userId, 'FOOD_TEXT', () =>
+          this.foodAnalysisService.analyzeText(input.text),
+        );
+      } else {
+        const photo = await this.aiGateway.run(userId, 'FOOD_VISION', () =>
+          this.foodAnalysisService.analyzePhoto({
+            imageBytes: input.imageBytes,
+          }),
+        );
+        if (photo.kind === 'workout') {
+          // Smartwatch / fitness-app summary: log the exercise, never a meal.
+          await this.healthRouting.saveWorkoutScreenshot(
+            userId,
+            replyToken,
+            photo.workout,
+          );
+          return;
+        }
+        if (photo.kind === 'other') {
+          await this.lineService.replyText(replyToken, NOT_FOOD_PHOTO_TEXT);
+          return;
+        }
+        analysis = photo.analysis;
+      }
 
       const pending = await this.pendingFoodService.upsertPending(
         userId,

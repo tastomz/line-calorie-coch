@@ -9,6 +9,7 @@ import {
   parseSleepCommand,
   parseStepsCommand,
 } from './health-commands';
+import { buildExerciseSavedMessage } from './health.messages';
 import { MEAL_ALLOCATION, MealPlanService } from './meal-plan.service';
 import { getProgramWeekDay } from './program-week';
 import { HealthInsightService } from './health-dashboard.service';
@@ -51,6 +52,57 @@ describe('health-commands parsers', () => {
   it('matches exact health commands', () => {
     expect(isExactHealthCommand('ร่างกาย', ['ร่างกาย', 'body'])).toBe(true);
     expect(isExactHealthCommand('สรุปสัปดาห์', ['สรุปสัปดาห์'])).toBe(true);
+  });
+});
+
+describe('parseExerciseCommand natural sentences', () => {
+  it.each([
+    ['วิ่งมา 30 นาที', 'RUNNING', 30],
+    ['วิ่ง30นาที', 'RUNNING', 30],
+    ['เดิน 1 ชั่วโมง', 'WALKING', 60],
+    ['วันนี้ว่ายน้ำ 20 นาที', 'SWIMMING', 20],
+    ['เวท 45 นาที', 'STRENGTH', 45],
+    ['ปั่นจักรยานไป 1.5 ชม.', 'CYCLING', 90],
+  ])('logs %s', (text, type, minutes) => {
+    const r = parseExerciseCommand(text);
+    expect(r?.type).toBe(type);
+    expect(r?.durationMinutes).toBe(minutes);
+  });
+
+  it.each([
+    'ควรไปวิ่งกี่นาทีดี',
+    'วิ่ง 30 นาทีดีไหม',
+    'วิ่ง',
+    'เดินทาง 30 นาที',
+    'วิ่ง 30 กม.',
+    'วิ่งมา 0 นาที',
+  ])('does not log %s', (text) => {
+    expect(parseExerciseCommand(text)).toBeNull();
+  });
+});
+
+describe('buildExerciseSavedMessage', () => {
+  it('shows calories, heart rate and the screenshot note when read from a watch', () => {
+    const text = buildExerciseSavedMessage({
+      name: 'Freestyle',
+      durationMinutes: 59,
+      caloriesBurned: 400,
+      avgHeartRate: 135,
+      fromScreenshot: true,
+    });
+    expect(text).toContain('59 นาที');
+    expect(text).toContain('เผาผลาญ 400 kcal');
+    expect(text).toContain('หัวใจเฉลี่ย 135 bpm');
+    expect(text).toContain('อ่านจากภาพสรุปการออกกำลังกาย');
+  });
+
+  it('keeps the plain message for typed logs', () => {
+    const text = buildExerciseSavedMessage({
+      name: 'Running',
+      durationMinutes: 30,
+    });
+    expect(text).not.toContain('เผาผลาญ');
+    expect(text).not.toContain('อ่านจากภาพ');
   });
 });
 
