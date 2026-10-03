@@ -38,6 +38,29 @@ that right in the `license` column. Do not scrape sites; request a licence or an
 
 Nutrition numbers are never invented or guessed in this repo.
 
+## Open Food Facts: 7-Eleven / CP / Ezygo packaged products
+
+Open Food Facts (ODbL; attribute "© Open Food Facts contributors") lists a few
+hundred Thai 7-Eleven-related products with barcodes and printed nutrition.
+Coverage is community-made and incomplete. Photos of packs are already handled by
+reading the printed label in the vision prompt; this data helps typed product names.
+
+The sandbox cannot reach openfoodfacts.org, so the data is prepared on a developer
+machine:
+
+1. Download the **JSONL** product export (not the MongoDB dump) from
+   <https://world.openfoodfacts.org/data> — a large file (several GB, gzip). The
+   file name is expected to be `openfoodfacts-products.jsonl.gz`; check the page.
+2. Reduce it to Thai 7-11 / CP / Ezygo products (add `--all-thailand` for every Thai product):
+
+   ```bash
+   node tools/off-extract-thailand.mjs ~/Downloads/openfoodfacts-products.jsonl.gz off-thailand.jsonl
+   ```
+
+3. The result is a small file of public data. A converter from it to the import CSV
+   (per-100 g values × pack weight, pack units) is the next step and is written
+   against real rows, not guessed field names.
+
 ## CSV format
 
 UTF-8, header row required. Required: `name_th, serving_unit, calories, protein_g, carbs_g, fat_g, source, license`.
