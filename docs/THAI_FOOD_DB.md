@@ -38,6 +38,48 @@ that right in the `license` column. Do not scrape sites; request a licence or an
 
 Nutrition numbers are never invented or guessed in this repo.
 
+## Open Food Facts: 7-Eleven / CP / Ezygo packaged products
+
+Open Food Facts (ODbL; attribute "© Open Food Facts contributors") lists a few
+hundred Thai 7-Eleven-related products with barcodes and printed nutrition.
+Coverage is community-made and incomplete. Photos of packs are already handled by
+reading the printed label in the vision prompt; this data helps typed product names.
+
+The sandbox cannot reach openfoodfacts.org, so the data is prepared on a developer
+machine:
+
+1. Download the product export from <https://world.openfoodfacts.org/data>: the
+   tab-separated **CSV** (`en.openfoodfacts.org.products.csv`, optionally `.gz`) or
+   the **JSONL** file. Not the MongoDB dump. These are large files (GB).
+2. Reduce it to Thai 7-11 / CP / Ezygo products (add `--all-thailand` for every Thai
+   product). The mode is chosen from the file name; the CSV header is checked and
+   the script stops with the column names it found if the ones it needs are missing:
+
+   ```bash
+   node tools/off-extract-thailand.mjs ~/Desktop/en.openfoodfacts.org.products.csv off-thailand.jsonl
+   ```
+
+3. Convert it to the import CSV. Per-100 g values are scaled by the pack weight in
+   `quantity` ("72 g"); the unit is one pack (`item`, typed as ซอง/กล่อง/แพ็ก/ขวด…).
+   Products are skipped and counted — never guessed — when the name, pack weight or
+   any of kcal/protein/carbs/fat is missing, the quantity is not in grams (e.g. ml
+   drinks), the same name has different numbers, or the importer's own checks fail:
+
+   ```bash
+   npm run convert:off -- --file off-thailand.jsonl --out thai-food-off.csv
+   ```
+
+4. Validate, then import (SIT first — see "Importing"):
+
+   ```bash
+   npm run import:thai-food -- --file thai-food-off.csv --dry-run
+   npm run import:thai-food -- --file thai-food-off.csv
+   ```
+
+Each row records `source = Open Food Facts` and the ODbL licence text; the source is
+shown on the estimate card. Spot-check a handful of products against the real pack:
+the data is community-contributed.
+
 ## CSV format
 
 UTF-8, header row required. Required: `name_th, serving_unit, calories, protein_g, carbs_g, fat_g, source, license`.
