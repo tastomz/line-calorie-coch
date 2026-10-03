@@ -68,6 +68,9 @@ export class ExerciseLogService {
     durationMinutes: number;
     workoutName?: string;
     notes?: string;
+    caloriesBurned?: number | null;
+    heartRate?: number | null;
+    source?: HealthDataSource;
   }) {
     if (params.durationMinutes <= 0 || params.durationMinutes > 24 * 60) {
       throw new Error('invalid duration');
@@ -80,7 +83,9 @@ export class ExerciseLogService {
         durationMinutes: params.durationMinutes,
         workoutName: params.workoutName ?? null,
         notes: params.notes ?? null,
-        source: HealthDataSource.MANUAL,
+        caloriesBurned: params.caloriesBurned ?? null,
+        heartRate: params.heartRate ?? null,
+        source: params.source ?? HealthDataSource.MANUAL,
       },
     });
   }

@@ -3,6 +3,8 @@ import {
   FOOD_QUANTITY_UNITS,
 } from './food-analysis.types';
 import {
+  parsePhotoKindJson,
+  parseWorkoutJson,
   parseFoodAnalysisJson,
   validateFoodAnalysisResult,
   normalizeQuantityUnit,
@@ -120,6 +122,68 @@ describe('food-analysis.validator', () => {
         validateFoodAnalysisResult({ ...valid, quantityUnit: 'whatever' }),
       ).toThrow(FoodAnalysisValidationError);
       expect(normalizeQuantityUnit('whatever')).toBe('whatever');
+    });
+  });
+
+  describe('photo kind and workout parsers', () => {
+    it('defaults to food for anything unexpected', () => {
+      expect(parsePhotoKindJson('{"kind":"food"}')).toBe('food');
+      expect(parsePhotoKindJson('{"kind":"banana"}')).toBe('food');
+      expect(parsePhotoKindJson('not json')).toBe('food');
+    });
+
+    it('recognises workout and other', () => {
+      expect(parsePhotoKindJson('{"kind":"workout"}')).toBe('workout');
+      expect(parsePhotoKindJson('{"kind":"other"}')).toBe('other');
+    });
+
+    it('reads a smartwatch workout screenshot', () => {
+      expect(
+        parseWorkoutJson(
+          JSON.stringify({
+            exerciseType: 'OTHER',
+            durationMinutes: 59.1,
+            caloriesBurned: 400,
+            avgHeartRate: 135,
+            workoutName: 'Freestyle',
+          }),
+        ),
+      ).toEqual({
+        exerciseType: 'OTHER',
+        durationMinutes: 59,
+        caloriesBurned: 400,
+        avgHeartRate: 135,
+        workoutName: 'Freestyle',
+      });
+    });
+
+    it('returns null when the duration is not readable', () => {
+      expect(
+        parseWorkoutJson(
+          JSON.stringify({
+            exerciseType: 'RUNNING',
+            durationMinutes: null,
+            caloriesBurned: 400,
+            avgHeartRate: null,
+            workoutName: null,
+          }),
+        ),
+      ).toBeNull();
+      expect(parseWorkoutJson('not json')).toBeNull();
+    });
+
+    it('drops implausible calories / heart rate instead of storing them', () => {
+      expect(
+        parseWorkoutJson(
+          JSON.stringify({
+            exerciseType: 'WALKING',
+            durationMinutes: 30,
+            caloriesBurned: 99999,
+            avgHeartRate: 5,
+            workoutName: null,
+          }),
+        ),
+      ).toMatchObject({ caloriesBurned: null, avgHeartRate: null });
     });
   });
 });

@@ -64,6 +64,76 @@ export const FOOD_ANALYSIS_JSON_SCHEMA = {
   },
 } as const;
 
+export type PhotoKind = 'food' | 'workout' | 'other';
+
+export const WORKOUT_EXERCISE_TYPES = [
+  'STRENGTH',
+  'RUNNING',
+  'WALKING',
+  'CYCLING',
+  'SWIMMING',
+  'SPORTS',
+  'MOBILITY',
+  'OTHER',
+] as const;
+
+export type WorkoutExerciseType = (typeof WORKOUT_EXERCISE_TYPES)[number];
+
+/** Numbers read off a fitness-tracker / smartwatch workout summary screenshot. */
+export type WorkoutScreenshot = {
+  exerciseType: WorkoutExerciseType;
+  durationMinutes: number;
+  caloriesBurned: number | null;
+  avgHeartRate: number | null;
+  workoutName: string | null;
+};
+
+/** Cheap pre-check: what is in the photo (before any expensive analysis). */
+export const PHOTO_KIND_MODEL = 'gpt-4o-mini';
+export const PHOTO_KIND_MAX_TOKENS = 20;
+
+export const PHOTO_KIND_PROMPT =
+  'Classify the image. food = meal, drink, snack or packaged food product. workout = screenshot of a smartwatch or fitness-app workout summary (duration, calories burned, heart rate). other = anything else. If unsure choose food. JSON only.';
+
+export const PHOTO_KIND_JSON_SCHEMA = {
+  name: 'photo_kind',
+  strict: true,
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['kind'],
+    properties: {
+      kind: { type: 'string', enum: ['food', 'workout', 'other'] },
+    },
+  },
+} as const;
+
+export const WORKOUT_EXTRACT_PROMPT =
+  'Read this workout summary screenshot. Use ONLY numbers visible on screen, null for anything not shown. durationMinutes = workout/exercise time in minutes; caloriesBurned = kcal shown; avgHeartRate = average heart rate. exerciseType: RUNNING|WALKING|CYCLING|SWIMMING|STRENGTH|SPORTS|MOBILITY|OTHER (OTHER for Freestyle/unknown). JSON only.';
+
+export const WORKOUT_JSON_SCHEMA = {
+  name: 'workout_screenshot',
+  strict: true,
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'exerciseType',
+      'durationMinutes',
+      'caloriesBurned',
+      'avgHeartRate',
+      'workoutName',
+    ],
+    properties: {
+      exerciseType: { type: 'string', enum: [...WORKOUT_EXERCISE_TYPES] },
+      durationMinutes: { type: ['number', 'null'] },
+      caloriesBurned: { type: ['number', 'null'] },
+      avgHeartRate: { type: ['number', 'null'] },
+      workoutName: { type: ['string', 'null'] },
+    },
+  },
+} as const;
+
 /** Keep prompts short to reduce input tokens. */
 export const FOOD_ANALYSIS_SYSTEM_PROMPT = `You estimate ONE meal's nutrition. Output JSON only.
 

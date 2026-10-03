@@ -42,6 +42,7 @@ describe('FoodLoggingService', () => {
   const foodAnalysisService = {
     analyzeText: jest.fn(),
     analyzeImage: jest.fn(),
+    analyzePhoto: jest.fn(),
     analyzeCompositionAdjustment: jest.fn(),
   };
   const messageClassifyService = {
@@ -127,6 +128,7 @@ describe('FoodLoggingService', () => {
   const healthRouting = {
     tryHandleText: jest.fn().mockResolvedValue(false),
     tryHandleImage: jest.fn().mockResolvedValue(false),
+    saveWorkoutScreenshot: jest.fn().mockResolvedValue(undefined),
   };
   const healthDashboard = {
     buildToday: jest.fn((params: Record<string, unknown>) =>
@@ -1473,16 +1475,19 @@ describe('FoodLoggingService', () => {
     lineService.getMessageContentPreviewBytes.mockResolvedValue(
       Buffer.from('fake-image'),
     );
-    foodAnalysisService.analyzeImage.mockResolvedValue({
-      foodName: 'ข้าวมันไก่',
-      estimatedCalories: 600,
-      proteinG: 30,
-      carbsG: 60,
-      fatG: 20,
-      confidence: 0.8,
-      assumptions: [],
-      estimatedQuantity: 1,
-      quantityUnit: 'plate',
+    foodAnalysisService.analyzePhoto.mockResolvedValue({
+      kind: 'food',
+      analysis: {
+        foodName: 'ข้าวมันไก่',
+        estimatedCalories: 600,
+        proteinG: 30,
+        carbsG: 60,
+        fatG: 20,
+        confidence: 0.8,
+        assumptions: [],
+        estimatedQuantity: 1,
+        quantityUnit: 'plate',
+      },
     });
     pendingFoodService.upsertPending.mockResolvedValue({
       originalQuantity: 1,
@@ -1492,16 +1497,59 @@ describe('FoodLoggingService', () => {
 
     await service.handleImage(completedUser as never, 'token', 'msg-img-1');
 
-    expect(foodAnalysisService.analyzeImage).toHaveBeenCalledTimes(1);
+    expect(foodAnalysisService.analyzePhoto).toHaveBeenCalledTimes(1);
     expect(messageClassifyService.classify).not.toHaveBeenCalled();
     expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
+  });
+
+  it('logs a smartwatch workout screenshot as exercise, never as a meal', async () => {
+    lineService.getMessageContentPreviewBytes.mockResolvedValue(
+      Buffer.from('fake-image'),
+    );
+    const workout = {
+      exerciseType: 'OTHER',
+      durationMinutes: 59,
+      caloriesBurned: 400,
+      avgHeartRate: 135,
+      workoutName: 'Freestyle',
+    };
+    foodAnalysisService.analyzePhoto.mockResolvedValue({
+      kind: 'workout',
+      workout,
+    });
+
+    await service.handleImage(completedUser as never, 'token', 'msg-img-w');
+
+    expect(healthRouting.saveWorkoutScreenshot).toHaveBeenCalledWith(
+      'user-a',
+      'token',
+      workout,
+    );
+    expect(pendingFoodService.upsertPending).not.toHaveBeenCalled();
+    expect(lineService.replyButtonsOrPush).not.toHaveBeenCalled();
+  });
+
+  it('tells the user when a photo is not food or a workout summary', async () => {
+    lineService.getMessageContentPreviewBytes.mockResolvedValue(
+      Buffer.from('fake-image'),
+    );
+    foodAnalysisService.analyzePhoto.mockResolvedValue({ kind: 'other' });
+
+    await service.handleImage(completedUser as never, 'token', 'msg-img-o');
+
+    expect(pendingFoodService.upsertPending).not.toHaveBeenCalled();
+    expect(healthRouting.saveWorkoutScreenshot).not.toHaveBeenCalled();
+    expect(lineService.replyText).toHaveBeenCalledWith(
+      'token',
+      expect.stringContaining('ดูไม่ออกว่าเป็นอาหาร'),
+    );
   });
 
   it('asks for a clearer photo when the image cannot be read (no 0 kcal card)', async () => {
     lineService.getMessageContentPreviewBytes.mockResolvedValue(
       Buffer.from('fake-image'),
     );
-    foodAnalysisService.analyzeImage.mockRejectedValue(
+    foodAnalysisService.analyzePhoto.mockRejectedValue(
       new FoodImageUnreadableError(),
     );
 
@@ -1614,6 +1662,37 @@ describe('FoodLoggingService', () => {
     expect(lineService.replyText).not.toHaveBeenCalledWith(
       'token',
       GENERAL_HELP_TEXT,
+    );
+  });
+
+  it('logs ยากิโซบะ หมู as food instead of the medical-advice reply', async () => {
+    foodAnalysisService.analyzeText.mockResolvedValue({
+      foodName: 'ยากิโซบะหมู',
+      estimatedCalories: 520,
+      proteinG: 22,
+      carbsG: 70,
+      fatG: 18,
+      confidence: 0.7,
+      assumptions: [],
+      estimatedQuantity: 1,
+      quantityUnit: 'plate',
+    });
+    pendingFoodService.upsertPending.mockResolvedValue({
+      originalQuantity: 1,
+      consumedQuantity: 1,
+      quantityUnit: 'plate',
+    });
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'มื้อเช้า ยากิโซบะ หมู',
+    );
+
+    expect(foodAnalysisService.analyzeText).toHaveBeenCalledTimes(1);
+    expect(lineService.replyText).not.toHaveBeenCalledWith(
+      'token',
+      expect.stringContaining('ปรึกษา'),
     );
   });
 
