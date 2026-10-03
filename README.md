@@ -102,7 +102,7 @@ Quantity adjustments stay local (no OpenAI).
 
 ## Membership / subscription / AI usage
 
-FREE + PRO (**50 THB/month**). Promo Free PRO codes **10/15/30 days** (`TASTOM-XXXXXX`).
+FREE + PRO (**50 THB/month**). Promo Free PRO codes (`TASTOM-XXXXXX`) with admin-typed days (1–365) and redemption limit (1–1,000).
 
 - Web: `/membership` · API: `/api/membership/*`
 - Local QA: `/dev/*` (`ENABLE_DEV_MEMBERSHIP_TOOLS=true`)
