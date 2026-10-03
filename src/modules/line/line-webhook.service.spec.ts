@@ -97,6 +97,35 @@ describe('LineWebhookService', () => {
     );
   });
 
+  it('routes postback events to onboarding using the postback data as text', async () => {
+    await service.handleEvent({
+      type: 'postback',
+      webhookEventId: 'evt-postback',
+      replyToken: 'token',
+      source: { userId: 'U123' },
+      postback: { data: 'foodedit:menu:abc123' },
+    });
+
+    expect(onboarding.handleTextMessage).toHaveBeenCalledWith(
+      'U123',
+      'token',
+      'foodedit:menu:abc123',
+    );
+  });
+
+  it('ignores postback events with no data', async () => {
+    const result = await service.handleEvent({
+      type: 'postback',
+      webhookEventId: 'evt-postback-empty',
+      replyToken: 'token',
+      source: { userId: 'U123' },
+      postback: {},
+    });
+
+    expect(result).toBe('processed');
+    expect(onboarding.handleTextMessage).not.toHaveBeenCalled();
+  });
+
   it('routes image message events to onboarding', async () => {
     await service.handleEvent({
       type: 'message',

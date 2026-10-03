@@ -17,10 +17,10 @@ import {
   FlexTheme,
   flexMessage,
   hbox,
-  linkButton,
+  linkPostbackButton,
   macroCell,
-  primaryButton,
-  secondaryButton,
+  primaryPostbackButton,
+  secondaryPostbackButton,
   sectionLabel,
   t,
   truncate,
@@ -89,8 +89,16 @@ export function buildTodayFoodEditListFlex(
       [
         hbox(
           [
-            secondaryButton('✏️ แก้ไข', foodEditMenuText(log.id)),
-            linkButton('🗑️ ลบ', foodEditDelText(log.id)),
+            secondaryPostbackButton(
+              '✏️ แก้ไข',
+              foodEditMenuText(log.id),
+              `✏️ แก้ไข ${truncate(log.foodName, 22)}`,
+            ),
+            linkPostbackButton(
+              '🗑️ ลบ',
+              foodEditDelText(log.id),
+              `🗑️ ลบ ${truncate(log.foodName, 22)}`,
+            ),
           ],
           { spacing: 'sm' },
         ),
@@ -150,10 +158,18 @@ export function buildFoodEditMenuFlex(log: FoodLog): FlexMessagePayload {
     ),
     footer: vbox(
       [
-        primaryButton('ปริมาณ', foodEditQtyText(log.id)),
-        secondaryButton('ชื่ออาหาร', foodEditNameText(log.id)),
-        secondaryButton('สารอาหาร', foodEditNutText(log.id)),
-        linkButton('ยกเลิก', FOOD_EDIT_CANCEL_TEXT),
+        primaryPostbackButton('ปริมาณ', foodEditQtyText(log.id), 'ปริมาณ'),
+        secondaryPostbackButton(
+          'ชื่ออาหาร',
+          foodEditNameText(log.id),
+          'ชื่ออาหาร',
+        ),
+        secondaryPostbackButton(
+          'สารอาหาร',
+          foodEditNutText(log.id),
+          'สารอาหาร',
+        ),
+        linkPostbackButton('ยกเลิก', FOOD_EDIT_CANCEL_TEXT, 'ยกเลิก'),
       ],
       { paddingAll: '12px', spacing: 'sm' },
     ),
@@ -181,8 +197,12 @@ export function buildFoodDeleteConfirmFlex(log: FoodLog): FlexMessagePayload {
     ),
     footer: vbox(
       [
-        primaryButton('ยืนยันลบ', foodEditDelOkText(log.id)),
-        linkButton('ยกเลิก', FOOD_EDIT_CANCEL_TEXT),
+        primaryPostbackButton(
+          'ยืนยันลบ',
+          foodEditDelOkText(log.id),
+          `🗑️ ยืนยันลบ ${truncate(log.foodName, 22)}`,
+        ),
+        linkPostbackButton('ยกเลิก', FOOD_EDIT_CANCEL_TEXT, 'ยกเลิก'),
       ],
       { paddingAll: '12px', spacing: 'sm' },
     ),
