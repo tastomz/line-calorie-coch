@@ -83,7 +83,8 @@ Secrets are never logged.
 ```bash
 npx prisma migrate dev       # local SQLite
 npx prisma migrate deploy    # production Postgres (after switching to prisma/postgres artifacts)
-npm run cleanup:retention    # expired pending + old LineEvent rows
+npm run cleanup:retention    # expired pending + old LineEvent rows (dev, ts-node)
+npm run cleanup:retention:prod # same, from compiled dist/ (production image)
 ```
 
 ## Docker (production image)

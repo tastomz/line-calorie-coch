@@ -26,6 +26,7 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "cleanup:retention": "ts-node -r tsconfig-paths/register src/scripts/run-retention-cleanup.ts",
+    "cleanup:retention:prod": "node dist/scripts/run-retention-cleanup.js",
     "import:thai-food": "ts-node -r tsconfig-paths/register src/scripts/import-thai-food.ts"
   },
   "dependencies": {
