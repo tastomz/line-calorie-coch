@@ -190,4 +190,81 @@ describe('FoodAnalysisService', () => {
       /temporarily unavailable/,
     );
   });
+  describe('Thai output requirement', () => {
+    type SystemCall = { messages: Array<{ role: string; content: unknown }> };
+
+    function serviceWith(create: jest.Mock): FoodAnalysisService {
+      const config = {
+        get: (key: string) => (key === 'OPENAI_API_KEY' ? 'test-key' : ''),
+      } as unknown as ConfigService;
+      const service = new FoodAnalysisService(config);
+      (
+        service as unknown as {
+          client: { chat: { completions: { create: typeof create } } };
+        }
+      ).client = { chat: { completions: { create } } };
+      return service;
+    }
+
+    function okResponse(foodName: string) {
+      return {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                foodName,
+                estimatedCalories: 600,
+                proteinG: 30,
+                carbsG: 70,
+                fatG: 20,
+                confidence: 0.8,
+                assumptions: ['1 จาน'],
+                estimatedQuantity: 1,
+                quantityUnit: 'plate',
+              }),
+            },
+          },
+        ],
+      };
+    }
+
+    function systemPrompt(create: jest.Mock): string {
+      const calls = create.mock.calls as unknown[][];
+      const arg = calls[0][0] as SystemCall;
+      return String(arg.messages.find((m) => m.role === 'system')?.content);
+    }
+
+    it('tells the model to name text-analysis dishes in Thai', async () => {
+      const create = jest.fn().mockResolvedValue(okResponse('ข้าวมันไก่'));
+      await serviceWith(create).analyzeText('fried chicken rice');
+      expect(systemPrompt(create)).toContain('MUST be in Thai');
+    });
+
+    it('tells the model to name photo dishes in Thai', async () => {
+      const create = jest.fn().mockResolvedValue(okResponse('ข้าวมันไก่'));
+      await serviceWith(create).analyzeImage({
+        imageBytes: Buffer.from([1, 2, 3]),
+      });
+      expect(systemPrompt(create)).toContain('MUST be in Thai');
+    });
+
+    it('tells the model to keep composition re-estimates in Thai', async () => {
+      const create = jest.fn().mockResolvedValue(okResponse('ข้าวเปล่า'));
+      await serviceWith(create).analyzeCompositionAdjustment({
+        previous: {
+          foodName: 'ข้าวมันไก่',
+          estimatedCalories: 600,
+          proteinG: 30,
+          carbsG: 70,
+          fatG: 20,
+          confidence: 0.8,
+          assumptions: [],
+          estimatedQuantity: 1,
+          quantityUnit: 'plate',
+        },
+        instruction: 'ไม่กินไก่',
+      });
+      expect(systemPrompt(create)).toContain('MUST be in Thai');
+    });
+  });
 });
