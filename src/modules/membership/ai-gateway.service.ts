@@ -24,10 +24,34 @@ export class AiGatewayService {
     operation: AiOperation,
     work: () => Promise<T>,
   ): Promise<T> {
+    return this.execute(userId, operation, work, true);
+  }
+
+  /**
+   * Same as `run` but does NOT consume the user's daily plan quota.
+   * Only for tiny internal routing calls (message type classification) that
+   * the user did not ask for; tokens are still logged for cost tracking.
+   */
+  async runUnmetered<T>(
+    userId: string,
+    operation: AiOperation,
+    work: () => Promise<T>,
+  ): Promise<T> {
+    return this.execute(userId, operation, work, false);
+  }
+
+  private async execute<T>(
+    userId: string,
+    operation: AiOperation,
+    work: () => Promise<T>,
+    metered: boolean,
+  ): Promise<T> {
     if (!userId) {
       throw new Error('userId is required for AI gateway');
     }
-    await this.aiUsage.consumeAiUsage(userId, operation);
+    if (metered) {
+      await this.aiUsage.consumeAiUsage(userId, operation);
+    }
     let captured: AiTokenUsageMeta | undefined;
     try {
       const result = await runWithAiTokenCapture((meta) => {
