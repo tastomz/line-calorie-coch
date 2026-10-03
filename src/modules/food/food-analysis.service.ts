@@ -60,6 +60,14 @@ export function completionLimits(model: string):
     : { temperature: 0, max_tokens: FOOD_ANALYSIS_MAX_TOKENS };
 }
 
+/** The text gave no usable numbers (0 kcal) — never offer that as a meal. */
+export class FoodEstimateEmptyError extends FoodAnalysisError {
+  constructor() {
+    super('estimate was empty');
+    this.name = 'FoodEstimateEmptyError';
+  }
+}
+
 /** Reject absurdly large payloads; never silently truncate image bytes. */
 const MAX_IMAGE_BYTES = 4_000_000;
 
@@ -92,12 +100,16 @@ export class FoodAnalysisService {
       throw new FoodAnalysisValidationError('food text is required');
     }
 
-    return this.requestAnalysis([
+    const analysis = await this.requestAnalysis([
       {
         role: 'user',
         content: `USER CONTENT (untrusted food description):\nFood: ${trimmed}`,
       },
     ]);
+    if (analysis.estimatedCalories <= 0) {
+      throw new FoodEstimateEmptyError();
+    }
+    return analysis;
   }
 
   async analyzeImage(params: {
