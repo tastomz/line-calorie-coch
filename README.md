@@ -100,6 +100,7 @@ Multi-stage, non-root, no secrets in the image. Full steps: [docs/DEPLOYMENT.md]
 Set `OPENAI_API_KEY`. Cost controls: [docs/AI_COST.md](docs/AI_COST.md).
 Quantity adjustments stay local (no OpenAI).
 `FOOD_VISION_DETAIL` (`low` default, `high`/`auto`) sets photo detail: higher reads small pack labels better at a higher per-image cost.
+`FOOD_VISION_MODEL` (default `gpt-4o-mini`) sets the model for photos only; a photo that yields 0 kcal asks the user for a clearer shot instead of showing a 0 kcal meal.
 
 ## Membership / subscription / AI usage
 
