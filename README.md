@@ -83,7 +83,8 @@ Secrets are never logged.
 ```bash
 npx prisma migrate dev       # local SQLite
 npx prisma migrate deploy    # production Postgres (after switching to prisma/postgres artifacts)
-npm run cleanup:retention    # expired pending + old LineEvent rows
+npm run cleanup:retention    # expired pending + old LineEvent rows (dev, ts-node)
+npm run cleanup:retention:prod # same, from compiled dist/ (production image)
 ```
 
 ## Docker (production image)
@@ -101,7 +102,7 @@ Quantity adjustments stay local (no OpenAI).
 
 ## Membership / subscription / AI usage
 
-FREE + PRO (**50 THB/month**). Promo Free PRO codes **10/15/30 days** (`TASTOM-XXXXXX`).
+FREE + PRO (**50 THB/month**). Promo Free PRO codes (`TASTOM-XXXXXX`) with admin-typed days (1–365) and redemption limit (1–1,000).
 
 - Web: `/membership` · API: `/api/membership/*`
 - Local QA: `/dev/*` (`ENABLE_DEV_MEMBERSHIP_TOOLS=true`)
@@ -110,6 +111,12 @@ FREE + PRO (**50 THB/month**). Promo Free PRO codes **10/15/30 days** (`TASTOM-X
 - Docs: [docs/MEMBERSHIP.md](docs/MEMBERSHIP.md)
 
 **PAYMENT LIVE = NOT ACTIVE.**
+
+## Thai food reference table (optional)
+
+Exact-match lookup of common Thai dishes before the AI call. Ships empty (no data in
+the repo); import a licensed CSV with `npm run import:thai-food`. See
+[docs/THAI_FOOD_DB.md](docs/THAI_FOOD_DB.md) for sources, licensing and format.
 
 ## Google Sheets (optional)
 

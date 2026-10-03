@@ -72,6 +72,15 @@ describe('PendingFoodService.confirmPendingAtomic', () => {
         pendings.delete(where.userId);
         return Promise.resolve({ count: 1 });
       }),
+      upsert: jest.fn(
+        ({
+          create,
+          update,
+        }: {
+          create: Record<string, unknown>;
+          update: Record<string, unknown>;
+        }) => Promise.resolve({ create, update }),
+      ),
     },
   };
 
@@ -90,6 +99,63 @@ describe('PendingFoodService.confirmPendingAtomic', () => {
     expect(result.analysis.estimatedCalories).toBe(500);
     expect(pendings.has('user-a')).toBe(false);
     expect(foodLogs).toHaveLength(1);
+  });
+
+  it('saves the FoodLog at the pending eatenAt when set (past-day entry)', async () => {
+    const yesterday = new Date('2026-10-02T08:00:00.000Z');
+    pendings.set('user-a', { ...makePending('user-a'), eatenAt: yesterday });
+
+    const result = await service.confirmPendingAtomic('user-a');
+
+    expect(result.foodLog.eatenAt).toEqual(yesterday);
+  });
+
+  it('saves the FoodLog at now when pending has no eatenAt', async () => {
+    pendings.set('user-a', { ...makePending('user-a'), eatenAt: null });
+    const before = Date.now();
+
+    const result = await service.confirmPendingAtomic('user-a');
+
+    const eatenAt = result.foodLog.eatenAt.getTime();
+    expect(eatenAt).toBeGreaterThanOrEqual(before);
+    expect(eatenAt).toBeLessThanOrEqual(Date.now());
+  });
+
+  it('upsertPending stores eatenAt on create and update, null by default', async () => {
+    const analysis = {
+      foodName: 'ข้าวมันไก่',
+      estimatedCalories: 600,
+      proteinG: 30,
+      carbsG: 70,
+      fatG: 20,
+      confidence: 0.8,
+      assumptions: [],
+      estimatedQuantity: 1,
+      quantityUnit: 'plate' as const,
+    };
+    const past = new Date('2026-10-02T08:00:00.000Z');
+
+    const withDate = (await service.upsertPending(
+      'user-a',
+      analysis,
+      undefined,
+      past,
+    )) as unknown as {
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    };
+    expect(withDate.create.eatenAt).toEqual(past);
+    expect(withDate.update.eatenAt).toEqual(past);
+
+    const withoutDate = (await service.upsertPending(
+      'user-a',
+      analysis,
+    )) as unknown as {
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    };
+    expect(withoutDate.create.eatenAt).toBeNull();
+    expect(withoutDate.update.eatenAt).toBeNull();
   });
 
   it('rejects a second confirm for the same pending (no duplicate FoodLog)', async () => {

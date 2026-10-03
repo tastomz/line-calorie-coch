@@ -14,7 +14,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
-import { isAllowedPromoDays } from '../membership/promo-code.generator';
+import { parsePromoParams } from '../membership/promo-code.generator';
 import { membershipRateLimiter } from '../membership/membership-rate-limiter';
 import { ADMIN_SESSION_COOKIE, AdminAuthService } from './admin-auth.service';
 import { AdminAiUsageService } from './admin-ai-usage.service';
@@ -30,6 +30,19 @@ export class AdminApiController {
     private readonly aiUsage: AdminAiUsageService,
     private readonly config: ConfigService,
   ) {}
+
+  private promoParams(body: {
+    trialDays?: unknown;
+    maxRedemptions?: unknown;
+  }): { trialDays: number; maxRedemptions: number } {
+    try {
+      return parsePromoParams(body);
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'invalid promo parameters',
+      );
+    }
+  }
 
   @Post('login')
   async login(
@@ -112,14 +125,11 @@ export class AdminApiController {
       expiresAt?: string | null;
     },
   ) {
-    const trialDays = body.trialDays ?? 30;
-    if (!isAllowedPromoDays(trialDays)) {
-      throw new BadRequestException('trialDays must be 10, 15, or 30');
-    }
+    const { trialDays, maxRedemptions } = this.promoParams(body);
     try {
       const promo = await this.dashboard.generateFreeProCode({
         trialDays,
-        maxRedemptions: body.maxRedemptions ?? 1,
+        maxRedemptions,
         description: body.description,
         expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
       });
@@ -148,13 +158,10 @@ export class AdminApiController {
       expiresAt?: string | null;
     },
   ) {
-    const trialDays = body.trialDays ?? 30;
-    if (!isAllowedPromoDays(trialDays)) {
-      throw new BadRequestException('trialDays must be 10, 15, or 30');
-    }
+    const { trialDays, maxRedemptions } = this.promoParams(body);
     const promo = await this.dashboard.generateFreeProCode({
       trialDays,
-      maxRedemptions: body.maxRedemptions ?? 1,
+      maxRedemptions,
       description: body.description,
       expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
     });

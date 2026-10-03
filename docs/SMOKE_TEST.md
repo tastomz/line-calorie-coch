@@ -35,6 +35,19 @@ Mark each item only after observing the expected result.
 - [ ] Cancel pending → `ยกเลิกการบันทึกแล้วครับ`, pending cleared
 - [ ] New food while pending → ask replace vs keep (no silent overwrite)
 
+## Edit / past-day / reference table (added 2026-10)
+
+Run on SIT first. Use a user with a completed profile.
+
+- [ ] Edit buttons: `รายการอาหาร` → tap ✏️ แก้ไข → the chat shows "✏️ แก้ไข <ชื่ออาหาร>", **not** a raw `foodedit:…` string; ปริมาณ / ชื่ออาหาร / สารอาหาร / ยกเลิก / ลบ + ยืนยันลบ all work
+- [ ] Log yesterday: `เมื่อวาน ข้าวมันไก่` → card starts with "📅 บันทึกย้อนหลัง: เมื่อวาน" → บันทึก → "✅ บันทึกแล้ว (เมื่อวาน)" and "📊 เมื่อวาน" totals; today's totals unchanged
+- [ ] `เมื่อวาน` → read-only list of yesterday with kcal/protein/carbs/fat vs target; no AI call (check logs)
+- [ ] `ย้อนหลัง` → 7-day card; tap a day → that day's detail (chat shows "📅 <วัน>", not `foodday:N`); tapping วันนี้ opens the editable list
+- [ ] `2 วันก่อน`, `ย้อนหลัง 3` work; `เมื่อวาน น้ำหนัก 84` / `เมื่อวาน นอน 00:30 ตื่น 07:30` are **not** logged as food
+- [ ] Past-day entries appear in Google Sheets under the right date (if Sheets enabled)
+- [ ] Reference table (only after a licensed CSV is imported): a listed dish returns "ค่ามาตรฐาน … · <source>" with **no** OpenAI call in logs; an unlisted dish still goes to AI; `<dish> 1 ชาม` when data is per plate goes to AI
+- [ ] Migrations `pending_eaten_at` and `thai_food_reference` applied (deploy log shows `prisma migrate deploy` success; `/health/ready` 200)
+
 ## Sign-off
 
 | Environment | Tester | Date | Pass? |

@@ -50,6 +50,7 @@ export class PendingFoodService {
     userId: string,
     analysis: FoodAnalysisResult,
     imageUrl?: string,
+    eatenAt?: Date,
   ) {
     const expiresAt = new Date(Date.now() + PENDING_TTL_MS);
     const assumptions = JSON.stringify(analysis.assumptions);
@@ -73,6 +74,7 @@ export class PendingFoodService {
         originalProteinG: analysis.proteinG,
         originalCarbsG: analysis.carbsG,
         originalFatG: analysis.fatG,
+        eatenAt: eatenAt ?? null,
         expiresAt,
       },
       update: {
@@ -91,6 +93,7 @@ export class PendingFoodService {
         originalProteinG: analysis.proteinG,
         originalCarbsG: analysis.carbsG,
         originalFatG: analysis.fatG,
+        eatenAt: eatenAt ?? null,
         expiresAt,
         createdAt: new Date(),
       },
@@ -278,7 +281,7 @@ export class PendingFoodService {
       const foodLog = await tx.foodLog.create({
         data: {
           userId,
-          eatenAt: new Date(),
+          eatenAt: pending.eatenAt ?? new Date(),
           foodName: analysis.foodName,
           calories: analysis.estimatedCalories,
           proteinG: analysis.proteinG,

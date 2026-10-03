@@ -3,6 +3,7 @@ import { FoodAnalysisResult } from './food-analysis.types';
 import { DailySummary } from './daily-totals.service';
 import { quantityUnitLabelTh } from './quantity-adjustment';
 import { buildDailyMacroReport } from './nutrition-display';
+import { describeDayTh, localDaysAgo } from './day-bounds';
 
 export const FOOD_CONFIRM_CHOICES = [
   { label: '✓ บันทึก', text: 'บันทึก' },
@@ -62,7 +63,10 @@ export const LOG_FOOD_HINT_TEXT = `🍽️ บันทึกอาหาร
 ตัวอย่าง:
 • ข้าวมันไก่ 1 จาน
 • ไข่ต้ม 2 ฟอง
-• กินไปครึ่งจาน`;
+• กินไปครึ่งจาน
+
+ลืมบันทึก? พิมพ์ "เมื่อวาน ข้าวมันไก่" เพื่อบันทึกย้อนหลัง
+ดูย้อนหลังรายวัน: พิมพ์ "ย้อนหลัง"`;
 
 export const COACH_ENTRY_TEXT = `🧠 Kcal Coach
 
@@ -125,10 +129,12 @@ export function formatMacro(value: number): string {
 /** Concise estimate card for LINE. */
 export function buildFoodEstimateMessage(
   analysis: FoodAnalysisResult,
-  pending?: Pick<
-    PendingFoodAnalysis,
-    'originalQuantity' | 'consumedQuantity' | 'quantityUnit'
-  > | null,
+  pending?:
+    | (Pick<
+        PendingFoodAnalysis,
+        'originalQuantity' | 'consumedQuantity' | 'quantityUnit'
+      > & { eatenAt?: Date | null })
+    | null,
 ): string {
   const confidencePct = Math.round(analysis.confidence * 100);
   const unit = quantityUnitLabelTh(
@@ -151,7 +157,12 @@ export function buildFoodEstimateMessage(
       ? `\n\n💬 สมมติฐาน: ${analysis.assumptions.slice(0, 2).join(' · ')}`
       : '';
 
-  return `🍽️ ประเมินมื้อนี้
+  const pastDay =
+    pending?.eatenAt && localDaysAgo(pending.eatenAt) > 0
+      ? `📅 บันทึกย้อนหลัง: ${describeDayTh(pending.eatenAt)}\n\n`
+      : '';
+
+  return `${pastDay}🍽️ ประเมินมื้อนี้
 
 ${analysis.foodName}
 🔥 ประมาณ ${formatNumber(analysis.estimatedCalories)} kcal
@@ -188,9 +199,10 @@ export function buildQuantityAdjustedMessage(
 export function buildFoodSavedMessage(
   analysis: FoodAnalysisResult,
   summary: DailySummary,
+  dayLabel = 'วันนี้',
 ): string {
   const coach = toCoachSummaryFromDaily(summary);
-  const mealBlock = `✅ บันทึกแล้ว
+  const mealBlock = `✅ บันทึกแล้ว${dayLabel === 'วันนี้' ? '' : ` (${dayLabel})`}
 
 🍽️ ${analysis.foodName}
 🔥 ${formatNumber(analysis.estimatedCalories)} kcal
@@ -202,7 +214,7 @@ export function buildFoodSavedMessage(
 
   return `${mealBlock}
 
-📊 วันนี้
+📊 ${dayLabel}
 ${buildDailyMacroReport(coach)}`;
 }
 
