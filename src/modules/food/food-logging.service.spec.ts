@@ -1617,6 +1617,37 @@ describe('FoodLoggingService', () => {
     );
   });
 
+  it('logs ยากิโซบะ หมู as food instead of the medical-advice reply', async () => {
+    foodAnalysisService.analyzeText.mockResolvedValue({
+      foodName: 'ยากิโซบะหมู',
+      estimatedCalories: 520,
+      proteinG: 22,
+      carbsG: 70,
+      fatG: 18,
+      confidence: 0.7,
+      assumptions: [],
+      estimatedQuantity: 1,
+      quantityUnit: 'plate',
+    });
+    pendingFoodService.upsertPending.mockResolvedValue({
+      originalQuantity: 1,
+      consumedQuantity: 1,
+      quantityUnit: 'plate',
+    });
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'มื้อเช้า ยากิโซบะ หมู',
+    );
+
+    expect(foodAnalysisService.analyzeText).toHaveBeenCalledTimes(1);
+    expect(lineService.replyText).not.toHaveBeenCalledWith(
+      'token',
+      expect.stringContaining('ปรึกษา'),
+    );
+  });
+
   it('rate-limits expensive food analysis with a friendly message', async () => {
     messageClassifyService.classify.mockResolvedValue({
       type: 'food',
