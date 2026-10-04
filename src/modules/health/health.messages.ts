@@ -89,6 +89,30 @@ ${params.durationMinutes} นาที${extra.length > 0 ? `\n${extra.join('\n')
 บันทึกแล้ว${source}`;
 }
 
+export function buildSleepDurationSavedMessage(
+  durationMinutes: number,
+): string {
+  const h = Math.floor(durationMinutes / 60);
+  const m = durationMinutes % 60;
+  const dur = m === 0 ? `${h} ชม.` : `${h} ชม. ${m} นาที`;
+  return `😴 การนอน
+
+${dur}
+
+บันทึกแล้ว (ไม่ได้ระบุเวลาเข้านอน/ตื่น ถ้าต้องการเวลา พิมพ์ "นอน 00:30 ตื่น 07:30")`;
+}
+
+export function buildHydrationAddedMessage(params: {
+  label: string;
+  addedMl: number;
+  totalMl: number;
+  targetMl: number;
+}): string {
+  return `💧 บันทึกน้ำ +${params.addedMl} ml (${params.label})
+
+รวมวันนี้ ${(params.totalMl / 1000).toFixed(1)} / ${(params.targetMl / 1000).toFixed(1)} L`;
+}
+
 export function buildStepsMessage(steps: number): string {
   return `👣 วันนี้
 

@@ -25,6 +25,8 @@ import {
   isMealSuggestionRequest,
   parseExerciseCommand,
   parseHydrationCommand,
+  parseHydrationSentence,
+  parseSleepDurationCommand,
   parseRecoveryCommand,
   parseSleepCommand,
   parseStepsCommand,
@@ -42,7 +44,9 @@ import {
   buildBodyProgressMessage,
   buildBodyScanPreviewMessage,
   buildExerciseSavedMessage,
+  buildHydrationAddedMessage,
   buildHydrationMessage,
+  buildSleepDurationSavedMessage,
   buildMealPlanMessage,
   buildRecoverySavedMessage,
   buildSleepSavedMessage,
@@ -170,6 +174,36 @@ export class HealthRoutingService {
     const sleepParsed = parseSleepCommand(normalized);
     if (sleepParsed) {
       await this.saveSleep(user.id, replyToken, sleepParsed);
+      return true;
+    }
+
+    const sleepDuration = parseSleepDurationCommand(normalized);
+    if (sleepDuration) {
+      await this.saveSleepDuration(
+        user.id,
+        replyToken,
+        sleepDuration.durationMinutes,
+      );
+      return true;
+    }
+
+    const waterSentence = parseHydrationSentence(normalized);
+    if (waterSentence) {
+      try {
+        await this.hydration.add(user.id, waterSentence.amountMl);
+        const total = await this.hydration.todayTotalMl(user.id);
+        await this.lineService.replyText(
+          replyToken,
+          buildHydrationAddedMessage({
+            label: waterSentence.label,
+            addedMl: waterSentence.amountMl,
+            totalMl: total,
+            targetMl: this.hydration.defaultTargetMl,
+          }),
+        );
+      } catch {
+        await this.lineService.replyText(replyToken, 'บันทึกน้ำไม่สำเร็จครับ');
+      }
       return true;
     }
 
@@ -322,6 +356,28 @@ export class HealthRoutingService {
         replyToken,
         buildBodyProgressMessage(deltas),
       );
+    }
+  }
+
+  /** Duration-only sleep ("นอนไป 6.30 ชั่วโมง"): wake = now, bedtime = now − duration. */
+  private async saveSleepDuration(
+    userId: string,
+    replyToken: string,
+    durationMinutes: number,
+  ) {
+    try {
+      const wakeTime = new Date();
+      const bedtime = new Date(wakeTime.getTime() - durationMinutes * 60_000);
+      const log = await this.sleep.create({ userId, bedtime, wakeTime });
+      await this.lineService.replyText(
+        replyToken,
+        buildSleepDurationSavedMessage(log.durationMinutes),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Sleep duration save failed: ${error instanceof Error ? error.message : 'unknown'}`,
+      );
+      await this.lineService.replyText(replyToken, 'บันทึกการนอนไม่สำเร็จครับ');
     }
   }
 

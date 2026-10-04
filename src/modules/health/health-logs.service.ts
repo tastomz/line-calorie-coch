@@ -90,6 +90,21 @@ export class ExerciseLogService {
     });
   }
 
+  async todayEntries(userId: string) {
+    const { start, end } = dayBounds();
+    return this.prisma.exerciseLog.findMany({
+      where: { userId, performedAt: { gte: start, lt: end } },
+      orderBy: { performedAt: 'asc' },
+      select: {
+        type: true,
+        workoutName: true,
+        durationMinutes: true,
+        caloriesBurned: true,
+        heartRate: true,
+      },
+    });
+  }
+
   async todayTotalMinutes(userId: string): Promise<number> {
     const { start, end } = dayBounds();
     const rows = await this.prisma.exerciseLog.findMany({

@@ -3,6 +3,8 @@ import { BodyScanService } from './body-scan.service';
 import {
   isExactHealthCommand,
   isHealthCoachQuestion,
+  parseHydrationSentence,
+  parseSleepDurationCommand,
   parseExerciseCommand,
   parseHydrationCommand,
   parseRecoveryCommand,
@@ -103,6 +105,57 @@ describe('buildExerciseSavedMessage', () => {
     });
     expect(text).not.toContain('เผาผลาญ');
     expect(text).not.toContain('อ่านจากภาพ');
+  });
+});
+
+describe('parseSleepDurationCommand', () => {
+  it.each([
+    ['นอนไป 6.30 ชั่วโมง', 390],
+    ['นอน 6.5 ชั่วโมง', 390],
+    ['เมื่อคืนนอน 7 ชม.', 420],
+    ['นอน 6 ชั่วโมง 30 นาที', 390],
+    ['นอนหลับมา 8ชม', 480],
+  ])('reads %s as %d minutes', (text, minutes) => {
+    expect(parseSleepDurationCommand(text)?.durationMinutes).toBe(minutes);
+  });
+
+  it.each([
+    'ควรนอนกี่ชั่วโมง',
+    'นอน 7 ชั่วโมงพอไหม',
+    'นอน 00:30 ตื่น 07:30',
+    'นอน 6.75 ชั่วโมง',
+    'นอน 30 ชั่วโมง',
+    'นอน 20 นาที',
+  ])('does not log %s as a duration', (text) => {
+    expect(parseSleepDurationCommand(text)).toBeNull();
+  });
+});
+
+describe('parseHydrationSentence', () => {
+  it.each([
+    ['ดื่มน้ำไป2แก้ว', 500],
+    ['ดื่มน้ำ 1 ขวด', 500],
+    ['น้ำ 1.5 ลิตร', 1500],
+    ['น้ำเปล่า 500 มล.', 500],
+    ['ดื่มน้ำไป 300 ml', 300],
+  ])('reads %s as %d ml', (text, ml) => {
+    expect(parseHydrationSentence(text)?.amountMl).toBe(ml);
+  });
+
+  it('tells the user which glass size was assumed', () => {
+    expect(parseHydrationSentence('ดื่มน้ำไป2แก้ว')?.label).toContain(
+      'แก้วละ 250 ml',
+    );
+  });
+
+  it.each([
+    'ควรดื่มน้ำกี่แก้ว',
+    'ดื่มน้ำ 2 แก้วพอไหม',
+    'น้ำ 250',
+    'น้ำ 50 ลิตร',
+    'ดื่มน้ำ',
+  ])('does not log %s', (text) => {
+    expect(parseHydrationSentence(text)).toBeNull();
   });
 });
 

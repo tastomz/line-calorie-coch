@@ -656,6 +656,7 @@ export class FoodLoggingService {
     user: User,
     replyToken: string,
     question: string,
+    overview = false,
   ): Promise<void> {
     let nutrition = null;
     try {
@@ -673,14 +674,22 @@ export class FoodLoggingService {
       todayWeightKg,
     });
     const deterministic = this.healthInsights.buildInsights(snap);
+    // Rich-menu overview: the fallback is the rule-based next-actions list.
+    const fallbackText = overview
+      ? buildCoachNextActionsText(snap)
+      : deterministic.length > 0
+        ? `💡 จากข้อมูลที่มี\n\n${deterministic.map((d) => `• ${d}`).join('\n')}`
+        : 'ข้อมูลยังไม่พอสำหรับวิเคราะห์ครับ';
+    const foods = overview
+      ? (await this.foodLogService.listForUserOnDate(user.id)).map((log) => ({
+          name: log.foodName,
+          kcal: Math.round(log.calories),
+          proteinG: Math.round(log.proteinG),
+        }))
+      : undefined;
     const apiKey = (process.env.OPENAI_API_KEY ?? '').trim();
     if (!apiKey) {
-      await this.lineService.replyText(
-        replyToken,
-        deterministic.length > 0
-          ? `💡 จากข้อมูลที่มี\n\n${deterministic.map((d) => `• ${d}`).join('\n')}`
-          : 'ข้อมูลยังไม่พอสำหรับวิเคราะห์ครับ',
-      );
+      await this.lineService.replyText(replyToken, fallbackText);
       return;
     }
     try {
@@ -689,7 +698,7 @@ export class FoodLoggingService {
         const completion = await openai.chat.completions.create({
           model: 'gpt-4o-mini',
           temperature: 0.4,
-          max_tokens: 280,
+          max_tokens: overview ? 420 : 280,
           messages: [
             {
               role: 'system',
@@ -711,6 +720,17 @@ export class FoodLoggingService {
                   steps: snap.steps,
                   waterMl: snap.waterMl,
                   recoveryScore: snap.recoveryScore,
+                  ...(overview
+                    ? {
+                        caloriesRemaining:
+                          snap.nutrition?.remaining.calories ?? null,
+                        proteinRemainingG:
+                          snap.nutrition?.remaining.proteinG ?? null,
+                        waterTargetMl: snap.waterTargetMl,
+                        foodsToday: foods,
+                        exerciseToday: snap.exerciseSessions ?? [],
+                      }
+                    : {}),
                 },
                 insights: deterministic,
               }),
@@ -730,15 +750,19 @@ export class FoodLoggingService {
       if (error instanceof AiQuotaExceededError) {
         await this.lineService.replyText(
           replyToken,
-          buildQuotaExceededMessage(error),
+          overview
+            ? `${fallbackText}\n\n(โควตาวิเคราะห์ด้วย AI ของวันนี้ครบแล้ว)`
+            : buildQuotaExceededMessage(error),
         );
         return;
       }
       await this.lineService.replyText(
         replyToken,
-        deterministic.length > 0
-          ? `💡 จากข้อมูลที่มี\n\n${deterministic.map((d) => `• ${d}`).join('\n')}`
-          : 'ตอบคำถามสุขภาพไม่สำเร็จครับ',
+        overview
+          ? fallbackText
+          : deterministic.length > 0
+            ? `💡 จากข้อมูลที่มี\n\n${deterministic.map((d) => `• ${d}`).join('\n')}`
+            : 'ตอบคำถามสุขภาพไม่สำเร็จครับ',
       );
     }
   }
@@ -864,22 +888,18 @@ export class FoodLoggingService {
     }
   }
 
-  /** Rich Menu โค้ช: deterministic next actions; falls back to the prompt. */
+  /**
+   * Rich Menu โค้ช: today's foods, calories, exercise, water and sleep go to
+   * the AI coach for analysis + next steps (COACH quota). Without AI (no key,
+   * quota used up, error) it falls back to the rule-based next-actions list.
+   */
   private async replyCoachEntry(user: User, replyToken: string): Promise<void> {
     try {
-      const summary = await this.dailySummaryService.getDailySummary(user.id);
-      const todayWeightKg = await this.weightLogService.getTodayAverageKg(
-        user.id,
-      );
-      const snap = await this.healthDashboard.buildToday({
-        userId: user.id,
-        userCreatedAt: user.createdAt,
-        nutrition: summary,
-        todayWeightKg,
-      });
-      await this.lineService.replyText(
+      await this.replyCrossHealthCoach(
+        user,
         replyToken,
-        buildCoachNextActionsText(snap),
+        'วิเคราะห์ข้อมูลวันนี้ทั้งหมดและแนะนำสิ่งที่ควรทำต่อ',
+        true,
       );
     } catch (error) {
       if (!(error instanceof NutritionProfileMissingError)) {

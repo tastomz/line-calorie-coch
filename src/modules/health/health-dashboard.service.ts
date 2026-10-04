@@ -18,6 +18,14 @@ export type DailyHealthSnapshot = {
   weightKg: number | null;
   sleepMinutes: number | null;
   exerciseMinutes: number;
+  /** Today's individual workouts (optional detail for the AI coach). */
+  exerciseSessions?: Array<{
+    type: string;
+    workoutName: string | null;
+    durationMinutes: number;
+    caloriesBurned: number | null;
+    heartRate: number | null;
+  }>;
   steps: number | null;
   waterMl: number;
   waterTargetMl: number;
@@ -43,14 +51,21 @@ export class HealthDashboardService {
     todayWeightKg: number | null;
   }): Promise<DailyHealthSnapshot> {
     const program = getProgramWeekDay(params.userCreatedAt);
-    const [latestSleep, exerciseMinutes, activity, waterMl, recovery] =
-      await Promise.all([
-        this.sleep.latest(params.userId),
-        this.exercise.todayTotalMinutes(params.userId),
-        this.activity.getToday(params.userId),
-        this.hydration.todayTotalMl(params.userId),
-        this.recovery.getToday(params.userId),
-      ]);
+    const [
+      latestSleep,
+      exerciseMinutes,
+      exerciseSessions,
+      activity,
+      waterMl,
+      recovery,
+    ] = await Promise.all([
+      this.sleep.latest(params.userId),
+      this.exercise.todayTotalMinutes(params.userId),
+      this.exercise.todayEntries(params.userId),
+      this.activity.getToday(params.userId),
+      this.hydration.todayTotalMl(params.userId),
+      this.recovery.getToday(params.userId),
+    ]);
 
     const tip = params.nutrition
       ? buildNextMealTip(params.nutrition)
@@ -62,6 +77,7 @@ export class HealthDashboardService {
       weightKg: params.todayWeightKg,
       sleepMinutes: latestSleep?.durationMinutes ?? null,
       exerciseMinutes,
+      exerciseSessions,
       steps: activity?.steps ?? null,
       waterMl,
       waterTargetMl: this.hydration.defaultTargetMl,

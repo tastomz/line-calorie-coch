@@ -4,14 +4,14 @@ The Rich Menu is configured in **LINE Official Account Manager** (Chat → Rich 
 not in this repo. Set every tile to a **Text** action; the bot recognises these
 exact messages (`FOOD_COMMANDS` in `src/modules/food/food-logging.service.ts`).
 
-| Tile | Message to send | Bot reply (no AI call) |
+| Tile | Message to send | Bot reply |
 | --- | --- | --- |
 | ดูภาพรวมวันนี้ | `วันนี้` (also `ดูภาพรวมวันนี้`, `ภาพรวม`) | Today's overview card: calories, macros, weight, sleep, exercise, steps, water |
 | อาหาร | `อาหาร` | Today's logged foods with ✏️ edit / delete buttons; if nothing is logged yet, how to log a meal |
-| โค้ช | `โค้ช` | "สิ่งที่ควรทำต่อวันนี้": up to 4 next actions from recorded data (food left to reach targets, exercise, steps, water, sleep), then example questions to ask |
+| โค้ช | `โค้ช` | AI analysis of today's data (foods eaten, calories vs target, exercise, water, sleep) with 3 concrete next steps; uses the COACH daily quota. Falls back to the rule-based "สิ่งที่ควรทำต่อวันนี้" list (no AI) when there is no OpenAI key, the quota is used up, or the call fails |
 | โปรไฟล์ | `โปรไฟล์` (targets in chat) or a URI action to the membership page `/profile` | Targets text, or the LIFF membership page |
 
-The next-actions list is deterministic (`src/modules/food/coach-next-actions.ts`):
+The fallback list is deterministic (`src/modules/food/coach-next-actions.ts`):
 it only uses values that were actually recorded and asks the user to log missing
 data (e.g. sleep) instead of guessing.
 
