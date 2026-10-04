@@ -140,6 +140,103 @@ export function parseExerciseCommand(text: string): {
   return { type, durationMinutes, name };
 }
 
+const SLEEP_QUESTION = /ไหม|มั้ย|หรือเปล่า|ควร|กี่|เท่าไร|เท่าไหร่|\?/;
+
+/**
+ * "นอนไป 6.30 ชั่วโมง" | "เมื่อคืนนอน 7 ชม." | "นอน 6 ชั่วโมง 30 นาที".
+ * "6.30" is read Thai-clock style (6 h 30 min) when the fraction has two
+ * digits ≤ 59; "6.5" is 6.5 hours. The reply always echoes the result.
+ */
+export function parseSleepDurationCommand(
+  text: string,
+): { durationMinutes: number } | null {
+  const t = text.trim();
+  if (SLEEP_QUESTION.test(t)) return null;
+  const m = t.match(
+    /^(?:เมื่อคืน|คืนนี้|เมื่อวาน)?\s*(?:ผม|ฉัน)?\s*นอน(?:หลับ)?(?:ไป|มา|ได้)?\s*(\d{1,2})(?:[.:](\d{1,2}))?\s*(?:ชั่วโมง|ชม\.?|ชม|hr|hrs|h)(?:\s*(\d{1,2})\s*(?:นาที|min|mins|m))?$/i,
+  );
+  if (!m) return null;
+  const hours = Number(m[1]);
+  let minutes = m[3] ? Number(m[3]) : 0;
+  if (m[2] !== undefined) {
+    const fraction = m[2];
+    if (m[3]) return null;
+    if (fraction.length === 2) {
+      const mm = Number(fraction);
+      if (mm > 59) return null;
+      minutes = mm;
+    } else {
+      minutes = Math.round(Number(`0.${fraction}`) * 60);
+    }
+  }
+  if (minutes > 59) return null;
+  const durationMinutes = hours * 60 + minutes;
+  return durationMinutes >= 60 && durationMinutes <= 16 * 60
+    ? { durationMinutes }
+    : null;
+}
+
+/**
+ * "งีบ30นาที" | "งีบไป 1 ชั่วโมง" | "งีบหลับมา 20 นาที". Needs a unit; questions
+ * are never logged. 5 min – 4 h.
+ */
+export function parseNapCommand(
+  text: string,
+): { durationMinutes: number } | null {
+  const t = text.trim();
+  if (SLEEP_QUESTION.test(t)) return null;
+  const m = t.match(
+    /^(?:ผม|ฉัน)?\s*(?:เพิ่ง)?งีบ(?:หลับ)?(?:ไป|มา|ได้)?\s*(\d+(?:\.\d+)?)\s*(นาที|min|mins|m|ชั่วโมง|ชม\.?|ชม|hr|hrs|h)$/i,
+  );
+  if (!m) return null;
+  const amount = Number(m[1]);
+  const isHours = /^(ชั่วโมง|ชม|hr|hrs|h)/i.test(m[2]);
+  const durationMinutes = Math.round(isHours ? amount * 60 : amount);
+  return Number.isFinite(durationMinutes) &&
+    durationMinutes >= 5 &&
+    durationMinutes <= 240
+    ? { durationMinutes }
+    : null;
+}
+
+const WATER_UNIT_ML: Readonly<Record<string, number>> = {
+  แก้ว: 250,
+  ขวด: 500,
+  ลิตร: 1000,
+  ล: 1000,
+  l: 1000,
+  มล: 1,
+  ml: 1,
+};
+
+/**
+ * "ดื่มน้ำไป2แก้ว" | "น้ำ 1 ขวด" | "ดื่มน้ำ 1.5 ลิตร" | "น้ำ 500 มล."
+ * แก้ว = 250 ml, ขวด = 500 ml (stated in the reply). Needs a unit.
+ */
+export function parseHydrationSentence(
+  text: string,
+): { amountMl: number; label: string } | null {
+  const t = text.trim();
+  if (SLEEP_QUESTION.test(t)) return null;
+  const m = t.match(
+    /^(?:ผม|ฉัน)?\s*(?:ดื่ม|กิน)?น้ำ(?:เปล่า)?(?:ไป|แล้ว)?\s*(\d+(?:\.\d+)?)\s*(แก้ว|ขวด|ลิตร|ล\.?|l|มล\.?|ml)$/i,
+  );
+  if (!m) return null;
+  const amount = Number(m[1]);
+  const unit = m[2].toLowerCase().replace(/\.$/, '');
+  const perUnit = WATER_UNIT_ML[unit];
+  if (!perUnit || !Number.isFinite(amount) || amount <= 0) return null;
+  const amountMl = Math.round(amount * perUnit);
+  if (amountMl < 50 || amountMl > 5000) return null;
+  const label =
+    unit === 'แก้ว'
+      ? `${amount} แก้ว นับแก้วละ 250 ml`
+      : unit === 'ขวด'
+        ? `${amount} ขวด นับขวดละ 500 ml`
+        : `${amount} ${m[2]}`;
+  return { amountMl, label };
+}
+
 /** ก้าว 8420 | steps 8420 */
 export function parseStepsCommand(text: string): number | null {
   const m = text.trim().match(/^(?:ก้าว|steps|activity)\s+(\d{1,6})$/i);

@@ -25,6 +25,9 @@ import {
   isMealSuggestionRequest,
   parseExerciseCommand,
   parseHydrationCommand,
+  parseHydrationSentence,
+  parseNapCommand,
+  parseSleepDurationCommand,
   parseRecoveryCommand,
   parseSleepCommand,
   parseStepsCommand,
@@ -42,7 +45,10 @@ import {
   buildBodyProgressMessage,
   buildBodyScanPreviewMessage,
   buildExerciseSavedMessage,
+  buildHydrationAddedMessage,
   buildHydrationMessage,
+  buildNapSavedMessage,
+  buildSleepDurationSavedMessage,
   buildMealPlanMessage,
   buildRecoverySavedMessage,
   buildSleepSavedMessage,
@@ -170,6 +176,42 @@ export class HealthRoutingService {
     const sleepParsed = parseSleepCommand(normalized);
     if (sleepParsed) {
       await this.saveSleep(user.id, replyToken, sleepParsed);
+      return true;
+    }
+
+    const nap = parseNapCommand(normalized);
+    if (nap) {
+      await this.saveNap(user.id, replyToken, nap.durationMinutes);
+      return true;
+    }
+
+    const sleepDuration = parseSleepDurationCommand(normalized);
+    if (sleepDuration) {
+      await this.saveSleepDuration(
+        user.id,
+        replyToken,
+        sleepDuration.durationMinutes,
+      );
+      return true;
+    }
+
+    const waterSentence = parseHydrationSentence(normalized);
+    if (waterSentence) {
+      try {
+        await this.hydration.add(user.id, waterSentence.amountMl);
+        const total = await this.hydration.todayTotalMl(user.id);
+        await this.lineService.replyText(
+          replyToken,
+          buildHydrationAddedMessage({
+            label: waterSentence.label,
+            addedMl: waterSentence.amountMl,
+            totalMl: total,
+            targetMl: this.hydration.defaultTargetMl,
+          }),
+        );
+      } catch {
+        await this.lineService.replyText(replyToken, 'บันทึกน้ำไม่สำเร็จครับ');
+      }
       return true;
     }
 
@@ -322,6 +364,51 @@ export class HealthRoutingService {
         replyToken,
         buildBodyProgressMessage(deltas),
       );
+    }
+  }
+
+  /** Nap: wake = now, bedtime = now − duration; flagged so it is not "last night". */
+  private async saveNap(
+    userId: string,
+    replyToken: string,
+    durationMinutes: number,
+  ) {
+    try {
+      const wakeTime = new Date();
+      const bedtime = new Date(wakeTime.getTime() - durationMinutes * 60_000);
+      await this.sleep.create({ userId, bedtime, wakeTime, isNap: true });
+      const total = await this.sleep.todayNapMinutes(userId);
+      await this.lineService.replyText(
+        replyToken,
+        buildNapSavedMessage(durationMinutes, total),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Nap save failed: ${error instanceof Error ? error.message : 'unknown'}`,
+      );
+      await this.lineService.replyText(replyToken, 'บันทึกการงีบไม่สำเร็จครับ');
+    }
+  }
+
+  /** Duration-only sleep ("นอนไป 6.30 ชั่วโมง"): wake = now, bedtime = now − duration. */
+  private async saveSleepDuration(
+    userId: string,
+    replyToken: string,
+    durationMinutes: number,
+  ) {
+    try {
+      const wakeTime = new Date();
+      const bedtime = new Date(wakeTime.getTime() - durationMinutes * 60_000);
+      const log = await this.sleep.create({ userId, bedtime, wakeTime });
+      await this.lineService.replyText(
+        replyToken,
+        buildSleepDurationSavedMessage(log.durationMinutes),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Sleep duration save failed: ${error instanceof Error ? error.message : 'unknown'}`,
+      );
+      await this.lineService.replyText(replyToken, 'บันทึกการนอนไม่สำเร็จครับ');
     }
   }
 

@@ -3,13 +3,21 @@ import { BodyScanService } from './body-scan.service';
 import {
   isExactHealthCommand,
   isHealthCoachQuestion,
+  parseHydrationSentence,
+  parseNapCommand,
+  parseSleepDurationCommand,
   parseExerciseCommand,
   parseHydrationCommand,
   parseRecoveryCommand,
   parseSleepCommand,
   parseStepsCommand,
 } from './health-commands';
-import { buildExerciseSavedMessage } from './health.messages';
+import {
+  buildExerciseSavedMessage,
+  buildNapSavedMessage,
+} from './health.messages';
+import { NAP_NOTE, SleepLogService } from './health-logs.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import { MEAL_ALLOCATION, MealPlanService } from './meal-plan.service';
 import { getProgramWeekDay } from './program-week';
 import { HealthInsightService } from './health-dashboard.service';
@@ -103,6 +111,108 @@ describe('buildExerciseSavedMessage', () => {
     });
     expect(text).not.toContain('เผาผลาญ');
     expect(text).not.toContain('อ่านจากภาพ');
+  });
+});
+
+describe('parseSleepDurationCommand', () => {
+  it.each([
+    ['นอนไป 6.30 ชั่วโมง', 390],
+    ['นอน 6.5 ชั่วโมง', 390],
+    ['เมื่อคืนนอน 7 ชม.', 420],
+    ['นอน 6 ชั่วโมง 30 นาที', 390],
+    ['นอนหลับมา 8ชม', 480],
+  ])('reads %s as %d minutes', (text, minutes) => {
+    expect(parseSleepDurationCommand(text)?.durationMinutes).toBe(minutes);
+  });
+
+  it.each([
+    'ควรนอนกี่ชั่วโมง',
+    'นอน 7 ชั่วโมงพอไหม',
+    'นอน 00:30 ตื่น 07:30',
+    'นอน 6.75 ชั่วโมง',
+    'นอน 30 ชั่วโมง',
+    'นอน 20 นาที',
+  ])('does not log %s as a duration', (text) => {
+    expect(parseSleepDurationCommand(text)).toBeNull();
+  });
+});
+
+describe('nap logging', () => {
+  it.each([
+    ['งีบ30นาที', 30],
+    ['งีบไป 1 ชั่วโมง', 60],
+    ['งีบหลับมา 20 นาที', 20],
+    ['งีบ 1.5 ชม.', 90],
+  ])('reads %s as %d minutes', (text, minutes) => {
+    expect(parseNapCommand(text)?.durationMinutes).toBe(minutes);
+  });
+
+  it.each([
+    'งีบ',
+    'งีบกี่นาทีดี',
+    'ควรงีบ 20 นาทีไหม',
+    'งีบ 2 นาที',
+    'งีบ 9 ชั่วโมง',
+    'นอน 7 ชั่วโมง',
+  ])('does not log %s as a nap', (text) => {
+    expect(parseNapCommand(text)).toBeNull();
+  });
+
+  it('shows the nap total only when there was an earlier nap today', () => {
+    expect(buildNapSavedMessage(30, 30)).not.toContain('งีบรวม');
+    expect(buildNapSavedMessage(30, 50)).toContain('งีบรวมวันนี้ 50 นาที');
+  });
+
+  it('stores a nap flagged and keeps it out of "last night"', async () => {
+    const create = jest.fn().mockResolvedValue({});
+    const findFirst = jest.fn().mockResolvedValue(null);
+    const service = new SleepLogService({
+      sleepLog: { create, findFirst },
+    } as unknown as PrismaService);
+
+    const wake = new Date('2026-10-04T06:00:00.000Z');
+    await service.create({
+      userId: 'u1',
+      bedtime: new Date(wake.getTime() - 30 * 60_000),
+      wakeTime: wake,
+      isNap: true,
+    });
+    const data = (create.mock.calls[0] as [{ data: { notes: string } }])[0]
+      .data;
+    expect(data.notes).toBe(NAP_NOTE);
+
+    await service.latest('u1');
+    const where = (findFirst.mock.calls[0] as [{ where: object }])[0].where;
+    expect(JSON.stringify(where)).toContain('"OR"');
+    expect(JSON.stringify(where)).toContain('nap');
+  });
+});
+
+describe('parseHydrationSentence', () => {
+  it.each([
+    ['ดื่มน้ำไป2แก้ว', 500],
+    ['ดื่มน้ำ 1 ขวด', 500],
+    ['น้ำ 1.5 ลิตร', 1500],
+    ['น้ำเปล่า 500 มล.', 500],
+    ['ดื่มน้ำไป 300 ml', 300],
+  ])('reads %s as %d ml', (text, ml) => {
+    expect(parseHydrationSentence(text)?.amountMl).toBe(ml);
+  });
+
+  it('tells the user which glass size was assumed', () => {
+    expect(parseHydrationSentence('ดื่มน้ำไป2แก้ว')?.label).toContain(
+      'แก้วละ 250 ml',
+    );
+  });
+
+  it.each([
+    'ควรดื่มน้ำกี่แก้ว',
+    'ดื่มน้ำ 2 แก้วพอไหม',
+    'น้ำ 250',
+    'น้ำ 50 ลิตร',
+    'ดื่มน้ำ',
+  ])('does not log %s', (text) => {
+    expect(parseHydrationSentence(text)).toBeNull();
   });
 });
 
