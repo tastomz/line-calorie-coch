@@ -17,6 +17,8 @@ export type DailyHealthSnapshot = {
   nutrition: DailyCoachSummary | null;
   weightKg: number | null;
   sleepMinutes: number | null;
+  /** Minutes napped today (separate from last night's sleep). */
+  napMinutes?: number;
   exerciseMinutes: number;
   /** Today's individual workouts (optional detail for the AI coach). */
   exerciseSessions?: Array<{
@@ -53,6 +55,7 @@ export class HealthDashboardService {
     const program = getProgramWeekDay(params.userCreatedAt);
     const [
       latestSleep,
+      napMinutes,
       exerciseMinutes,
       exerciseSessions,
       activity,
@@ -60,6 +63,7 @@ export class HealthDashboardService {
       recovery,
     ] = await Promise.all([
       this.sleep.latest(params.userId),
+      this.sleep.todayNapMinutes(params.userId),
       this.exercise.todayTotalMinutes(params.userId),
       this.exercise.todayEntries(params.userId),
       this.activity.getToday(params.userId),
@@ -76,6 +80,7 @@ export class HealthDashboardService {
       nutrition: params.nutrition,
       weightKg: params.todayWeightKg,
       sleepMinutes: latestSleep?.durationMinutes ?? null,
+      napMinutes,
       exerciseMinutes,
       exerciseSessions,
       steps: activity?.steps ?? null,
@@ -107,8 +112,11 @@ export class HealthDashboardService {
     if (snap.weightKg != null) {
       lines.push(`⚖️ ${snap.weightKg.toFixed(1)} kg`);
     }
-    if (snap.sleepMinutes != null) {
-      lines.push(`😴 ${this.formatDuration(snap.sleepMinutes)}`);
+    if (snap.sleepMinutes != null || (snap.napMinutes ?? 0) > 0) {
+      const night =
+        snap.sleepMinutes != null ? this.formatDuration(snap.sleepMinutes) : '';
+      const nap = (snap.napMinutes ?? 0) > 0 ? `งีบ ${snap.napMinutes}m` : '';
+      lines.push(`😴 ${[night, nap].filter(Boolean).join(' + ')}`);
     }
     if (snap.exerciseMinutes > 0) {
       lines.push(`🏋️ ${snap.exerciseMinutes} min`);

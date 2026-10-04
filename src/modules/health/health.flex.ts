@@ -141,8 +141,12 @@ export function buildHealthDashboardFlex(
   }
   const rowBits: string[] = [];
   if (snap.weightKg != null) rowBits.push(`⚖️ ${snap.weightKg.toFixed(1)} kg`);
-  if (snap.sleepMinutes != null)
-    rowBits.push(`😴 ${formatDuration(snap.sleepMinutes)}`);
+  if (snap.sleepMinutes != null || (snap.napMinutes ?? 0) > 0) {
+    const night =
+      snap.sleepMinutes != null ? formatDuration(snap.sleepMinutes) : '';
+    const nap = (snap.napMinutes ?? 0) > 0 ? `งีบ ${snap.napMinutes}m` : '';
+    rowBits.push(`😴 ${[night, nap].filter(Boolean).join(' + ')}`);
+  }
   if (rowBits.length) {
     body.push(
       multiline(rowBits.join('\n'), { margin: '10px', color: FlexTheme.text }),

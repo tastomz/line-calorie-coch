@@ -26,6 +26,7 @@ import {
   parseExerciseCommand,
   parseHydrationCommand,
   parseHydrationSentence,
+  parseNapCommand,
   parseSleepDurationCommand,
   parseRecoveryCommand,
   parseSleepCommand,
@@ -46,6 +47,7 @@ import {
   buildExerciseSavedMessage,
   buildHydrationAddedMessage,
   buildHydrationMessage,
+  buildNapSavedMessage,
   buildSleepDurationSavedMessage,
   buildMealPlanMessage,
   buildRecoverySavedMessage,
@@ -174,6 +176,12 @@ export class HealthRoutingService {
     const sleepParsed = parseSleepCommand(normalized);
     if (sleepParsed) {
       await this.saveSleep(user.id, replyToken, sleepParsed);
+      return true;
+    }
+
+    const nap = parseNapCommand(normalized);
+    if (nap) {
+      await this.saveNap(user.id, replyToken, nap.durationMinutes);
       return true;
     }
 
@@ -356,6 +364,29 @@ export class HealthRoutingService {
         replyToken,
         buildBodyProgressMessage(deltas),
       );
+    }
+  }
+
+  /** Nap: wake = now, bedtime = now − duration; flagged so it is not "last night". */
+  private async saveNap(
+    userId: string,
+    replyToken: string,
+    durationMinutes: number,
+  ) {
+    try {
+      const wakeTime = new Date();
+      const bedtime = new Date(wakeTime.getTime() - durationMinutes * 60_000);
+      await this.sleep.create({ userId, bedtime, wakeTime, isNap: true });
+      const total = await this.sleep.todayNapMinutes(userId);
+      await this.lineService.replyText(
+        replyToken,
+        buildNapSavedMessage(durationMinutes, total),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Nap save failed: ${error instanceof Error ? error.message : 'unknown'}`,
+      );
+      await this.lineService.replyText(replyToken, 'บันทึกการงีบไม่สำเร็จครับ');
     }
   }
 

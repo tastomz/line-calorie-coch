@@ -4,6 +4,7 @@ import {
   isExactHealthCommand,
   isHealthCoachQuestion,
   parseHydrationSentence,
+  parseNapCommand,
   parseSleepDurationCommand,
   parseExerciseCommand,
   parseHydrationCommand,
@@ -11,7 +12,12 @@ import {
   parseSleepCommand,
   parseStepsCommand,
 } from './health-commands';
-import { buildExerciseSavedMessage } from './health.messages';
+import {
+  buildExerciseSavedMessage,
+  buildNapSavedMessage,
+} from './health.messages';
+import { NAP_NOTE, SleepLogService } from './health-logs.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import { MEAL_ALLOCATION, MealPlanService } from './meal-plan.service';
 import { getProgramWeekDay } from './program-week';
 import { HealthInsightService } from './health-dashboard.service';
@@ -128,6 +134,57 @@ describe('parseSleepDurationCommand', () => {
     'นอน 20 นาที',
   ])('does not log %s as a duration', (text) => {
     expect(parseSleepDurationCommand(text)).toBeNull();
+  });
+});
+
+describe('nap logging', () => {
+  it.each([
+    ['งีบ30นาที', 30],
+    ['งีบไป 1 ชั่วโมง', 60],
+    ['งีบหลับมา 20 นาที', 20],
+    ['งีบ 1.5 ชม.', 90],
+  ])('reads %s as %d minutes', (text, minutes) => {
+    expect(parseNapCommand(text)?.durationMinutes).toBe(minutes);
+  });
+
+  it.each([
+    'งีบ',
+    'งีบกี่นาทีดี',
+    'ควรงีบ 20 นาทีไหม',
+    'งีบ 2 นาที',
+    'งีบ 9 ชั่วโมง',
+    'นอน 7 ชั่วโมง',
+  ])('does not log %s as a nap', (text) => {
+    expect(parseNapCommand(text)).toBeNull();
+  });
+
+  it('shows the nap total only when there was an earlier nap today', () => {
+    expect(buildNapSavedMessage(30, 30)).not.toContain('งีบรวม');
+    expect(buildNapSavedMessage(30, 50)).toContain('งีบรวมวันนี้ 50 นาที');
+  });
+
+  it('stores a nap flagged and keeps it out of "last night"', async () => {
+    const create = jest.fn().mockResolvedValue({});
+    const findFirst = jest.fn().mockResolvedValue(null);
+    const service = new SleepLogService({
+      sleepLog: { create, findFirst },
+    } as unknown as PrismaService);
+
+    const wake = new Date('2026-10-04T06:00:00.000Z');
+    await service.create({
+      userId: 'u1',
+      bedtime: new Date(wake.getTime() - 30 * 60_000),
+      wakeTime: wake,
+      isNap: true,
+    });
+    const data = (create.mock.calls[0] as [{ data: { notes: string } }])[0]
+      .data;
+    expect(data.notes).toBe(NAP_NOTE);
+
+    await service.latest('u1');
+    const where = (findFirst.mock.calls[0] as [{ where: object }])[0].where;
+    expect(JSON.stringify(where)).toContain('"OR"');
+    expect(JSON.stringify(where)).toContain('nap');
   });
 });
 

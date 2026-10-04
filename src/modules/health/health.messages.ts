@@ -102,6 +102,19 @@ ${dur}
 บันทึกแล้ว (ไม่ได้ระบุเวลาเข้านอน/ตื่น ถ้าต้องการเวลา พิมพ์ "นอน 00:30 ตื่น 07:30")`;
 }
 
+export function buildNapSavedMessage(
+  durationMinutes: number,
+  totalTodayMinutes: number,
+): string {
+  const total =
+    totalTodayMinutes > durationMinutes
+      ? `\nงีบรวมวันนี้ ${totalTodayMinutes} นาที`
+      : '';
+  return `😴 งีบ ${durationMinutes} นาที${total}
+
+บันทึกแล้ว (แยกจากการนอนกลางคืน)`;
+}
+
 export function buildHydrationAddedMessage(params: {
   label: string;
   addedMl: number;

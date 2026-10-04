@@ -716,6 +716,7 @@ export class FoodLoggingService {
                   proteinTarget: snap.nutrition?.target.proteinG ?? null,
                   weightKg: snap.weightKg,
                   sleepMinutes: snap.sleepMinutes,
+                  napMinutesToday: snap.napMinutes ?? 0,
                   exerciseMinutes: snap.exerciseMinutes,
                   steps: snap.steps,
                   waterMl: snap.waterMl,

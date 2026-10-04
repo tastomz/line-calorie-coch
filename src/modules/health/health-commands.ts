@@ -176,6 +176,29 @@ export function parseSleepDurationCommand(
     : null;
 }
 
+/**
+ * "งีบ30นาที" | "งีบไป 1 ชั่วโมง" | "งีบหลับมา 20 นาที". Needs a unit; questions
+ * are never logged. 5 min – 4 h.
+ */
+export function parseNapCommand(
+  text: string,
+): { durationMinutes: number } | null {
+  const t = text.trim();
+  if (SLEEP_QUESTION.test(t)) return null;
+  const m = t.match(
+    /^(?:ผม|ฉัน)?\s*(?:เพิ่ง)?งีบ(?:หลับ)?(?:ไป|มา|ได้)?\s*(\d+(?:\.\d+)?)\s*(นาที|min|mins|m|ชั่วโมง|ชม\.?|ชม|hr|hrs|h)$/i,
+  );
+  if (!m) return null;
+  const amount = Number(m[1]);
+  const isHours = /^(ชั่วโมง|ชม|hr|hrs|h)/i.test(m[2]);
+  const durationMinutes = Math.round(isHours ? amount * 60 : amount);
+  return Number.isFinite(durationMinutes) &&
+    durationMinutes >= 5 &&
+    durationMinutes <= 240
+    ? { durationMinutes }
+    : null;
+}
+
 const WATER_UNIT_ML: Readonly<Record<string, number>> = {
   แก้ว: 250,
   ขวด: 500,
