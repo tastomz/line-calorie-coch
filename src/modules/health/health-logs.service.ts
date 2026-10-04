@@ -4,6 +4,12 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { dayBounds, getZonedDateParts } from '../food/day-bounds';
 import { dateKeyFromParts, todayDateKey } from './program-week';
 
+export const NAP_NOTE = 'nap';
+/** SQL `notes != 'nap'` would drop NULL notes, so spell out the OR. */
+const NOT_NAP = {
+  OR: [{ notes: null }, { notes: { not: NAP_NOTE } }],
+};
+
 @Injectable()
 export class SleepLogService {
   constructor(private readonly prisma: PrismaService) {}
@@ -14,6 +20,8 @@ export class SleepLogService {
     wakeTime: Date;
     sleepScore?: number;
     notes?: string;
+    /** A daytime nap: stored with notes="nap", excluded from "last night". */
+    isNap?: boolean;
   }) {
     if (params.wakeTime.getTime() <= params.bedtime.getTime()) {
       throw new Error('wakeTime must be after bedtime');
@@ -30,17 +38,32 @@ export class SleepLogService {
         wakeTime: params.wakeTime,
         durationMinutes,
         sleepScore: params.sleepScore ?? null,
-        notes: params.notes ?? null,
+        notes: params.isNap ? NAP_NOTE : (params.notes ?? null),
         source: HealthDataSource.MANUAL,
       },
     });
   }
 
+  /** Latest NIGHT sleep (naps are tracked separately). */
   async latest(userId: string) {
     return this.prisma.sleepLog.findFirst({
-      where: { userId },
+      where: { userId, ...NOT_NAP },
       orderBy: { bedtime: 'desc' },
     });
+  }
+
+  /** Minutes napped today (naps that ended today). */
+  async todayNapMinutes(userId: string): Promise<number> {
+    const { start, end } = dayBounds();
+    const rows = await this.prisma.sleepLog.findMany({
+      where: {
+        userId,
+        notes: NAP_NOTE,
+        wakeTime: { gte: start, lt: end },
+      },
+      select: { durationMinutes: true },
+    });
+    return rows.reduce((sum, row) => sum + row.durationMinutes, 0);
   }
 
   async averageDurationMinutes(
@@ -49,7 +72,7 @@ export class SleepLogService {
   ): Promise<number | null> {
     const since = new Date(Date.now() - days * 86_400_000);
     const rows = await this.prisma.sleepLog.findMany({
-      where: { userId, bedtime: { gte: since } },
+      where: { userId, bedtime: { gte: since }, ...NOT_NAP },
       select: { durationMinutes: true },
     });
     if (rows.length === 0) return null;
@@ -86,6 +109,21 @@ export class ExerciseLogService {
         caloriesBurned: params.caloriesBurned ?? null,
         heartRate: params.heartRate ?? null,
         source: params.source ?? HealthDataSource.MANUAL,
+      },
+    });
+  }
+
+  async todayEntries(userId: string) {
+    const { start, end } = dayBounds();
+    return this.prisma.exerciseLog.findMany({
+      where: { userId, performedAt: { gte: start, lt: end } },
+      orderBy: { performedAt: 'asc' },
+      select: {
+        type: true,
+        workoutName: true,
+        durationMinutes: true,
+        caloriesBurned: true,
+        heartRate: true,
       },
     });
   }
