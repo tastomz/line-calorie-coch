@@ -17,7 +17,17 @@ export type DailyHealthSnapshot = {
   nutrition: DailyCoachSummary | null;
   weightKg: number | null;
   sleepMinutes: number | null;
+  /** Minutes napped today (separate from last night's sleep). */
+  napMinutes?: number;
   exerciseMinutes: number;
+  /** Today's individual workouts (optional detail for the AI coach). */
+  exerciseSessions?: Array<{
+    type: string;
+    workoutName: string | null;
+    durationMinutes: number;
+    caloriesBurned: number | null;
+    heartRate: number | null;
+  }>;
   steps: number | null;
   waterMl: number;
   waterTargetMl: number;
@@ -43,14 +53,23 @@ export class HealthDashboardService {
     todayWeightKg: number | null;
   }): Promise<DailyHealthSnapshot> {
     const program = getProgramWeekDay(params.userCreatedAt);
-    const [latestSleep, exerciseMinutes, activity, waterMl, recovery] =
-      await Promise.all([
-        this.sleep.latest(params.userId),
-        this.exercise.todayTotalMinutes(params.userId),
-        this.activity.getToday(params.userId),
-        this.hydration.todayTotalMl(params.userId),
-        this.recovery.getToday(params.userId),
-      ]);
+    const [
+      latestSleep,
+      napMinutes,
+      exerciseMinutes,
+      exerciseSessions,
+      activity,
+      waterMl,
+      recovery,
+    ] = await Promise.all([
+      this.sleep.latest(params.userId),
+      this.sleep.todayNapMinutes(params.userId),
+      this.exercise.todayTotalMinutes(params.userId),
+      this.exercise.todayEntries(params.userId),
+      this.activity.getToday(params.userId),
+      this.hydration.todayTotalMl(params.userId),
+      this.recovery.getToday(params.userId),
+    ]);
 
     const tip = params.nutrition
       ? buildNextMealTip(params.nutrition)
@@ -61,7 +80,9 @@ export class HealthDashboardService {
       nutrition: params.nutrition,
       weightKg: params.todayWeightKg,
       sleepMinutes: latestSleep?.durationMinutes ?? null,
+      napMinutes,
       exerciseMinutes,
+      exerciseSessions,
       steps: activity?.steps ?? null,
       waterMl,
       waterTargetMl: this.hydration.defaultTargetMl,
@@ -91,8 +112,11 @@ export class HealthDashboardService {
     if (snap.weightKg != null) {
       lines.push(`⚖️ ${snap.weightKg.toFixed(1)} kg`);
     }
-    if (snap.sleepMinutes != null) {
-      lines.push(`😴 ${this.formatDuration(snap.sleepMinutes)}`);
+    if (snap.sleepMinutes != null || (snap.napMinutes ?? 0) > 0) {
+      const night =
+        snap.sleepMinutes != null ? this.formatDuration(snap.sleepMinutes) : '';
+      const nap = (snap.napMinutes ?? 0) > 0 ? `งีบ ${snap.napMinutes}m` : '';
+      lines.push(`😴 ${[night, nap].filter(Boolean).join(' + ')}`);
     }
     if (snap.exerciseMinutes > 0) {
       lines.push(`🏋️ ${snap.exerciseMinutes} min`);

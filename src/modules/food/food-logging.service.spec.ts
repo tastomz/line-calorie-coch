@@ -972,9 +972,8 @@ describe('FoodLoggingService', () => {
     expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
   });
 
-  it('โค้ช shows next actions from recorded data with zero AI', async () => {
-    dailySummaryService.getDailySummary.mockResolvedValue(sampleSummary);
-    healthDashboard.buildToday.mockResolvedValueOnce({
+  describe('โค้ช rich menu (AI overview with rule-based fallback)', () => {
+    const snapshot = {
       programLabel: 'W1D1',
       nutrition: {
         ...sampleSummary,
@@ -988,37 +987,101 @@ describe('FoodLoggingService', () => {
       waterTargetMl: 2500,
       recoveryScore: null,
       tip: '',
+    };
+    const savedKey = process.env.OPENAI_API_KEY;
+
+    afterEach(() => {
+      if (savedKey === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = savedKey;
     });
 
-    await service.handleCompletedText(completedUser as never, 'token', 'โค้ช');
+    it("sends today's foods, calories, exercise, water and sleep to the AI coach", async () => {
+      process.env.OPENAI_API_KEY = 'sk-test';
+      dailySummaryService.getDailySummary.mockResolvedValue(sampleSummary);
+      healthDashboard.buildToday.mockResolvedValueOnce(snapshot);
+      foodLogService.listForUserOnDate.mockResolvedValue([
+        { foodName: 'ข้าวมันไก่', calories: 600, proteinG: 30 },
+      ]);
+      aiGateway.run.mockImplementationOnce(() =>
+        Promise.resolve('วันนี้โปรตีนยังขาด ลองกินไข่ต้ม 2 ฟอง'),
+      );
 
-    expect(lineService.replyText).toHaveBeenCalledWith(
-      'token',
-      expect.stringMatching(
-        /สิ่งที่ควรทำต่อวันนี้[\s\S]*กินให้ถึงเป้า[\s\S]*ออกกำลังกาย[\s\S]*ถามผมได้เลย/,
-      ),
-    );
-    expect(messageClassifyService.classify).not.toHaveBeenCalled();
-    expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
-    expect(aiGateway.run).not.toHaveBeenCalled();
-    expect(aiGateway.runUnmetered).not.toHaveBeenCalled();
-  });
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'โค้ช',
+      );
 
-  it('โค้ช falls back to the question prompt when the profile is missing', async () => {
-    dailySummaryService.getDailySummary.mockRejectedValue(
-      new NutritionProfileMissingError(),
-    );
+      expect(aiGateway.run).toHaveBeenCalledWith(
+        'user-a',
+        'COACH',
+        expect.any(Function),
+      );
+      expect(lineService.replyText).toHaveBeenCalledWith(
+        'token',
+        expect.stringContaining('วันนี้โปรตีนยังขาด'),
+      );
+      expect(messageClassifyService.classify).not.toHaveBeenCalled();
+      expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
+    });
 
-    await service.handleCompletedText(
-      completedUser as never,
-      'token',
-      ' โค้ช ',
-    );
+    it('falls back to the rule-based next actions without an OpenAI key', async () => {
+      delete process.env.OPENAI_API_KEY;
+      dailySummaryService.getDailySummary.mockResolvedValue(sampleSummary);
+      healthDashboard.buildToday.mockResolvedValueOnce(snapshot);
 
-    expect(lineService.replyText).toHaveBeenCalledWith(
-      'token',
-      expect.stringContaining('🧠 Kcal Coach'),
-    );
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'โค้ช',
+      );
+
+      expect(aiGateway.run).not.toHaveBeenCalled();
+      expect(lineService.replyText).toHaveBeenCalledWith(
+        'token',
+        expect.stringMatching(
+          /สิ่งที่ควรทำต่อวันนี้[\s\S]*กินให้ถึงเป้า[\s\S]*ออกกำลังกาย[\s\S]*ถามผมได้เลย/,
+        ),
+      );
+    });
+
+    it('keeps the rule-based list and says so when the AI quota is used up', async () => {
+      process.env.OPENAI_API_KEY = 'sk-test';
+      dailySummaryService.getDailySummary.mockResolvedValue(sampleSummary);
+      healthDashboard.buildToday.mockResolvedValueOnce(snapshot);
+      aiGateway.run.mockRejectedValueOnce(
+        new AiQuotaExceededError('COACH', 'FREE', 3, 3),
+      );
+
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        'โค้ช',
+      );
+
+      expect(lineService.replyText).toHaveBeenCalledWith(
+        'token',
+        expect.stringMatching(/กินให้ถึงเป้า[\s\S]*โควตาวิเคราะห์ด้วย AI/),
+      );
+    });
+
+    it('still gives the rule-based list when the profile is missing', async () => {
+      delete process.env.OPENAI_API_KEY;
+      dailySummaryService.getDailySummary.mockRejectedValue(
+        new NutritionProfileMissingError(),
+      );
+
+      await service.handleCompletedText(
+        completedUser as never,
+        'token',
+        ' โค้ช ',
+      );
+
+      expect(lineService.replyText).toHaveBeenCalledWith(
+        'token',
+        expect.stringContaining('สิ่งที่ควรทำต่อวันนี้'),
+      );
+    });
   });
 
   it.each(['ดูภาพรวมวันนี้', 'ภาพรวม'])(
