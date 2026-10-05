@@ -239,3 +239,52 @@ export function parseWorkoutJson(content: string): WorkoutScreenshot | null {
     return null;
   }
 }
+
+/**
+ * Photo answer itemised by component: totals are summed here, not trusted
+ * from the model. A legacy answer with totals but no components is still
+ * accepted so older mocks and cached shapes keep working.
+ */
+export function parseFoodPhotoJson(content: string): FoodAnalysisResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new FoodAnalysisValidationError('AI response is not valid JSON');
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    throw new FoodAnalysisValidationError('AI response must be an object');
+  }
+  const data = parsed as Record<string, unknown>;
+  const components = Array.isArray(data.components) ? data.components : [];
+  if (components.length === 0) {
+    return validateFoodAnalysisResult(parsed);
+  }
+
+  const total = { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 };
+  for (const raw of components) {
+    const c = (raw ?? {}) as Record<string, unknown>;
+    total.calories += assertFiniteNonNegative(
+      'components.calories',
+      c.calories,
+    );
+    total.proteinG += assertFiniteNonNegative(
+      'components.proteinG',
+      c.proteinG,
+    );
+    total.carbsG += assertFiniteNonNegative('components.carbsG', c.carbsG);
+    total.fatG += assertFiniteNonNegative('components.fatG', c.fatG);
+  }
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+  return validateFoodAnalysisResult({
+    foodName: data.foodName,
+    estimatedCalories: Math.round(total.calories),
+    proteinG: round1(total.proteinG),
+    carbsG: round1(total.carbsG),
+    fatG: round1(total.fatG),
+    confidence: data.confidence,
+    assumptions: data.assumptions,
+    estimatedQuantity: data.estimatedQuantity,
+    quantityUnit: data.quantityUnit,
+  });
+}
