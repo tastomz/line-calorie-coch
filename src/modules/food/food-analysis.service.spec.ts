@@ -247,7 +247,102 @@ describe('FoodAnalysisService', () => {
       await serviceWith(create).analyzeImage({
         imageBytes: Buffer.from([1, 2, 3]),
       });
-      expect(systemPrompt(create)).toContain('MUST be in Thai');
+      expect(systemPrompt(create)).toContain('Thai only');
+    });
+
+    function componentsResponse() {
+      return {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                components: [
+                  {
+                    name: 'ข้าวสวย',
+                    grams: 180,
+                    calories: 234,
+                    proteinG: 4.5,
+                    carbsG: 50,
+                    fatG: 0.5,
+                  },
+                  {
+                    name: 'ไก่',
+                    grams: 140,
+                    calories: 230,
+                    proteinG: 42,
+                    carbsG: 0,
+                    fatG: 5,
+                  },
+                  {
+                    name: 'ผักบุ้ง',
+                    grams: 120,
+                    calories: 50,
+                    proteinG: 3,
+                    carbsG: 6,
+                    fatG: 2,
+                  },
+                  {
+                    name: 'น้ำมันผัด',
+                    grams: 18,
+                    calories: 160,
+                    proteinG: 0,
+                    carbsG: 0,
+                    fatG: 18,
+                  },
+                ],
+                foodName: 'ข้าวผัดผักบุ้งไฟแดงไก่',
+                confidence: 0.7,
+                assumptions: ['ข้าว ~180 g, ไก่ ~140 g, ผักบุ้ง ~120 g'],
+                estimatedQuantity: 1,
+                quantityUnit: 'plate',
+              }),
+            },
+          },
+        ],
+      };
+    }
+
+    it('sums the itemised components in code instead of trusting a single guess', async () => {
+      const create = jest
+        .fn()
+        .mockResolvedValueOnce({
+          choices: [{ message: { content: '{"kind":"food"}' } }],
+        })
+        .mockResolvedValueOnce(componentsResponse());
+      const result = await serviceWith(create).analyzePhoto({
+        imageBytes: Buffer.from([1, 2, 3]),
+      });
+      expect(result.kind).toBe('food');
+      if (result.kind !== 'food') return;
+      expect(result.analysis.estimatedCalories).toBe(674);
+      expect(result.analysis.proteinG).toBe(49.5);
+      expect(result.analysis.carbsG).toBe(56);
+      expect(result.analysis.fatG).toBe(25.5);
+      expect(result.analysis.assumptions[0]).toContain('ข้าว');
+    });
+
+    it('asks for rice, protein, vegetables and cooking oil as separate components', async () => {
+      const create = jest
+        .fn()
+        .mockResolvedValueOnce({
+          choices: [{ message: { content: '{"kind":"food"}' } }],
+        })
+        .mockResolvedValueOnce(componentsResponse());
+      await serviceWith(create).analyzePhoto({
+        imageBytes: Buffer.from([1, 2, 3]),
+      });
+      const body = (create.mock.calls[1] as unknown[])[0] as {
+        response_format: { json_schema: { name: string } };
+        max_tokens: number;
+      };
+      expect(body.response_format.json_schema.name).toBe(
+        'food_photo_components',
+      );
+      expect(body.max_tokens).toBe(650);
+      const prompt = systemPrompt(create);
+      expect(prompt).toContain('cooking oil');
+      expect(prompt).toContain('rice');
+      expect(prompt).toContain('Do not leave out the rice');
     });
 
     function kindResponse(kind: string) {
@@ -462,7 +557,8 @@ describe('FoodAnalysisService', () => {
         create.mock.calls[create.mock.calls.length - 1] as unknown[]
       )[0] as Record<string, unknown>;
       expect(body.temperature).toBe(0);
-      expect(body.max_tokens).toBe(220);
+      // Photo analysis is itemised, so it gets a larger output budget.
+      expect(body.max_tokens).toBe(650);
       expect(body.reasoning_effort).toBeUndefined();
     });
 

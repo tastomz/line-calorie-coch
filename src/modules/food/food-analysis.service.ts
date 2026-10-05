@@ -13,6 +13,9 @@ import {
   FOOD_ANALYSIS_MODEL,
   FOOD_ANALYSIS_SYSTEM_PROMPT,
   FOOD_COMPOSITION_ADJUST_PROMPT,
+  FOOD_PHOTO_JSON_SCHEMA,
+  FOOD_PHOTO_MAX_TOKENS,
+  FOOD_PHOTO_SYSTEM_PROMPT,
   PHOTO_KIND_JSON_SCHEMA,
   PHOTO_KIND_MAX_TOKENS,
   PHOTO_KIND_MODEL,
@@ -26,6 +29,7 @@ import {
   FoodAnalysisValidationError,
   PhotoAnalysisResult,
   parseFoodAnalysisJson,
+  parseFoodPhotoJson,
   parsePhotoKindJson,
   parseWorkoutJson,
 } from './food-analysis.validator';
@@ -56,7 +60,10 @@ export class FoodImageUnreadableError extends FoodAnalysisError {
 const REASONING_MODEL = /^(gpt-5|o\d)/;
 const REASONING_MAX_COMPLETION_TOKENS = 2000;
 
-export function completionLimits(model: string):
+export function completionLimits(
+  model: string,
+  maxTokens: number = FOOD_ANALYSIS_MAX_TOKENS,
+):
   | { temperature: number; max_tokens: number }
   | {
       max_completion_tokens: number;
@@ -67,7 +74,7 @@ export function completionLimits(model: string):
         max_completion_tokens: REASONING_MAX_COMPLETION_TOKENS,
         reasoning_effort: 'low',
       }
-    : { temperature: 0, max_tokens: FOOD_ANALYSIS_MAX_TOKENS };
+    : { temperature: 0, max_tokens: maxTokens };
 }
 
 /** The text gave no usable numbers (0 kcal) — never offer that as a meal. */
@@ -181,7 +188,7 @@ export class FoodAnalysisService {
       80,
     );
 
-    const analysis = await this.requestAnalysis(
+    const analysis = await this.requestStructured(
       [
         {
           role: 'user',
@@ -195,8 +202,11 @@ export class FoodAnalysisService {
           ],
         },
       ],
-      FOOD_ANALYSIS_SYSTEM_PROMPT,
+      FOOD_PHOTO_SYSTEM_PROMPT,
       this.visionModel,
+      FOOD_PHOTO_JSON_SCHEMA,
+      parseFoodPhotoJson,
+      FOOD_PHOTO_MAX_TOKENS,
     );
     // 0 kcal is "nothing read", not a meal: ask for a clearer photo instead.
     if (analysis.estimatedCalories <= 0) {
@@ -318,8 +328,7 @@ export class FoodAnalysisService {
       const completion = await withTimeout(
         this.client.chat.completions.create({
           model,
-          ...completionLimits(model),
-          ...(maxOutputTokens ? { max_tokens: maxOutputTokens } : {}),
+          ...completionLimits(model, maxOutputTokens),
           messages: [
             { role: 'system', content: systemPrompt },
             ...userMessages,

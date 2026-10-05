@@ -3,6 +3,7 @@ import {
   FOOD_QUANTITY_UNITS,
 } from './food-analysis.types';
 import {
+  parseFoodPhotoJson,
   parsePhotoKindJson,
   parseWorkoutJson,
   parseFoodAnalysisJson,
@@ -184,6 +185,72 @@ describe('food-analysis.validator', () => {
           }),
         ),
       ).toMatchObject({ caloriesBurned: null, avgHeartRate: null });
+    });
+  });
+
+  describe('parseFoodPhotoJson', () => {
+    it('adds up the components itself', () => {
+      const r = parseFoodPhotoJson(
+        JSON.stringify({
+          components: [
+            {
+              name: 'rice',
+              grams: 150,
+              calories: 195,
+              proteinG: 4,
+              carbsG: 42,
+              fatG: 0.4,
+            },
+            {
+              name: 'oil',
+              grams: 14,
+              calories: 126,
+              proteinG: 0,
+              carbsG: 0,
+              fatG: 14,
+            },
+          ],
+          foodName: 'ข้าวผัด',
+          confidence: 0.7,
+          assumptions: ['ข้าว ~150 g'],
+          estimatedQuantity: 1,
+          quantityUnit: 'plate',
+        }),
+      );
+      expect(r.estimatedCalories).toBe(321);
+      expect(r.proteinG).toBe(4);
+      expect(r.carbsG).toBe(42);
+      expect(r.fatG).toBe(14.4);
+    });
+
+    it('rejects a negative component value', () => {
+      expect(() =>
+        parseFoodPhotoJson(
+          JSON.stringify({
+            components: [
+              {
+                name: 'x',
+                grams: 1,
+                calories: -5,
+                proteinG: 0,
+                carbsG: 0,
+                fatG: 0,
+              },
+            ],
+            foodName: 'x',
+            confidence: 0.5,
+            assumptions: [],
+            estimatedQuantity: 1,
+            quantityUnit: 'plate',
+          }),
+        ),
+      ).toThrow(FoodAnalysisValidationError);
+    });
+
+    it('still accepts a legacy answer with totals and no components', () => {
+      expect(parseFoodPhotoJson(JSON.stringify(valid)).foodName).toBe(
+        valid.foodName,
+      );
     });
   });
 });
