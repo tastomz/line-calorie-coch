@@ -131,9 +131,9 @@ export class FoodAnalysisService {
 
   /**
    * Photo → food estimate, workout-screenshot numbers, or "other".
-   * A tiny, cheap check (gpt-4o-mini, low detail, ~20 output tokens) runs
-   * first so a smartwatch screenshot never reaches the expensive meal
-   * analysis. If the check fails or is unsure, the photo is treated as food.
+   * A tiny check (low detail, ~20 output tokens) runs first so a
+   * smartwatch screenshot never reaches the expensive meal analysis. If
+   * the check fails or is unsure, the photo is treated as food.
    */
   async analyzePhoto(params: {
     imageBytes: Buffer;

@@ -69,6 +69,7 @@ import {
   FoodEstimateEmptyError,
   FoodImageUnreadableError,
   FoodAnalysisService,
+  completionLimits,
 } from './food-analysis.service';
 import { FoodAnalysisResult } from './food-analysis.types';
 import { FoodAnalysisValidationError } from './food-analysis.validator';
@@ -150,6 +151,8 @@ import {
   parseQuantityAdjustment,
   resolveConsumedQuantity,
 } from './quantity-adjustment';
+
+const COACH_QA_MODEL = 'gpt-5';
 
 export const FOOD_COMMANDS = {
   START: ['เริ่ม', 'แก้ไขโปรไฟล์'],
@@ -710,9 +713,8 @@ export class FoodLoggingService {
       const openai = new OpenAI({ apiKey });
       const answer = await this.aiGateway.run(user.id, 'COACH', async () => {
         const completion = await openai.chat.completions.create({
-          model: 'gpt-4o-mini',
-          temperature: 0.4,
-          max_tokens: overview ? 420 : 280,
+          model: COACH_QA_MODEL,
+          ...completionLimits(COACH_QA_MODEL, overview ? 420 : 280),
           messages: [
             {
               role: 'system',
@@ -752,7 +754,7 @@ export class FoodLoggingService {
             },
           ],
         });
-        const meta = usageFromOpenAiCompletion(completion, 'gpt-4o-mini');
+        const meta = usageFromOpenAiCompletion(completion, COACH_QA_MODEL);
         if (meta) reportAiTokenUsage(meta);
         return (
           completion.choices[0]?.message?.content?.trim() ||
@@ -1653,7 +1655,7 @@ export class FoodLoggingService {
       return;
     }
 
-    const imageBytes = await this.lineService.getMessageContentPreviewBytes(
+    const imageBytes = await this.lineService.getMessageContentBytes(
       input.messageId,
     );
     await this.analyzeAndAskConfirmation(
@@ -1691,7 +1693,7 @@ export class FoodLoggingService {
     }
 
     try {
-      const imageBytes = await this.lineService.getMessageContentPreviewBytes(
+      const imageBytes = await this.lineService.getMessageContentBytes(
         buffered.messageId,
       );
       await this.analyzeAndAskConfirmation(

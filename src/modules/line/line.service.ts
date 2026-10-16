@@ -104,38 +104,18 @@ export class LineService implements OnModuleInit {
     }
   }
 
-  async getMessageContentBytes(messageId: string): Promise<Buffer> {
-    return this.readMessageContent(messageId, 'full');
-  }
-
   /**
-   * Prefer LINE's preview image for OpenAI Vision to minimize token cost.
-   * Falls back to full content if preview fails.
+   * Full-resolution image — needed to read printed nutrition labels and
+   * small on-screen digits (LINE's preview image is ~8KB, too small for
+   * either).
    */
-  async getMessageContentPreviewBytes(messageId: string): Promise<Buffer> {
-    try {
-      return await this.readMessageContent(messageId, 'preview');
-    } catch (error) {
-      this.logger.warn(
-        `LINE preview fetch failed; falling back to full content: ${error instanceof Error ? error.message : 'unknown error'}`,
-      );
-      return this.readMessageContent(messageId, 'full');
-    }
-  }
-
-  private async readMessageContent(
-    messageId: string,
-    mode: 'full' | 'preview',
-  ): Promise<Buffer> {
+  async getMessageContentBytes(messageId: string): Promise<Buffer> {
     if (!this.blobClient) {
       throw new Error('LINE_CHANNEL_ACCESS_TOKEN is not configured');
     }
 
     try {
-      const stream =
-        mode === 'preview'
-          ? await this.blobClient.getMessageContentPreview(messageId)
-          : await this.blobClient.getMessageContent(messageId);
+      const stream = await this.blobClient.getMessageContent(messageId);
       const chunks: Buffer[] = [];
       for await (const chunk of stream) {
         chunks.push(
@@ -144,12 +124,12 @@ export class LineService implements OnModuleInit {
       }
       const bytes = Buffer.concat(chunks);
       this.logger.log(
-        `Fetched LINE message ${mode} messageIdPrefix=${messageId.slice(0, 8)} bytes=${bytes.length}`,
+        `Fetched LINE message content messageIdPrefix=${messageId.slice(0, 8)} bytes=${bytes.length}`,
       );
       return bytes;
     } catch (error) {
       this.logger.error(
-        `LINE getMessageContent(${mode}) failed status=${this.extractHttpStatus(error)}: ${error instanceof Error ? error.message : 'unknown error'}`,
+        `LINE getMessageContent failed status=${this.extractHttpStatus(error)}: ${error instanceof Error ? error.message : 'unknown error'}`,
       );
       throw error;
     }

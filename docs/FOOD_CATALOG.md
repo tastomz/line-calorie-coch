@@ -38,7 +38,17 @@ estimate it replaces, just higher-confidence for an exact name match.
    minimum shared length (6 chars) so short words never trigger a match.
 3. If **exactly one** catalog item matches, use it. Zero matches, or more
    than one ambiguous match, falls through to AI — this never guesses.
-4. The catalog itself is small (hundreds of rows), so matching scans it in
+4. If no full name matches, fall back to matching the catalog name's
+   **first word** (the brand, e.g. "เลย์") — real users type the brand,
+   not the full printed label. Same rule: only acts when exactly one
+   catalog item carries that brand.
+5. The brand-only fallback is skipped entirely when the text names a price
+   or size (บาท, กรัม, มล, เล็ก/ใหญ่/มินิ/จัมโบ้, ...). The catalog stores
+   one SKU per brand/flavor with no price data, so a stated price/size
+   usually means a *different* pack than the one on file (a 10-baht mini
+   bag of เลย์ is not the same product as the 30-baht bag) — matching
+   anyway would answer confidently wrong instead of falling through to AI.
+6. The catalog itself is small (hundreds of rows), so matching scans it in
    memory rather than pushing the "contains, either direction" logic into
    SQL. Re-add DB-side filtering if the catalog grows much larger.
 
