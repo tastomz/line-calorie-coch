@@ -549,38 +549,39 @@ model WeeklyHealthReview {
   @@index([userId, weekStartDate])
 }
 
-/// Curated per-serving nutrition for common Thai dishes, imported from a
-/// licensed dataset (see docs/THAI_FOOD_DB.md). An empty table switches the
-/// feature off: every lookup misses and the AI path runs as before.
-model ThaiFoodItem {
-  id           String        @id @default(cuid())
-  nameTh       String
-  nameEn       String?
-  /// FoodQuantityUnit the macros below are expressed per ONE of.
-  servingUnit  String
-  servingDesc  String?
-  servingGrams Float?
-  calories     Float
-  proteinG     Float
-  carbsG       Float
-  fatG         Float
+/// Verified per-serving nutrition for convenience-store products, imported
+/// from a vetted dataset (see docs/FOOD_CATALOG.md). Looked up by name before
+/// AI; an empty table switches the feature off — every lookup misses and the
+/// AI path runs as before. Replaces the never-populated ThaiFoodItem/Key.
+model FoodCatalogItem {
+  id                   String    @id @default(cuid())
   /// Dataset name — shown to the user as the data source.
-  source       String
-  sourceRef    String?
-  /// Licence / permission note recorded at import time.
-  license      String
-  keys         ThaiFoodKey[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  source               String
+  /// Source dataset's own id for this item — upsert key with `source`.
+  sourceFoodId         String
+  retailer             String
+  nameTh               String
+  nameEn               String?
+  servingLabel         String?
+  servingQuantity      Float
+  servingWeightG       Float?
+  servingVolumeMl      Float?
+  energyKcal           Float
+  proteinG             Float
+  carbohydrateG        Float
+  fatG                 Float
+  sourceUrl            String
+  /// JSON string array — citations/notes from the source page.
+  sourceReferencesJson String
+  /// JSON string array — other serving-size options the source page listed.
+  servingOptionsJson   String
+  /// JSON string array — data-quality notes from import (see docs/FOOD_CATALOG.md).
+  qualityFlagsJson     String
+  retrievedAt          DateTime
+  /// NULL until independently checked against a current product label.
+  labelVerifiedAt      DateTime?
+  importedAt           DateTime  @default(now())
 
-  @@unique([source, nameTh])
-}
-
-/// Normalized lookup key (name, Thai/English aliases) -> item. Exact match only.
-model ThaiFoodKey {
-  key    String       @id
-  itemId String
-  item   ThaiFoodItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
-
-  @@index([itemId])
+  @@unique([source, sourceFoodId])
+  @@index([nameTh])
 }
