@@ -5,8 +5,10 @@ import { openAiCircuitBreaker } from '../../common/openai-circuit-breaker';
 import { OPENAI_CALL_TIMEOUT_MS, withTimeout } from '../../common/with-timeout';
 import { WEIGHT_MAX_KG, WEIGHT_MIN_KG } from '../weight/weight-parse';
 import { parseCoachHint } from './coach-hint';
+import { completionLimits } from './food-analysis.service';
 import {
   ClassifiedMessage,
+  ClassifiedMessageType,
   MESSAGE_CLASSIFY_JSON_SCHEMA,
   MESSAGE_CLASSIFY_MAX_TOKENS,
   MESSAGE_CLASSIFY_MODEL,
@@ -54,6 +56,10 @@ export class MessageClassifyService {
         weightKg: null,
         weightQuery: null,
         coachHint: null,
+        exerciseType: null,
+        exerciseDurationMinutes: null,
+        sleepDurationMinutes: null,
+        waterAmountMl: null,
       };
     }
 
@@ -65,8 +71,10 @@ export class MessageClassifyService {
       const completion = await withTimeout(
         this.client.chat.completions.create({
           model: MESSAGE_CLASSIFY_MODEL,
-          temperature: 0,
-          max_tokens: MESSAGE_CLASSIFY_MAX_TOKENS,
+          ...completionLimits(
+            MESSAGE_CLASSIFY_MODEL,
+            MESSAGE_CLASSIFY_MAX_TOKENS,
+          ),
           messages: [
             { role: 'system', content: MESSAGE_CLASSIFY_SYSTEM_PROMPT },
             { role: 'user', content: trimmed },
@@ -126,19 +134,86 @@ export class MessageClassifyService {
       weightKg = null;
     }
 
+    const clampedInt = (
+      value: unknown,
+      min: number,
+      max: number,
+    ): number | null => {
+      if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+      const rounded = Math.round(value);
+      return rounded >= min && rounded <= max ? rounded : null;
+    };
+
+    const resolvedType:
+      | 'weight_log'
+      | 'weight_query'
+      | 'food'
+      | 'exercise'
+      | 'sleep'
+      | 'nap'
+      | 'water'
+      | 'coach'
+      | 'health_coach'
+      | 'other' =
+      type === 'weight_log' ||
+      type === 'weight_query' ||
+      type === 'food' ||
+      type === 'exercise' ||
+      type === 'sleep' ||
+      type === 'nap' ||
+      type === 'water' ||
+      type === 'coach' ||
+      type === 'health_coach' ||
+      type === 'other'
+        ? type
+        : 'other';
+
+    const exerciseType =
+      resolvedType === 'exercise' &&
+      (raw.exerciseType === 'strength' ||
+        raw.exerciseType === 'running' ||
+        raw.exerciseType === 'walking' ||
+        raw.exerciseType === 'cycling' ||
+        raw.exerciseType === 'swimming' ||
+        raw.exerciseType === 'sports' ||
+        raw.exerciseType === 'mobility' ||
+        raw.exerciseType === 'other')
+        ? raw.exerciseType
+        : null;
+    const exerciseDurationMinutes =
+      resolvedType === 'exercise' && exerciseType
+        ? clampedInt(raw.exerciseDurationMinutes, 1, 600)
+        : null;
+
+    const sleepBounds =
+      resolvedType === 'nap'
+        ? ([5, 240] as const)
+        : resolvedType === 'sleep'
+          ? ([60, 960] as const)
+          : null;
+    const sleepDurationMinutes = sleepBounds
+      ? clampedInt(raw.sleepDurationMinutes, sleepBounds[0], sleepBounds[1])
+      : null;
+
+    const waterAmountMl =
+      resolvedType === 'water' ? clampedInt(raw.waterAmountMl, 50, 5000) : null;
+
+    // An exercise/sleep/nap/water type without a usable amount isn't a
+    // confident log — fall back to 'other' rather than saving a bogus entry.
+    const finalType: ClassifiedMessageType =
+      (resolvedType === 'exercise' &&
+        (!exerciseType || exerciseDurationMinutes == null)) ||
+      ((resolvedType === 'sleep' || resolvedType === 'nap') &&
+        sleepDurationMinutes == null) ||
+      (resolvedType === 'water' && waterAmountMl == null)
+        ? 'other'
+        : resolvedType;
+
     return {
-      type:
-        type === 'weight_log' ||
-        type === 'weight_query' ||
-        type === 'food' ||
-        type === 'coach' ||
-        type === 'health_coach' ||
-        type === 'other'
-          ? type
-          : 'other',
-      weightKg: type === 'weight_log' ? weightKg : null,
+      type: finalType,
+      weightKg: finalType === 'weight_log' ? weightKg : null,
       weightQuery:
-        type === 'weight_query'
+        finalType === 'weight_query'
           ? raw.weightQuery === 'latest' ||
             raw.weightQuery === 'trend' ||
             raw.weightQuery === 'progress' ||
@@ -146,7 +221,15 @@ export class MessageClassifyService {
             ? raw.weightQuery
             : 'latest'
           : null,
-      coachHint: type === 'coach' ? parseCoachHint(raw.coachHint) : null,
+      coachHint: finalType === 'coach' ? parseCoachHint(raw.coachHint) : null,
+      exerciseType: finalType === 'exercise' ? exerciseType : null,
+      exerciseDurationMinutes:
+        finalType === 'exercise' ? exerciseDurationMinutes : null,
+      sleepDurationMinutes:
+        finalType === 'sleep' || finalType === 'nap'
+          ? sleepDurationMinutes
+          : null,
+      waterAmountMl: finalType === 'water' ? waterAmountMl : null,
     };
   }
 }

@@ -9,7 +9,7 @@ Billing / quotas with OpenAI account = **not configured** by this repo.
 | --- | --- | --- |
 | Food image analysis | Vision (`gpt-4o-mini`, `detail=low`) | 4/min/user; max **4 MB** image; reject oversized |
 | Food text analysis | Chat completions | 8/min/user |
-| Message classify | Small JSON classify | 20/min/user; skipped when rules match |
+| Message classify | JSON classify (`gpt-5`, reasoning_effort=low) | 20/min/user; skipped when rules match |
 | Meal suggestions | Chat completions | 10/min/user (`coach` bucket) |
 | Daily coach tip | Chat completions | 10/min/user; deterministic fallback if limited/down |
 | Composition correction edit | Re-analysis | Same food text/image limits |
@@ -27,6 +27,8 @@ See `describeAiRateLimits()` / `src/common/ai-rate-limiter.ts`:
 Circuit breaker: 5 consecutive OpenAI failures → 60s cooldown (process-local).
 
 Timeouts: OpenAI calls capped at **15s** (`OPENAI_CALL_TIMEOUT_MS`).
+
+**Classify model note:** `MESSAGE_CLASSIFY_MODEL` (`src/modules/food/message-classify.types.ts`) moved from `gpt-4o-mini` to `gpt-5` so one classifier call can also pick up exercise/sleep/nap/water free-text reports the deterministic regexes in `health-commands.ts` miss. `gpt-5` is a reasoning model — higher per-call cost and latency than `gpt-4o-mini`, still rate-limited at 20/min/user and only called after every exact-command and regex fast path has already failed to match. If latency on the "วันนี้"/classify hot path becomes noticeable, `gpt-5-mini` is the cheaper fallback to try first.
 
 ## Expected AI usage (order-of-magnitude, active user / day)
 

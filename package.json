@@ -26,7 +26,9 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "cleanup:retention": "ts-node -r tsconfig-paths/register src/scripts/run-retention-cleanup.ts",
-    "cleanup:retention:prod": "node dist/scripts/run-retention-cleanup.js"
+    "cleanup:retention:prod": "node dist/scripts/run-retention-cleanup.js",
+    "import:food-catalog": "ts-node -r tsconfig-paths/register src/scripts/import-food-catalog.ts",
+    "import:food-catalog:prod": "node dist/scripts/import-food-catalog.js"
   },
   "dependencies": {
     "@line/bot-sdk": "^11.2.0",

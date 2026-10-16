@@ -1,12 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { HealthDataSource, User } from '@prisma/client';
+import { ExerciseType, HealthDataSource, User } from '@prisma/client';
 import OpenAI from 'openai';
 import {
   formatZonedTime,
   getZonedDateParts,
   zonedLocalToUtc,
 } from '../food/day-bounds';
+import { ClassifiedMessage } from '../food/message-classify.types';
 import { LineOutboundError } from '../line/line-outbound.error';
 import { LineService } from '../line/line.service';
 import { AiGatewayService } from '../membership/ai-gateway.service';
@@ -68,7 +69,34 @@ import {
   WeeklyReviewService,
 } from './weekly-review.service';
 
-/** Deterministic LINE health routing (AI only via AiGateway when needed). */
+const EXERCISE_TYPE_FROM_CLASSIFY: Record<
+  NonNullable<ClassifiedMessage['exerciseType']>,
+  ExerciseType
+> = {
+  strength: ExerciseType.STRENGTH,
+  running: ExerciseType.RUNNING,
+  walking: ExerciseType.WALKING,
+  cycling: ExerciseType.CYCLING,
+  swimming: ExerciseType.SWIMMING,
+  sports: ExerciseType.SPORTS,
+  mobility: ExerciseType.MOBILITY,
+  other: ExerciseType.OTHER,
+};
+
+const EXERCISE_NAME_FROM_TYPE: Record<ExerciseType, string> = {
+  [ExerciseType.STRENGTH]: 'Strength Training',
+  [ExerciseType.RUNNING]: 'Running',
+  [ExerciseType.WALKING]: 'Walking',
+  [ExerciseType.CYCLING]: 'Cycling',
+  [ExerciseType.SWIMMING]: 'Swimming',
+  [ExerciseType.SPORTS]: 'Sports',
+  [ExerciseType.MOBILITY]: 'Mobility',
+  [ExerciseType.OTHER]: 'Other',
+};
+
+/** Deterministic-first LINE health routing; falls back to a single AI
+ * classifier (trySaveClassifiedHealth, via food-logging.service.ts) for
+ * free text none of the regexes below matched. */
 @Injectable()
 export class HealthRoutingService {
   private readonly logger = new Logger(HealthRoutingService.name);
@@ -263,6 +291,62 @@ export class HealthRoutingService {
 
     if (isMealSuggestionRequest(normalized)) {
       await this.replyMealSuggestion(user.id, replyToken, normalized);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * AI-classified free text that the deterministic patterns above missed
+   * (e.g. "เมื่อคืนนอนไม่ค่อยหลับ ได้ประมาณ 5 ชั่วโมงกว่าๆ"). Only called
+   * with exercise/sleep/nap/water categories that already carry a usable
+   * amount — message-classify.service.ts falls back to 'other' otherwise.
+   */
+  async trySaveClassifiedHealth(
+    userId: string,
+    replyToken: string,
+    classified: ClassifiedMessage,
+  ): Promise<boolean> {
+    if (
+      classified.type === 'exercise' &&
+      classified.exerciseType &&
+      classified.exerciseDurationMinutes != null
+    ) {
+      const type = EXERCISE_TYPE_FROM_CLASSIFY[classified.exerciseType];
+      await this.saveExercise(userId, replyToken, {
+        type,
+        durationMinutes: classified.exerciseDurationMinutes,
+        name: EXERCISE_NAME_FROM_TYPE[type],
+      });
+      return true;
+    }
+
+    if (classified.type === 'nap' && classified.sleepDurationMinutes != null) {
+      await this.saveNap(userId, replyToken, classified.sleepDurationMinutes);
+      return true;
+    }
+
+    if (
+      classified.type === 'sleep' &&
+      classified.sleepDurationMinutes != null
+    ) {
+      await this.saveSleepDuration(
+        userId,
+        replyToken,
+        classified.sleepDurationMinutes,
+      );
+      return true;
+    }
+
+    if (classified.type === 'water' && classified.waterAmountMl != null) {
+      try {
+        await this.hydration.add(userId, classified.waterAmountMl);
+        const total = await this.hydration.todayTotalMl(userId);
+        await this.replyHydration(replyToken, total);
+      } catch {
+        await this.lineService.replyText(replyToken, 'บันทึกน้ำไม่สำเร็จครับ');
+      }
       return true;
     }
 
