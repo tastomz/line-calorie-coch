@@ -360,6 +360,7 @@ describe('FoodAnalysisService', () => {
     type CallBody = {
       model: string;
       max_tokens?: number;
+      max_completion_tokens?: number;
       response_format: { json_schema: { name: string } };
       messages: Array<{ role: string; content: unknown }>;
     };
@@ -368,7 +369,7 @@ describe('FoodAnalysisService', () => {
       return (create.mock.calls[index] as unknown[])[0] as CallBody;
     }
 
-    it('checks the photo kind first with a cheap low-detail mini call', async () => {
+    it('checks the photo kind first with a cheap low-detail call', async () => {
       const create = jest
         .fn()
         .mockResolvedValueOnce(kindResponse('food'))
@@ -379,8 +380,8 @@ describe('FoodAnalysisService', () => {
       expect(result.kind).toBe('food');
       expect(create).toHaveBeenCalledTimes(2);
       const check = callBody(create, 0);
-      expect(check.model).toBe('gpt-4o-mini');
-      expect(check.max_tokens).toBe(20);
+      expect(check.model).toBe('gpt-5');
+      expect(check.max_completion_tokens).toBe(2000);
       expect(check.response_format.json_schema.name).toBe('photo_kind');
       const parts = check.messages[1].content as Array<{
         image_url?: { detail?: string };
@@ -409,7 +410,7 @@ describe('FoodAnalysisService', () => {
         workout: { durationMinutes: 59, caloriesBurned: 400 },
       });
       expect(create).toHaveBeenCalledTimes(2);
-      expect(callBody(create, 1).model).toBe('gpt-4o-mini');
+      expect(callBody(create, 1).model).toBe('gpt-5');
       expect(callBody(create, 1).response_format.json_schema.name).toBe(
         'workout_screenshot',
       );
