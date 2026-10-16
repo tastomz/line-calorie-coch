@@ -362,8 +362,7 @@ export class HealthRoutingService {
       return false;
     }
     try {
-      const bytes =
-        await this.lineService.getMessageContentPreviewBytes(messageId);
+      const bytes = await this.lineService.getMessageContentBytes(messageId);
       const draft = await this.bodyAnalysis.extractFromImage(user.id, bytes);
       const text = buildBodyScanPreviewMessage(draft);
       try {
