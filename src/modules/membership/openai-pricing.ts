@@ -14,6 +14,7 @@ export const OPENAI_MODEL_PRICING_USD: Record<string, ModelTokenPricing> = {
   'gpt-4o': { inputPer1MUsd: 2.5, outputPer1MUsd: 10 },
   'gpt-4.1-mini': { inputPer1MUsd: 0.4, outputPer1MUsd: 1.6 },
   'gpt-4.1': { inputPer1MUsd: 2, outputPer1MUsd: 8 },
+  'gpt-5': { inputPer1MUsd: 1.25, outputPer1MUsd: 10 },
 };
 
 /** Fallback FX for display in THB (membership currency). Override via OPENAI_USD_THB_RATE. */

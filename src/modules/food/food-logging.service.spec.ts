@@ -113,7 +113,6 @@ describe('FoodLoggingService', () => {
       .mockRejectedValue(new Error('flex disabled in unit test')),
     replyFlexOrPush: jest.fn(),
     getMessageContentBytes: jest.fn(),
-    getMessageContentPreviewBytes: jest.fn(),
   };
   const aiGateway = {
     run: jest.fn(
@@ -1653,7 +1652,7 @@ describe('FoodLoggingService', () => {
   });
 
   it('analyzes photo with exactly one vision call and no classify', async () => {
-    lineService.getMessageContentPreviewBytes.mockResolvedValue(
+    lineService.getMessageContentBytes.mockResolvedValue(
       Buffer.from('fake-image'),
     );
     foodAnalysisService.analyzePhoto.mockResolvedValue({
@@ -1684,7 +1683,7 @@ describe('FoodLoggingService', () => {
   });
 
   it('logs a smartwatch workout screenshot as exercise, never as a meal', async () => {
-    lineService.getMessageContentPreviewBytes.mockResolvedValue(
+    lineService.getMessageContentBytes.mockResolvedValue(
       Buffer.from('fake-image'),
     );
     const workout = {
@@ -1711,7 +1710,7 @@ describe('FoodLoggingService', () => {
   });
 
   it('tells the user when a photo is not food or a workout summary', async () => {
-    lineService.getMessageContentPreviewBytes.mockResolvedValue(
+    lineService.getMessageContentBytes.mockResolvedValue(
       Buffer.from('fake-image'),
     );
     foodAnalysisService.analyzePhoto.mockResolvedValue({ kind: 'other' });
@@ -1727,7 +1726,7 @@ describe('FoodLoggingService', () => {
   });
 
   it('asks for a clearer photo when the image cannot be read (no 0 kcal card)', async () => {
-    lineService.getMessageContentPreviewBytes.mockResolvedValue(
+    lineService.getMessageContentBytes.mockResolvedValue(
       Buffer.from('fake-image'),
     );
     foodAnalysisService.analyzePhoto.mockRejectedValue(
