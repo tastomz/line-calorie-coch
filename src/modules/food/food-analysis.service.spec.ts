@@ -333,12 +333,14 @@ describe('FoodAnalysisService', () => {
       });
       const body = (create.mock.calls[1] as unknown[])[0] as {
         response_format: { json_schema: { name: string } };
-        max_tokens: number;
+        max_completion_tokens: number;
       };
       expect(body.response_format.json_schema.name).toBe(
         'food_photo_components',
       );
-      expect(body.max_tokens).toBe(650);
+      // Default model is gpt-5 (reasoning) — a fixed reasoning budget, not
+      // FOOD_PHOTO_MAX_TOKENS (that only applies to non-reasoning models).
+      expect(body.max_completion_tokens).toBe(2000);
       const prompt = systemPrompt(create);
       expect(prompt).toContain('cooking oil');
       expect(prompt).toContain('rice');
@@ -358,6 +360,7 @@ describe('FoodAnalysisService', () => {
     type CallBody = {
       model: string;
       max_tokens?: number;
+      max_completion_tokens?: number;
       response_format: { json_schema: { name: string } };
       messages: Array<{ role: string; content: unknown }>;
     };
@@ -366,7 +369,7 @@ describe('FoodAnalysisService', () => {
       return (create.mock.calls[index] as unknown[])[0] as CallBody;
     }
 
-    it('checks the photo kind first with a cheap low-detail mini call', async () => {
+    it('checks the photo kind first with a cheap low-detail call', async () => {
       const create = jest
         .fn()
         .mockResolvedValueOnce(kindResponse('food'))
@@ -377,8 +380,8 @@ describe('FoodAnalysisService', () => {
       expect(result.kind).toBe('food');
       expect(create).toHaveBeenCalledTimes(2);
       const check = callBody(create, 0);
-      expect(check.model).toBe('gpt-4o-mini');
-      expect(check.max_tokens).toBe(20);
+      expect(check.model).toBe('gpt-5');
+      expect(check.max_completion_tokens).toBe(2000);
       expect(check.response_format.json_schema.name).toBe('photo_kind');
       const parts = check.messages[1].content as Array<{
         image_url?: { detail?: string };
@@ -407,7 +410,7 @@ describe('FoodAnalysisService', () => {
         workout: { durationMinutes: 59, caloriesBurned: 400 },
       });
       expect(create).toHaveBeenCalledTimes(2);
-      expect(callBody(create, 1).model).toBe('gpt-4o-mini');
+      expect(callBody(create, 1).model).toBe('gpt-5');
       expect(callBody(create, 1).response_format.json_schema.name).toBe(
         'workout_screenshot',
       );
@@ -531,7 +534,7 @@ describe('FoodAnalysisService', () => {
       await serviceWithConfig(textCreate, {
         FOOD_VISION_MODEL: 'gpt-4o',
       }).analyzeText('ข้าว');
-      expect(modelOf(textCreate)).toBe('gpt-4o-mini');
+      expect(modelOf(textCreate)).toBe('gpt-5');
     });
 
     it('sends GPT-5 style limits (no temperature/max_tokens) for gpt-5 models', async () => {
@@ -568,7 +571,7 @@ describe('FoodAnalysisService', () => {
         await serviceWithConfig(create, {
           FOOD_VISION_MODEL: value,
         }).analyzeImage({ imageBytes: Buffer.from([1, 2, 3]) });
-        expect(modelOf(create)).toBe('gpt-4o-mini');
+        expect(modelOf(create)).toBe('gpt-5');
       }
     });
 

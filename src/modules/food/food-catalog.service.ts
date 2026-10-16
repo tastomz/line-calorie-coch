@@ -6,6 +6,37 @@ import { FoodAnalysisResult } from './food-analysis.types';
 /** Shortest normalized text either side must share to count as a name match. */
 const MIN_MATCH_LENGTH = 6;
 
+/**
+ * Shortest normalized brand word for the fallback brand-only match (e.g.
+ * "เลย์" alone, not the full printed product name). Shorter than
+ * MIN_MATCH_LENGTH because real brand words are short, but the fallback
+ * only fires when exactly one catalog item carries that brand word, so a
+ * short word is still safe — ambiguous brands fall through to AI.
+ */
+const MIN_BRAND_MATCH_LENGTH = 3;
+
+/**
+ * Price/size words that mean the text names a specific pack the catalog
+ * can't verify (we store one SKU per brand+flavor, no price or alternate
+ * sizes) — e.g. "เลย์ห่อละ10บาท" (a small bag) vs "เลย์ห่อละ30บาท" (the
+ * regular bag) have very different calories. The brand-only fallback
+ * skips rather than confidently guess the wrong pack.
+ */
+const AMBIGUOUS_SIZE_WORDS = [
+  'บาท',
+  'กรัม',
+  'ก.',
+  'มล',
+  'มิลลิลิตร',
+  'ลิตร',
+  'ซีซี',
+  'เล็ก',
+  'ใหญ่',
+  'จัมโบ้',
+  'มินิ',
+  'ไซส์',
+];
+
 function normalize(text: string): string {
   return text.trim().toLowerCase().replace(/\s+/g, '');
 }
@@ -31,7 +62,7 @@ export class FoodCatalogService {
    */
   async findByText(text: string): Promise<FoodAnalysisResult | null> {
     const query = normalize(text);
-    if (query.length < MIN_MATCH_LENGTH) {
+    if (query.length < MIN_BRAND_MATCH_LENGTH) {
       return null;
     }
 
@@ -42,14 +73,33 @@ export class FoodCatalogService {
       // cheap. Re-add DB-side filtering if the catalog grows much larger.
       const candidates = await this.prisma.foodCatalogItem.findMany();
 
-      const matches = candidates.filter((item) =>
+      const fullMatches = candidates.filter((item) =>
         this.isNameMatch(query, item),
       );
-      if (matches.length !== 1) {
-        // No match, or more than one candidate — never guess which one.
+      if (fullMatches.length === 1) {
+        return this.toAnalysisResult(fullMatches[0]);
+      }
+      if (fullMatches.length > 1) {
+        // Ambiguous full-name match — never guess which one.
         return null;
       }
-      return this.toAnalysisResult(matches[0]);
+
+      // Nobody's full printed name is in the text — real users type just
+      // the brand ("เลย์", not the full label). Fall back to matching the
+      // catalog name's first word, but only act when exactly one item
+      // carries that brand: if several share it, that's still ambiguous.
+      // Skip entirely when the text names a price or size — we only have
+      // one SKU per brand/flavor and can't tell if it's the right one.
+      if (AMBIGUOUS_SIZE_WORDS.some((word) => query.includes(word))) {
+        return null;
+      }
+      const brandMatches = candidates.filter((item) =>
+        this.isBrandMatch(query, item),
+      );
+      if (brandMatches.length !== 1) {
+        return null;
+      }
+      return this.toAnalysisResult(brandMatches[0]);
     } catch (error) {
       this.logger.warn(
         `Food catalog lookup failed, falling back to AI: ${error instanceof Error ? error.message : 'unknown'}`,
@@ -72,6 +122,26 @@ export class FoodCatalogService {
       return false;
     }
     return a.includes(b) || b.includes(a);
+  }
+
+  private isBrandMatch(
+    normalizedQuery: string,
+    item: FoodCatalogItem,
+  ): boolean {
+    return (
+      this.brandWordMatches(normalizedQuery, item.nameTh) ||
+      (item.nameEn != null &&
+        this.brandWordMatches(normalizedQuery, item.nameEn))
+    );
+  }
+
+  /** The catalog name's first word, e.g. "เลย์" from "เลย์ มันฝรั่ง...". */
+  private brandWordMatches(normalizedQuery: string, name: string): boolean {
+    const brandWord = normalize(name.trim().split(/\s+/)[0] ?? '');
+    if (brandWord.length < MIN_BRAND_MATCH_LENGTH) {
+      return false;
+    }
+    return normalizedQuery.includes(brandWord);
   }
 
   private toAnalysisResult(item: FoodCatalogItem): FoodAnalysisResult {

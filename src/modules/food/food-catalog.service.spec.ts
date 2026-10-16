@@ -22,6 +22,16 @@ describe('FoodCatalogService.findByText', () => {
     fatG: 5,
     servingQuantity: 1,
   };
+  const lays = {
+    id: 'cat-3',
+    nameTh: 'เลย์ มันฝรั่งแท้ทอดกรอบแผ่นเรียบ รสซาวครีมและหัวหอม',
+    nameEn: null,
+    energyKcal: 430,
+    proteinG: 5,
+    carbohydrateG: 40,
+    fatG: 28,
+    servingQuantity: 1,
+  };
 
   function makeService(items: unknown[]) {
     const prisma = {
@@ -90,10 +100,48 @@ describe('FoodCatalogService.findByText', () => {
   });
 
   it('returns null when more than one catalog item matches (never guesses)', async () => {
-    const twin = { ...doritos, id: 'cat-3', nameTh: doritos.nameTh };
+    const twin = { ...doritos, id: 'cat-4', nameTh: doritos.nameTh };
     const { service } = makeService([doritos, twin]);
 
     const result = await service.findByText(doritos.nameTh);
+
+    expect(result).toBeNull();
+  });
+
+  it('falls back to a brand-only match when the full name is not typed', async () => {
+    const { service } = makeService([doritos, hanami, lays]);
+
+    const result = await service.findByText('กินเลย์ไป1ห่อ');
+
+    expect(result?.foodName).toBe(lays.nameTh);
+    expect(result?.estimatedCalories).toBe(430);
+  });
+
+  it('does not guess between two catalog items sharing the same brand word', async () => {
+    const laysBbq = {
+      ...lays,
+      id: 'cat-5',
+      nameTh: 'เลย์ มันฝรั่งแท้ทอดกรอบแผ่นเรียบ รสบาร์บีคิว',
+    };
+    const { service } = makeService([lays, laysBbq]);
+
+    const result = await service.findByText('กินเลย์ไป1ห่อ');
+
+    expect(result).toBeNull();
+  });
+
+  it('does not brand-match when the text names a price (unverifiable pack size)', async () => {
+    const { service } = makeService([doritos, hanami, lays]);
+
+    const result = await service.findByText('เลย์ห่อละ10บาท1ห่อ');
+
+    expect(result).toBeNull();
+  });
+
+  it('does not brand-match when the text names a size/weight', async () => {
+    const { service } = makeService([doritos, hanami, lays]);
+
+    const result = await service.findByText('เลย์ถุงเล็ก');
 
     expect(result).toBeNull();
   });
