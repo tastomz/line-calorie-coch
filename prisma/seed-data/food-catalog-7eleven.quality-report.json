@@ -1,0 +1,822 @@
+{
+  "source_list_url": "https://fit-d.com/food/shop/OQ,,/7-eleven",
+  "expected_count": 504,
+  "exported_count": 504,
+  "failed_count": 0,
+  "quality_flags": {
+    "serving_mass_or_volume_unspecified": 60,
+    "energy_macro_discrepancy": 25,
+    "all_macros_zero_with_nonzero_energy": 9,
+    "additional_serving_options_not_fetched": 37
+  },
+  "null_counts": {
+    "source": 0,
+    "source_food_id": 0,
+    "retailer": 0,
+    "name_th": 0,
+    "name_en": 270,
+    "serving_label": 0,
+    "serving_quantity": 0,
+    "serving_weight_g": 185,
+    "serving_volume_ml": 379,
+    "energy_kcal": 0,
+    "protein_g": 0,
+    "carbohydrate_g": 0,
+    "fat_g": 0,
+    "source_url": 0,
+    "source_references": 0,
+    "serving_options": 0,
+    "quality_flags": 0,
+    "retrieved_at": 0,
+    "label_verified_at": 504
+  },
+  "duplicate_names": {
+    "นมเมจิ ไฮโปรตีน สูตรเวย์ รสช็อกโกแลต": 2,
+    "เบียร์สิงห์": 3,
+    "มาม่า คัพ รสต้มยำกุ้ง": 2,
+    "ไวไว บะหมี่กึ่งสำเร็จรูป รสหอยลายผัดฉ่า": 2,
+    "สนิกเกอร์ส ถั่วลิสงคาราเมลและนูกัตเคลือบช็อกโกแลตนม": 2,
+    "คาลพิส แลคโตะ เครื่องดื่มผสมนมเปรี้ยว": 2
+  },
+  "rows_with_flags": [
+    {
+      "source_food_id": "MTA2OQ,,",
+      "name_th": "น้ำเต้าหู้(จืด)",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified",
+        "energy_macro_discrepancy",
+        "all_macros_zero_with_nonzero_energy"
+      ]
+    },
+    {
+      "source_food_id": "MTA4Nw,,",
+      "name_th": "อาริงาโต ข้าวเกรียบปลาหมึกอบกรอบ",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTA4OQ,,",
+      "name_th": "ปูไทย ขนมทอดกรอบ",
+      "quality_flags": [
+        "energy_macro_discrepancy"
+      ]
+    },
+    {
+      "source_food_id": "MTA5MQ,,",
+      "name_th": "สแน็คแจ๊ค ขนมถั่วลันเตาอบกรอบ รสเห็ดหอมชิตาเกะ",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTA5NA,,",
+      "name_th": "มโนห์รา ข้าวเกรียบปู",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTA5NQ,,",
+      "name_th": "โดริโทส ข้าวโพดแผ่นทอดกรอบ รสนาโชชีส",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTAwOA,,",
+      "name_th": "ครีมเทียม",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified",
+        "energy_macro_discrepancy",
+        "all_macros_zero_with_nonzero_energy"
+      ]
+    },
+    {
+      "source_food_id": "MTE0NQ,,",
+      "name_th": "ชีสไบท์",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified",
+        "energy_macro_discrepancy",
+        "all_macros_zero_with_nonzero_energy"
+      ]
+    },
+    {
+      "source_food_id": "MTE0Ng,,",
+      "name_th": "ฟุตลองสไปซี่",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified",
+        "energy_macro_discrepancy",
+        "all_macros_zero_with_nonzero_energy"
+      ]
+    },
+    {
+      "source_food_id": "MTE0Nw,,",
+      "name_th": "สเลอปี้",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified",
+        "energy_macro_discrepancy",
+        "all_macros_zero_with_nonzero_energy"
+      ]
+    },
+    {
+      "source_food_id": "MTE3NA,,",
+      "name_th": "ป๊อกกี้ เพรทซ์ โรสท์",
+      "quality_flags": [
+        "energy_macro_discrepancy",
+        "all_macros_zero_with_nonzero_energy"
+      ]
+    },
+    {
+      "source_food_id": "MTExNA,,",
+      "name_th": "น้ำส้มคั้น",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified",
+        "energy_macro_discrepancy",
+        "all_macros_zero_with_nonzero_energy"
+      ]
+    },
+    {
+      "source_food_id": "MTExNg,,",
+      "name_th": "คาราด้า ขนมอบกรอบรสปลาหมึก",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTExNw,,",
+      "name_th": "โปเต้ มันฝรั่งทอดกรอบ",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTExOA,,",
+      "name_th": "ปาปริก้า มันฝรั่งทอดกรอบ",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTExOQ,,",
+      "name_th": "คอนเน่ ข้าวโพดอบกรอบ รสชีส",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTEyMA,,",
+      "name_th": "โตโร ข้าวโพดอบกรอบคลุกคาราเมลและเนย",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTEyMQ,,",
+      "name_th": "อาร์เชนอล บัตเตอร์คุกกี",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTEyOA,,",
+      "name_th": "เพรทซ์ ขนมกรอบแบบแท่ง รสพิซซ่า",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTEzMQ,,",
+      "name_th": "ควอดาตินิ นาโปลิเทนเนอร์ เวเฟอร์ชิ้นเล็ก สอดไส้ครีมเฮเซลนัด",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTEzMg,,",
+      "name_th": "ริทซ์ แครกเกอร์รสชีส",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTEzMw,,",
+      "name_th": "ริทซ์ แครกเกอร์",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTEzNA,,",
+      "name_th": "เซียงไฮ้ เวเฟอร์เคลือบครีมรสช็อกโกแลต",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTI1Nw,,",
+      "name_th": "แม็กนั่ม เฮเซลนัท ลักซ์",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified",
+        "energy_macro_discrepancy"
+      ]
+    },
+    {
+      "source_food_id": "MTI1OQ,,",
+      "name_th": "แม็กนั่ม ไวท์ อัลมอนด์",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified",
+        "energy_macro_discrepancy"
+      ]
+    },
+    {
+      "source_food_id": "MTI2MA,,",
+      "name_th": "แม็กนั่ม คลาสสิค",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTI2MQ,,",
+      "name_th": "แม็กนั่ม อัลมอนด์",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified",
+        "energy_macro_discrepancy"
+      ]
+    },
+    {
+      "source_food_id": "MTI3Ng,,",
+      "name_th": "เบียร์สิงห์",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified",
+        "energy_macro_discrepancy"
+      ]
+    },
+    {
+      "source_food_id": "MTI3OA,,",
+      "name_th": "เบียร์สิงห์",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified",
+        "energy_macro_discrepancy"
+      ]
+    },
+    {
+      "source_food_id": "MTI3OQ,,",
+      "name_th": "เบียร์สิงห์",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified",
+        "energy_macro_discrepancy"
+      ]
+    },
+    {
+      "source_food_id": "MTM0NA,,",
+      "name_th": "เซเว่นอัพ ฟรี",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTM4OQ,,",
+      "name_th": "เอ็ม-150 ซ่าส์",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTMyMg,,",
+      "name_th": "เค้กชาไทย",
+      "quality_flags": [
+        "energy_macro_discrepancy"
+      ]
+    },
+    {
+      "source_food_id": "MTQxNw,,",
+      "name_th": "ดัชมิลล์ นมพาสเจอร์ไรส์ไขมันต่ำ โปรตีนสูง รสจืด สูตรไม่เติมน้ำตาลทราย",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTU5Nw,,",
+      "name_th": "ไข่เค็ม สูตรเค็มน้อย",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTYwNA,,",
+      "name_th": "โจ๊กหมู ตราซีพี",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTYyMQ,,",
+      "name_th": "เบงเบง เวเฟอร์สอดไส้ครีม และคาราเมล",
+      "quality_flags": [
+        "energy_macro_discrepancy"
+      ]
+    },
+    {
+      "source_food_id": "MTYyNg,,",
+      "name_th": "ฮูเร่ โปรตีนเชค ปราศจากน้ำตาลแลคโตส รสช๊อกโกแลต",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTYzNg,,",
+      "name_th": "ฟาร์มเฮ้าส์ ขนมปังไส้หมูหยอง มายองเนส",
+      "quality_flags": [
+        "energy_macro_discrepancy"
+      ]
+    },
+    {
+      "source_food_id": "MTc0MQ,,",
+      "name_th": "ลินด์ เอ็กเซอร์แลนซ์ ดาร์ก 70% โกโก้ ดาร์กช็อกโกแลต",
+      "quality_flags": [
+        "energy_macro_discrepancy"
+      ]
+    },
+    {
+      "source_food_id": "MTc1MQ,,",
+      "name_th": "ดัชมิลล์ โยเกิร์ตพร้อมดื่ม 4 IN 1 ไลฟ์พลัส สูตรน้ำตาล 2% รสผักและผลไม้ผสม",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTc5MQ,,",
+      "name_th": "โก๋แก่ ถั่วลิสงอบกรอบ รสกะทิ",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTcwNA,,",
+      "name_th": "ฮูเร่ โปรตีนเชค ปราศจากน้ำตาลแลคโตส รสจืด",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTcwOA,,",
+      "name_th": "ยำยำ บะหมี่กึ่งสำเร็จรูปเส้นแบน รสสุกี้",
+      "quality_flags": [
+        "energy_macro_discrepancy"
+      ]
+    },
+    {
+      "source_food_id": "MTcyMg,,",
+      "name_th": "ดัชมิลล์ โยเกิร์ตพร้อมดื่ม 4in1 ไมโคร แอคทีฟ รสสตรอเบอร์รี่",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTcyMw,,",
+      "name_th": "ดัชมิลล์ โยเกิร์ตพร้อมดื่ม 4in1 ไมโคร แอคทีฟ รสส้ม",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTcyNA,,",
+      "name_th": "ดัชมิลล์ โยเกิร์ตพร้อมดื่ม 4in1 ไมโคร แอคทีฟ รสบลูเบอร์รี่",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTcyNQ,,",
+      "name_th": "ดัชมิลล์ โยเกิร์ตพร้อมดื่ม 4in1 ไมโคร แอคทีฟ รสผลไม้ผสม",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTcyNg,,",
+      "name_th": "ดัชมิลล์ โยเกิร์ตพร้อมดื่ม 4in1 ไมโคร แอคทีฟ รสเบอร์รี่รวม 4 ชนิด",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTcyNw,,",
+      "name_th": "ดัชมิลล์ ดีไลท์ นมเปรี้ยวปราศจากไขมัน",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTcyOQ,,",
+      "name_th": "ดัชมิลล์ ดีไลท์ นมเปรี้ยวปราศจากไขมัน น้ำตาล 0.1%",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTczMA,,",
+      "name_th": "ดัชมิลล์ ดีไลท์ นมเปรี้ยวปราศจากไขมัน สูตรน้ำตาลน้อย",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTczNQ,,",
+      "name_th": "ดัชมิลล์ โยเกิร์ตพร้อมดื่ม 4in1 ไมโคร แอคทีฟ รสองุ่นเคียวโฮ",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTg0MA,,",
+      "name_th": "ดอยคำ น้ำฝรั่ง ๙๘%",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTg0NQ,,",
+      "name_th": "ดอยคำ น้ำมะม่วง ๙๘%",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTg0Nw,,",
+      "name_th": "ดอยคำ น้ำมัลเบอร์รี ๕๐%",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTg0OA,,",
+      "name_th": "ดอยคำ น้ำลิ้นจี่ ๙๘%",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTg0OQ,,",
+      "name_th": "ดอยคำ น้ำสตรอว์เบอร์รี ๙๘%",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTg1MA,,",
+      "name_th": "ดอยคำ น้ำส้ม ๙๘%",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTg1MQ,,",
+      "name_th": "ดอยคำ น้ำเบอร์รีรวม ๙๘%",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTg1Mg,,",
+      "name_th": "ดอยคำ น้ำเสาวรส ๕๐%",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTg1Mw,,",
+      "name_th": "ดอยคำ สตรอว์เบอร์รีอบแห้ง",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTg4NA,,",
+      "name_th": "ปาร์ตี้ มันเทศผสมทอดกรอบเคลือบเนยคาราเมล",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTg4OQ,,",
+      "name_th": "เบบี้สตาร์ ขนมอบกรอบบะหมี่เส้นใหญ่ปรุงรส รสดั้งเดิม",
+      "quality_flags": [
+        "energy_macro_discrepancy"
+      ]
+    },
+    {
+      "source_food_id": "MTg5NQ,,",
+      "name_th": "สปอนเซอร์ ออริจินัล",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTg5Ng,,",
+      "name_th": "100 พลัส เครื่องดื่มกลิ่นเลมอน",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTg5Nw,,",
+      "name_th": "กระทิงแดง",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTg5OA,,",
+      "name_th": "คาราบาวแดง",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTg5OQ,,",
+      "name_th": "สปอนเซอร์ แอคทีฟ เครื่องดื่มกลิ่นมะนาว",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTgwNg,,",
+      "name_th": "โยเกิร์ตเมจิ รสออริจินัล",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTgwNw,,",
+      "name_th": "โยเกิร์ตเมจิ วุ้นมะพร้าว",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTgwOA,,",
+      "name_th": "โยเกิร์ตเมจิ รสสตรอเบอร์รี่",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTgxOQ,,",
+      "name_th": "นมเปรี้ยวโยเกิร์ตพร้อมดื่ม ไลฟ์ รสธรรมชาติ",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTgyMA,,",
+      "name_th": "นมเปรี้ยวโยเกิร์ตพร้อมดื่ม ไพเกน กลิ่นบลูเบอร์รี่",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTgyMQ,,",
+      "name_th": "นมเปรี้ยวโยเกิร์ตพร้อมดื่ม เมจิ ไพเกน กลิ่นผลไม้รวม",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTgyMg,,",
+      "name_th": "นมเปรี้ยวโยเกิร์ตพร้อมดื่ม ไพเกน กลิ่นสตรอเบอร์รี่",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTgyNQ,,",
+      "name_th": "นมเปรี้ยวโยเกิร์ตพร้อมดื่ม ไพเกน กลิ่นส้ม",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTgyNg,,",
+      "name_th": "นมเปรี้ยวโยเกิร์ตพร้อมดื่ม เมจิ ไพเกน รสธรรมชาติ",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTgzMQ,,",
+      "name_th": "ดอยคำ น้ำมะเขือเทศ ๙๙%",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTgzMg,,",
+      "name_th": "ดอยคำ น้ำมะเขือเทศผสมน้ำผลไม้รวม ๙๘% ม็อกเทล",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "MTk0Mw,,",
+      "name_th": "จูปาจุ๊ปส์ ส้ม",
+      "quality_flags": [
+        "energy_macro_discrepancy"
+      ]
+    },
+    {
+      "source_food_id": "MTk0Nw,,",
+      "name_th": "ครัวซองค์ ครีมคัสตาดไข่เค็ม",
+      "quality_flags": [
+        "energy_macro_discrepancy"
+      ]
+    },
+    {
+      "source_food_id": "MTk3OQ,,",
+      "name_th": "แซนวิชไข่ + มายองเนส",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTkwMA,,",
+      "name_th": "เอ็ม พลัส เครื่องดื่มเกลือแร่",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTkwMQ,,",
+      "name_th": "เอ็ม เครื่องดื่มเกลือแร่",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTkwMg,,",
+      "name_th": "ชาร์ค คูล ไบท์ เครื่องดื่มชูกำลัง",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTkwMw,,",
+      "name_th": "โพคารี่สเวท",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTkwNg,,",
+      "name_th": "สปอนเซอร์ แอคทีฟ เครื่องดื่มกลิ่นน้ำมิกซ์เบอร์รี่",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTkwNw,,",
+      "name_th": "สปอนเซอร์ แอคทีฟ น้ำรสองุ่น 10% กลิ่นซิตรัส",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTkwOQ,,",
+      "name_th": "ซีวิท วิตามิน ออเรนจ์",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTkxMA,,",
+      "name_th": "ซีวิท วิตามินเลมอน",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTkxMQ,,",
+      "name_th": "ซีวิท น้ำรสทับทิม",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTkxNg,,",
+      "name_th": "ดับเบิ้ล ซี เครื่องดื่มวิตามินซี รสส้มและเลมอน",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTkxNw,,",
+      "name_th": "ดับเบิ้ล ซี เครื่องดื่มวิตามินซี รสองุ่นแดงผสมองุ่นขาว",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTkxOA,,",
+      "name_th": "ดับเบิ้ล ซี เครื่องดื่มวิตามินซี รสพีชผสมลิ้นจี่",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTkxOQ,,",
+      "name_th": "ดับเบิ้ล ซี เครื่องดื่มวิตามินซี รสเลมอนและมะนาว",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTkyMA,,",
+      "name_th": "วู้ดดี้ ซี+ ล็อค เครื่องดื่มวิตามินซี กลิ่นส้ม",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTkyMQ,,",
+      "name_th": "วู้ดดี้ ซี+ ล็อค เครื่องดื่มวิตามินซี กลิ่นเลมอน",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTkyMg,,",
+      "name_th": "วี-บูสท์ เครื่องดื่มน้ำรสเลมอน",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTkyMw,,",
+      "name_th": "วี-บูสท์ เครื่องดื่มน้ำรสส้ม",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTkyNA,,",
+      "name_th": "เอ แอนด์ ดับบลิว น้ำอัดลม",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTkyNQ,,",
+      "name_th": "เค้กแบล็คฟอเรสต์ครีมสด",
+      "quality_flags": [
+        "energy_macro_discrepancy"
+      ]
+    },
+    {
+      "source_food_id": "MTkyNg,,",
+      "name_th": "คาลพิส แลคโตะ โซดา เครื่องดื่มอัดลมรสนมเปรี้ยว",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "MTkyNw,,",
+      "name_th": "คาลพิส แลคโตะ เครื่องดื่มผสมนมเปรี้ยว",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "Njc3",
+      "name_th": "ยาคูลท์",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified",
+        "energy_macro_discrepancy",
+        "all_macros_zero_with_nonzero_energy"
+      ]
+    },
+    {
+      "source_food_id": "NzYx",
+      "name_th": "แฮม",
+      "quality_flags": [
+        "additional_serving_options_not_fetched"
+      ]
+    },
+    {
+      "source_food_id": "ODAz",
+      "name_th": "โฟร์โมสต์ นมยูเอชทีรสซ็อกโกแลต",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified"
+      ]
+    },
+    {
+      "source_food_id": "ODU2",
+      "name_th": "ซาลาเปาไส้หมู",
+      "quality_flags": [
+        "serving_mass_or_volume_unspecified",
+        "energy_macro_discrepancy",
+        "all_macros_zero_with_nonzero_energy"
+      ]
+    }
+  ]
+}

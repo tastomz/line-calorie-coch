@@ -9,6 +9,7 @@ import { DailyCoachService } from './daily-coach.service';
 import { DailySummaryService } from './daily-summary.service';
 import { DailyTotalsService } from './daily-totals.service';
 import { FoodAnalysisService } from './food-analysis.service';
+import { FoodCatalogService } from './food-catalog.service';
 import { FoodLogService } from './food-log.service';
 import { FoodLoggingService } from './food-logging.service';
 import { MessageClassifyService } from './message-classify.service';
@@ -25,6 +26,7 @@ import { PendingFoodService } from './pending-food.service';
   ],
   providers: [
     FoodAnalysisService,
+    FoodCatalogService,
     MessageClassifyService,
     FoodLogService,
     PendingFoodService,
@@ -35,6 +37,7 @@ import { PendingFoodService } from './pending-food.service';
   ],
   exports: [
     FoodAnalysisService,
+    FoodCatalogService,
     MessageClassifyService,
     FoodLogService,
     PendingFoodService,
