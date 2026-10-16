@@ -472,6 +472,18 @@ export class FoodLoggingService {
         return;
       }
 
+      // Exercise/sleep/nap/water the regex patterns in health-commands.ts
+      // missed (looser phrasing) but this single classifier is confident on.
+      if (
+        await this.healthRouting.trySaveClassifiedHealth(
+          userId,
+          replyToken,
+          classified,
+        )
+      ) {
+        return;
+      }
+
       // other
       if (isWeightDomainText(text)) {
         await this.lineService.replyText(replyToken, WEIGHT_HELP_TEXT);

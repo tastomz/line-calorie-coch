@@ -133,6 +133,7 @@ describe('FoodLoggingService', () => {
     tryHandleText: jest.fn().mockResolvedValue(false),
     tryHandleImage: jest.fn().mockResolvedValue(false),
     saveWorkoutScreenshot: jest.fn().mockResolvedValue(undefined),
+    trySaveClassifiedHealth: jest.fn().mockResolvedValue(false),
   };
   const healthDashboard = {
     buildToday: jest.fn((params: Record<string, unknown>) =>
@@ -1323,6 +1324,63 @@ describe('FoodLoggingService', () => {
       'token',
       expect.stringMatching(/เหลือวันนี้[\s\S]*มื้อถัดไป[\s\S]*ไก่/),
     );
+  });
+
+  it('routes an AI-classified exercise report to healthRouting instead of food', async () => {
+    messageClassifyService.classify.mockResolvedValue({
+      type: 'exercise',
+      weightKg: null,
+      weightQuery: null,
+      coachHint: null,
+      exerciseType: 'running',
+      exerciseDurationMinutes: 30,
+      sleepDurationMinutes: null,
+      waterAmountMl: null,
+    });
+    healthRouting.trySaveClassifiedHealth.mockResolvedValue(true);
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'เมื่อคืนวิ่งมาแบบเบาๆ สักครึ่งชั่วโมง',
+    );
+
+    expect(healthRouting.trySaveClassifiedHealth).toHaveBeenCalledWith(
+      'user-a',
+      'token',
+      expect.objectContaining({
+        type: 'exercise',
+        exerciseDurationMinutes: 30,
+      }),
+    );
+    expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
+  });
+
+  it('falls through to the general help text when the AI health fallback declines', async () => {
+    messageClassifyService.classify.mockResolvedValue({
+      type: 'other',
+      weightKg: null,
+      weightQuery: null,
+      coachHint: null,
+      exerciseType: null,
+      exerciseDurationMinutes: null,
+      sleepDurationMinutes: null,
+      waterAmountMl: null,
+    });
+    healthRouting.trySaveClassifiedHealth.mockResolvedValue(false);
+
+    await service.handleCompletedText(
+      completedUser as never,
+      'token',
+      'เหนื่อยมากเลยวันนี้',
+    );
+
+    expect(healthRouting.trySaveClassifiedHealth).toHaveBeenCalled();
+    expect(lineService.replyText).toHaveBeenCalledWith(
+      'token',
+      expect.any(String),
+    );
+    expect(foodAnalysisService.analyzeText).not.toHaveBeenCalled();
   });
 
   it('keeps numeric today summary with deterministic tip', async () => {
