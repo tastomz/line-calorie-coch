@@ -7,8 +7,8 @@ Billing / quotas with OpenAI account = **not configured** by this repo.
 
 | Path | Model usage | Mitigation |
 | --- | --- | --- |
-| Food image analysis | Vision (`gpt-4o-mini`, `detail=low`) | 4/min/user; max **4 MB** image; reject oversized |
-| Food text analysis | Chat completions | 8/min/user |
+| Food image analysis | Vision (`gpt-5` default — set per-env via `FOOD_VISION_MODEL`, e.g. production uses `gpt-4o`) | 4/min/user; max **4 MB** image; reject oversized |
+| Food text analysis | Chat completions (`gpt-5`, reasoning_effort=low) | 8/min/user |
 | Message classify | JSON classify (`gpt-5`, reasoning_effort=low) | 20/min/user; skipped when rules match |
 | Meal suggestions | Chat completions | 10/min/user (`coach` bucket) |
 | Daily coach tip | Chat completions | 10/min/user; deterministic fallback if limited/down |
@@ -29,6 +29,8 @@ Circuit breaker: 5 consecutive OpenAI failures → 60s cooldown (process-local).
 Timeouts: OpenAI calls capped at **15s** (`OPENAI_CALL_TIMEOUT_MS`).
 
 **Classify model note:** `MESSAGE_CLASSIFY_MODEL` (`src/modules/food/message-classify.types.ts`) moved from `gpt-4o-mini` to `gpt-5` so one classifier call can also pick up exercise/sleep/nap/water free-text reports the deterministic regexes in `health-commands.ts` miss. `gpt-5` is a reasoning model — higher per-call cost and latency than `gpt-4o-mini`, still rate-limited at 20/min/user and only called after every exact-command and regex fast path has already failed to match. If latency on the "วันนี้"/classify hot path becomes noticeable, `gpt-5-mini` is the cheaper fallback to try first.
+
+**Food analysis model note:** `FOOD_ANALYSIS_MODEL` (`src/modules/food/food-analysis.types.ts`) moved from `gpt-4o-mini` to `gpt-5` — `gpt-4o-mini` gave the same calorie estimate for a packaged snack regardless of the price the user typed (e.g. "เลย์ห่อละ10บาท" vs "เลย์ห่อละ30บาท" both answered ~150 kcal, confirmed in production), because it has no real-world knowledge of product pricing to reason with. `gpt-5` is prompted to use a stated price as a cue for pack size. This also changes the vision fallback model used when `FOOD_VISION_MODEL` is unset — every real environment sets `FOOD_VISION_MODEL` explicitly (production uses `gpt-4o`), so this only affects a fresh/local environment with no override.
 
 ## Expected AI usage (order-of-magnitude, active user / day)
 

@@ -333,12 +333,14 @@ describe('FoodAnalysisService', () => {
       });
       const body = (create.mock.calls[1] as unknown[])[0] as {
         response_format: { json_schema: { name: string } };
-        max_tokens: number;
+        max_completion_tokens: number;
       };
       expect(body.response_format.json_schema.name).toBe(
         'food_photo_components',
       );
-      expect(body.max_tokens).toBe(650);
+      // Default model is gpt-5 (reasoning) — a fixed reasoning budget, not
+      // FOOD_PHOTO_MAX_TOKENS (that only applies to non-reasoning models).
+      expect(body.max_completion_tokens).toBe(2000);
       const prompt = systemPrompt(create);
       expect(prompt).toContain('cooking oil');
       expect(prompt).toContain('rice');
@@ -531,7 +533,7 @@ describe('FoodAnalysisService', () => {
       await serviceWithConfig(textCreate, {
         FOOD_VISION_MODEL: 'gpt-4o',
       }).analyzeText('ข้าว');
-      expect(modelOf(textCreate)).toBe('gpt-4o-mini');
+      expect(modelOf(textCreate)).toBe('gpt-5');
     });
 
     it('sends GPT-5 style limits (no temperature/max_tokens) for gpt-5 models', async () => {
@@ -568,7 +570,7 @@ describe('FoodAnalysisService', () => {
         await serviceWithConfig(create, {
           FOOD_VISION_MODEL: value,
         }).analyzeImage({ imageBytes: Buffer.from([1, 2, 3]) });
-        expect(modelOf(create)).toBe('gpt-4o-mini');
+        expect(modelOf(create)).toBe('gpt-5');
       }
     });
 
