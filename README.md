@@ -102,6 +102,13 @@ Quantity adjustments stay local (no OpenAI).
 `FOOD_VISION_DETAIL` (`low` default, `high`/`auto`) sets photo detail: higher reads small pack labels better at a higher per-image cost.
 `FOOD_VISION_MODEL` (default `gpt-4o-mini`) sets the model for photos only; a photo that yields 0 kcal asks the user for a clearer shot instead of showing a 0 kcal meal.
 
+## Food catalog (verified-label lookup)
+
+Text that names a known packaged product (e.g. a 7-Eleven item) is answered
+from a verified label instead of AI — no token cost, no guessing. Empty by
+default; see [docs/FOOD_CATALOG.md](docs/FOOD_CATALOG.md) for the dataset,
+matching rules, and how to import one.
+
 ## Membership / subscription / AI usage
 
 FREE + PRO (**50 THB/month**). Promo Free PRO codes (`TASTOM-XXXXXX`) with admin-typed days (1–365) and redemption limit (1–1,000).
