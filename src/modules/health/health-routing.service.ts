@@ -7,6 +7,7 @@ import {
   getZonedDateParts,
   zonedLocalToUtc,
 } from '../food/day-bounds';
+import { completionLimits } from '../food/food-analysis.service';
 import { ClassifiedMessage } from '../food/message-classify.types';
 import { LineOutboundError } from '../line/line-outbound.error';
 import { LineService } from '../line/line.service';
@@ -68,6 +69,8 @@ import {
   BodyScanAnalysisService,
   WeeklyReviewService,
 } from './weekly-review.service';
+
+const MEAL_PLAN_MODEL = 'gpt-5';
 
 const EXERCISE_TYPE_FROM_CLASSIFY: Record<
   NonNullable<ClassifiedMessage['exerciseType']>,
@@ -680,9 +683,8 @@ export class HealthRoutingService {
         'MEAL_PLAN',
         async () => {
           const completion = await this.openai!.chat.completions.create({
-            model: 'gpt-4o-mini',
-            temperature: 0.5,
-            max_tokens: 320,
+            model: MEAL_PLAN_MODEL,
+            ...completionLimits(MEAL_PLAN_MODEL, 320),
             messages: [
               {
                 role: 'system',
@@ -699,7 +701,7 @@ export class HealthRoutingService {
               },
             ],
           });
-          const meta = usageFromOpenAiCompletion(completion, 'gpt-4o-mini');
+          const meta = usageFromOpenAiCompletion(completion, MEAL_PLAN_MODEL);
           if (meta) reportAiTokenUsage(meta);
           return (
             completion.choices[0]?.message?.content?.trim() ||

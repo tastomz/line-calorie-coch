@@ -13,6 +13,7 @@ import {
   buildDeterministicCoachTip,
   buildMealRecommendationFallback,
 } from './daily-coach.messages';
+import { completionLimits } from './food-analysis.service';
 
 export class DailyCoachError extends Error {
   constructor(message: string) {
@@ -21,7 +22,7 @@ export class DailyCoachError extends Error {
   }
 }
 
-const COACH_MODEL = 'gpt-4o-mini';
+const COACH_MODEL = 'gpt-5';
 const COACH_MAX_TOKENS = 140;
 
 const COACH_SYSTEM_PROMPT = `You are a Thai LINE nutrition coach.
@@ -170,8 +171,7 @@ export class DailyCoachService {
       const completion = await withTimeout(
         this.client.chat.completions.create({
           model: COACH_MODEL,
-          temperature: 0.4,
-          max_tokens: COACH_MAX_TOKENS,
+          ...completionLimits(COACH_MODEL, COACH_MAX_TOKENS),
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userContent },
