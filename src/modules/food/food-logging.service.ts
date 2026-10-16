@@ -72,6 +72,7 @@ import {
 } from './food-analysis.service';
 import { FoodAnalysisResult } from './food-analysis.types';
 import { FoodAnalysisValidationError } from './food-analysis.validator';
+import { FoodCatalogService } from './food-catalog.service';
 import { FoodLogService } from './food-log.service';
 import {
   AMBIGUOUS_NUMBER_TEXT,
@@ -190,6 +191,7 @@ export class FoodLoggingService {
 
   constructor(
     private readonly foodAnalysisService: FoodAnalysisService,
+    private readonly foodCatalogService: FoodCatalogService,
     private readonly messageClassifyService: MessageClassifyService,
     private readonly pendingFoodService: PendingFoodService,
     private readonly foodLogService: FoodLogService,
@@ -1730,6 +1732,23 @@ export class FoodLoggingService {
       foodEditSessionBuffer.clear(userId);
     }
 
+    // Verified-label catalog match (e.g. 7-Eleven products) — skip AI and
+    // its rate limit entirely when the text names one unambiguously.
+    if (input.kind === 'text') {
+      const catalogMatch = await this.foodCatalogService.findByText(input.text);
+      if (catalogMatch) {
+        await this.savePendingAndReply(
+          userId,
+          replyToken,
+          catalogMatch,
+          lineUserId,
+          input.daysAgo,
+          undefined,
+        );
+        return;
+      }
+    }
+
     const rateKey = lineUserId ?? userId;
     const bucket = input.kind === 'image' ? 'food_image' : 'food_text';
     if (!aiRateLimiter.tryConsume(rateKey, bucket)) {
@@ -1765,20 +1784,13 @@ export class FoodLoggingService {
         analysis = photo.analysis;
       }
 
-      const pending = await this.pendingFoodService.upsertPending(
+      await this.savePendingAndReply(
         userId,
-        analysis,
-        input.kind === 'image' ? input.imageUrl : undefined,
-        input.kind === 'text' && input.daysAgo
-          ? shiftDaysAgoKeepingTime(input.daysAgo)
-          : undefined,
-      );
-
-      await this.lineService.replyButtonsOrPush(
         replyToken,
-        lineUserId ?? userId,
-        buildFoodEstimateMessage(analysis, pending),
-        FOOD_CONFIRM_CHOICES,
+        analysis,
+        lineUserId,
+        input.kind === 'text' ? input.daysAgo : undefined,
+        input.kind === 'image' ? input.imageUrl : undefined,
       );
     } catch (error) {
       if (error instanceof AiQuotaExceededError) {
@@ -1814,6 +1826,29 @@ export class FoodLoggingService {
       }
       await this.lineService.replyText(replyToken, FOOD_ANALYSIS_FAILED_TEXT);
     }
+  }
+
+  private async savePendingAndReply(
+    userId: string,
+    replyToken: string,
+    analysis: FoodAnalysisResult,
+    lineUserId: string | undefined,
+    daysAgo: number | undefined,
+    imageUrl: string | undefined,
+  ): Promise<void> {
+    const pending = await this.pendingFoodService.upsertPending(
+      userId,
+      analysis,
+      imageUrl,
+      daysAgo ? shiftDaysAgoKeepingTime(daysAgo) : undefined,
+    );
+
+    await this.lineService.replyButtonsOrPush(
+      replyToken,
+      lineUserId ?? userId,
+      buildFoodEstimateMessage(analysis, pending),
+      FOOD_CONFIRM_CHOICES,
+    );
   }
 
   private async confirmPending(
