@@ -111,7 +111,7 @@ describe('FoodCatalogService.findByText', () => {
   it('falls back to a brand-only match when the full name is not typed', async () => {
     const { service } = makeService([doritos, hanami, lays]);
 
-    const result = await service.findByText('เลย์ห่อละ30 1ห่อ');
+    const result = await service.findByText('กินเลย์ไป1ห่อ');
 
     expect(result?.foodName).toBe(lays.nameTh);
     expect(result?.estimatedCalories).toBe(430);
@@ -125,7 +125,23 @@ describe('FoodCatalogService.findByText', () => {
     };
     const { service } = makeService([lays, laysBbq]);
 
-    const result = await service.findByText('เลย์ห่อละ30 1ห่อ');
+    const result = await service.findByText('กินเลย์ไป1ห่อ');
+
+    expect(result).toBeNull();
+  });
+
+  it('does not brand-match when the text names a price (unverifiable pack size)', async () => {
+    const { service } = makeService([doritos, hanami, lays]);
+
+    const result = await service.findByText('เลย์ห่อละ10บาท1ห่อ');
+
+    expect(result).toBeNull();
+  });
+
+  it('does not brand-match when the text names a size/weight', async () => {
+    const { service } = makeService([doritos, hanami, lays]);
+
+    const result = await service.findByText('เลย์ถุงเล็ก');
 
     expect(result).toBeNull();
   });

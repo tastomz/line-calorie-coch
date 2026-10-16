@@ -15,6 +15,28 @@ const MIN_MATCH_LENGTH = 6;
  */
 const MIN_BRAND_MATCH_LENGTH = 3;
 
+/**
+ * Price/size words that mean the text names a specific pack the catalog
+ * can't verify (we store one SKU per brand+flavor, no price or alternate
+ * sizes) — e.g. "เลย์ห่อละ10บาท" (a small bag) vs "เลย์ห่อละ30บาท" (the
+ * regular bag) have very different calories. The brand-only fallback
+ * skips rather than confidently guess the wrong pack.
+ */
+const AMBIGUOUS_SIZE_WORDS = [
+  'บาท',
+  'กรัม',
+  'ก.',
+  'มล',
+  'มิลลิลิตร',
+  'ลิตร',
+  'ซีซี',
+  'เล็ก',
+  'ใหญ่',
+  'จัมโบ้',
+  'มินิ',
+  'ไซส์',
+];
+
 function normalize(text: string): string {
   return text.trim().toLowerCase().replace(/\s+/g, '');
 }
@@ -66,6 +88,11 @@ export class FoodCatalogService {
       // the brand ("เลย์", not the full label). Fall back to matching the
       // catalog name's first word, but only act when exactly one item
       // carries that brand: if several share it, that's still ambiguous.
+      // Skip entirely when the text names a price or size — we only have
+      // one SKU per brand/flavor and can't tell if it's the right one.
+      if (AMBIGUOUS_SIZE_WORDS.some((word) => query.includes(word))) {
+        return null;
+      }
       const brandMatches = candidates.filter((item) =>
         this.isBrandMatch(query, item),
       );
