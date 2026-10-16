@@ -1653,7 +1653,7 @@ export class FoodLoggingService {
       return;
     }
 
-    const imageBytes = await this.lineService.getMessageContentPreviewBytes(
+    const imageBytes = await this.lineService.getMessageContentBytes(
       input.messageId,
     );
     await this.analyzeAndAskConfirmation(
@@ -1691,7 +1691,7 @@ export class FoodLoggingService {
     }
 
     try {
-      const imageBytes = await this.lineService.getMessageContentPreviewBytes(
+      const imageBytes = await this.lineService.getMessageContentBytes(
         buffered.messageId,
       );
       await this.analyzeAndAskConfirmation(
