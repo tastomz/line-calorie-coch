@@ -548,7 +548,7 @@ describe('FoodAnalysisService', () => {
       expect(body.temperature).toBeUndefined();
       expect(body.max_tokens).toBeUndefined();
       expect(body.max_completion_tokens).toBe(2000);
-      expect(body.reasoning_effort).toBe('low');
+      expect(body.reasoning_effort).toBe('minimal');
     });
 
     it('keeps temperature 0 and max_tokens for gpt-4o family', async () => {
