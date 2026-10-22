@@ -88,15 +88,15 @@
         }
 
         let actionsHtml = '';
+        let showPlans = false;
         if (m.checkoutEnabled) {
-          if (isFree) {
-            actionsHtml = `<a class="btn" href="/upgrade">สมัคร Pro</a>`;
-          } else if (m.status === 'TRIALING') {
-            actionsHtml = `<a class="btn" href="/upgrade">สมัคร Pro (ชำระเงิน)</a>`;
-          } else if (!m.autoRenew) {
+          if (!m.autoRenew) {
+            // FREE, trial/promo, or a PromptPay pass: pick a package to buy/extend.
+            showPlans = true;
             actionsHtml = `
-              <a class="btn" href="/upgrade">ต่ออายุ Pro +30 วัน (QR พร้อมเพย์)</a>
-              <p class="muted">ใช้ได้ถึง ${fmtDate(m.periodEnd)} · ไม่ตัดเงินอัตโนมัติ</p>`;
+              <h3>👑 ${isFree ? 'สมัครสมาชิก Pro' : 'ต่ออายุ Pro'}</h3>
+              ${!isFree && expiry ? `<p class="muted">ตอนนี้ใช้ได้ถึง ${expiry} · ซื้อเพิ่มจะบวกวันต่อจากนี้</p>` : ''}
+              <div id="plans"></div>`;
           } else if (m.status === 'CANCELED') {
             actionsHtml = `
               <button class="btn" id="resume">กลับมาใช้งานต่อ</button>
@@ -126,6 +126,7 @@
           </div>
         `;
 
+        if (showPlans) renderPlanPicker(document.getElementById('plans'));
         document.getElementById('redeem')?.addEventListener('click', async () => {
           const code = document.getElementById('promo').value;
           const msg = document.getElementById('promoMsg');

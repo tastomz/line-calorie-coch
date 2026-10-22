@@ -585,3 +585,32 @@ model FoodCatalogItem {
   @@unique([source, sourceFoodId])
   @@index([nameTh])
 }
+
+enum DiscountType {
+  NONE
+  PERCENT
+  AMOUNT
+}
+
+/// PRO package sold via one-time PromptPay payment. Admin-editable price,
+/// length and discount. `code` is what clients send at checkout.
+model ProPlan {
+  id               String       @id @default(cuid())
+  code             String       @unique
+  labelTh          String
+  days             Int
+  priceThb         Int
+  discountType     DiscountType @default(NONE)
+  /// PERCENT: 1–90 · AMOUNT: whole baht off
+  discountValue    Int          @default(0)
+  /// Short tag shown to users, e.g. "โปรเปิดตัว"
+  discountLabel    String?
+  discountStartsAt DateTime?
+  discountEndsAt   DateTime?
+  active           Boolean      @default(true)
+  sortOrder        Int          @default(0)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([active, sortOrder])
+}

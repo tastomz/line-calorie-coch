@@ -114,7 +114,10 @@ export class MembershipApiController {
 
   @Post('checkout')
   @UseGuards(MembershipSessionGuard)
-  async checkout(@MembershipUserId() userId: string) {
+  async checkout(
+    @MembershipUserId() userId: string,
+    @Body() body: { planCode?: string } = {},
+  ) {
     if (!this.checkoutEnabled()) {
       throw new HttpException(
         'การชำระเงินยังไม่เปิดให้บริการ',
@@ -128,7 +131,7 @@ export class MembershipApiController {
       );
     }
     try {
-      return await this.billing.createCheckout(userId);
+      return await this.billing.createCheckout(userId, body?.planCode);
     } catch (error) {
       throw new HttpException(
         error instanceof Error
@@ -226,6 +229,15 @@ export class MembershipApiController {
       }
       throw error;
     }
+  }
+
+  /** Packages for sale with current (discounted) prices. Public. */
+  @Get('plans')
+  async plans() {
+    return {
+      checkoutEnabled: this.checkoutEnabled(),
+      plans: await this.billing.listPlansForSale(),
+    };
   }
 
   @Get('config')

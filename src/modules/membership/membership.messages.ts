@@ -1,9 +1,4 @@
-import {
-  AiOperation,
-  FREE_AI_LIMITS,
-  PRO_AI_LIMITS,
-  PRO_MONTHLY_PRICE_THB,
-} from './plan.config';
+import { AiOperation, FREE_AI_LIMITS, PRO_AI_LIMITS } from './plan.config';
 import {
   DailyUsageSnapshot,
   EffectiveEntitlement,
@@ -89,7 +84,7 @@ export function buildMembershipStatusMessage(
           : 'ใช้งานอยู่';
     return `👑 Tastom Pro
 
-${PRO_MONTHLY_PRICE_THB} บาท / 30 วัน (จ่ายผ่าน QR พร้อมเพย์)
+มีแพ็ก 1–12 เดือน · จ่ายผ่าน QR พร้อมเพย์
 สถานะ: ${statusLabel}
 
 ${usageBlock}
@@ -101,8 +96,8 @@ Pro ใช้งาน AI ได้มากขึ้น`;
 
   const upgrade =
     opts?.upgradeUrl != null
-      ? `\n\n👑 Pro\n${PRO_MONTHLY_PRICE_THB} บาท / 30 วัน (จ่ายผ่าน QR พร้อมเพย์)\nใช้งาน AI ได้มากขึ้น\n\nสมัคร Pro:\n${opts.upgradeUrl}`
-      : `\n\n👑 Pro\n${PRO_MONTHLY_PRICE_THB} บาท / 30 วัน (จ่ายผ่าน QR พร้อมเพย์)\nใช้งาน AI ได้มากขึ้น\n(ตั้งค่า MEMBERSHIP_WEB_URL เพื่อเปิดลิงก์สมัคร)`;
+      ? `\n\n👑 Pro\nมีแพ็ก 1–12 เดือน · จ่ายผ่าน QR พร้อมเพย์\nใช้งาน AI ได้มากขึ้น\n\nสมัคร Pro:\n${opts.upgradeUrl}`
+      : `\n\n👑 Pro\nมีแพ็ก 1–12 เดือน · จ่ายผ่าน QR พร้อมเพย์\nใช้งาน AI ได้มากขึ้น\n(ตั้งค่า MEMBERSHIP_WEB_URL เพื่อเปิดลิงก์สมัคร)`;
 
   const payNote = opts?.paymentConfigured
     ? ''
@@ -139,7 +134,7 @@ export function buildQuotaExceededMessage(
 
   const upgrade =
     error.plan === 'FREE'
-      ? `\n\n👑 Pro ${PRO_MONTHLY_PRICE_THB} บาท / 30 วัน (จ่ายผ่าน QR พร้อมเพย์)\nใช้งาน AI ได้มากขึ้น${
+      ? `\n\n👑 Pro มีแพ็ก 1–12 เดือน · จ่ายผ่าน QR พร้อมเพย์\nใช้งาน AI ได้มากขึ้น${
           upgradeUrl ? `\n${upgradeUrl}` : ''
         }`
       : '';

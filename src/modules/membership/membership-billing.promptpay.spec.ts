@@ -18,7 +18,13 @@ function paidSession(overrides: Record<string, unknown> = {}) {
     amount_total: 5000,
     customer: 'cus_1',
     client_reference_id: 'user-1',
-    metadata: { internalUserId: 'user-1', kind: 'pro_pass', passDays: '30' },
+    metadata: {
+      internalUserId: 'user-1',
+      kind: 'pro_pass',
+      planCode: '1m',
+      priceThb: '50',
+      passDays: '30',
+    },
     ...overrides,
   };
 }
@@ -45,6 +51,7 @@ describe('MembershipBillingService PromptPay pass', () => {
     prisma as never,
     { get: () => 'http://localhost:3000' } as never,
     entitlement,
+    {} as never,
     payments as never,
   );
 
@@ -130,8 +137,39 @@ describe('MembershipBillingService PromptPay pass', () => {
     ['wrong amount', { amount_total: 100 }],
     ['wrong currency', { currency: 'usd' }],
     ['not a pass', { metadata: { internalUserId: 'user-1' } }],
+    [
+      'amount differs from the priced metadata',
+      {
+        metadata: {
+          internalUserId: 'user-1',
+          kind: 'pro_pass',
+          priceThb: '600',
+          passDays: '365',
+        },
+      },
+    ],
   ])('does not grant for %s', async (_label, overrides) => {
     await event(paidSession(overrides));
     expect(tx.subscription.create).not.toHaveBeenCalled();
+  });
+
+  it('grants the days of a discounted 12-month plan', async () => {
+    const before = Date.now();
+    await event(
+      paidSession({
+        amount_total: 54000,
+        metadata: {
+          internalUserId: 'user-1',
+          kind: 'pro_pass',
+          planCode: '12m',
+          priceThb: '540',
+          passDays: '365',
+        },
+      }),
+    );
+    const data = tx.subscription.create.mock.calls[0][0].data;
+    const end = data.currentPeriodEnd.getTime();
+    expect(end).toBeGreaterThanOrEqual(before + 365 * DAY);
+    expect(end).toBeLessThan(before + 365 * DAY + 5000);
   });
 });

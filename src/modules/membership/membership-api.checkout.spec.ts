@@ -65,10 +65,12 @@ describe('MembershipApiController checkout gate', () => {
       checkoutFlag: 'true',
       paymentConfigured: true,
     });
-    await expect(controller.checkout('user-a')).resolves.toEqual({
+    await expect(
+      controller.checkout('user-a', { planCode: '3m' }),
+    ).resolves.toEqual({
       url: 'http://pay.test',
     });
-    expect(billing.createCheckout).toHaveBeenCalledWith('user-a');
+    expect(billing.createCheckout).toHaveBeenCalledWith('user-a', '3m');
   });
 
   it('exposes checkoutEnabled=false in public config by default', () => {

@@ -8,8 +8,12 @@ export type CheckoutSessionRequest = {
   userId: string;
   successUrl: string;
   cancelUrl: string;
-  /** Monthly price in THB — must match PRO_MONTHLY_PRICE_THB. */
-  priceThbMonthly: number;
+  /** ProPlan.code being bought. */
+  planCode: string;
+  /** Shown on the Stripe page, e.g. "3 เดือน". */
+  planLabelTh: string;
+  /** Final price in whole THB (discount already applied by the server). */
+  priceThb: number;
   /** Existing Stripe customer id when known. */
   providerCustomerId?: string;
   /** Days of PRO this one-time PromptPay payment buys. */

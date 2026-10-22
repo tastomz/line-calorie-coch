@@ -1,5 +1,4 @@
 import { MockPaymentProvider } from './mock.payment-provider';
-import { PRO_MONTHLY_PRICE_THB } from './plan.config';
 
 describe('MockPaymentProvider', () => {
   const config = {
@@ -12,7 +11,10 @@ describe('MockPaymentProvider', () => {
       userId: 'user-a',
       successUrl: 'http://localhost/success',
       cancelUrl: 'http://localhost/cancel',
-      priceThbMonthly: PRO_MONTHLY_PRICE_THB,
+      planCode: '1m',
+      planLabelTh: '1 เดือน',
+      priceThb: 60,
+      passDays: 30,
     });
     expect(session.url).toContain('/membership/mock-checkout?session_id=');
     const event = provider.simulatePaymentSuccess(session.sessionId);

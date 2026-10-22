@@ -12,7 +12,7 @@ import {
   FuturePaymentWebhookEvent,
   type PaymentProviderPort,
 } from './payment-provider.port';
-import { PRO_MONTHLY_PRICE_THB, PRO_PASS_DAYS } from './plan.config';
+import { ProPlanService } from './pro-plan.service';
 import { PRO_PASS_KIND } from './stripe.payment-provider';
 import { mapStripeSubscriptionStatus } from './stripe-status.mapper';
 import { SubscriptionEntitlementService } from './subscription-entitlement.service';
@@ -25,6 +25,7 @@ export class MembershipBillingService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly entitlement: SubscriptionEntitlementService,
+    private readonly plans: ProPlanService,
     @Inject(PAYMENT_PROVIDER)
     private readonly payments: PaymentProviderPort,
   ) {}
@@ -33,11 +34,21 @@ export class MembershipBillingService {
     return this.payments.isConfigured();
   }
 
+  listPlansForSale() {
+    return this.plans.listForSale();
+  }
+
   async createCheckout(
     userId: string,
+    planCode: unknown,
   ): Promise<{ url: string; sessionId: string }> {
     if (!this.payments.isConfigured()) {
       throw new Error('ระบบชำระเงินยังไม่พร้อม (Stripe TEST)');
+    }
+    // Price/days always come from the DB — the client only names the plan.
+    const plan = await this.plans.findForSale(planCode);
+    if (!plan) {
+      throw new Error('ไม่พบแพ็กเกจนี้ หรือปิดขายแล้วครับ');
     }
 
     const existing = await this.entitlement.getLatestSubscription(userId);
@@ -63,8 +74,10 @@ export class MembershipBillingService {
 
     const result = await this.payments.createCheckoutSession({
       userId,
-      priceThbMonthly: PRO_MONTHLY_PRICE_THB,
-      passDays: PRO_PASS_DAYS,
+      planCode: plan.code,
+      planLabelTh: plan.labelTh,
+      priceThb: plan.finalPriceThb,
+      passDays: plan.days,
       providerCustomerId: existing?.providerCustomerId ?? undefined,
       successUrl: `${webBase}/membership/success?session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${webBase}/membership/cancel`,
@@ -79,6 +92,8 @@ export class MembershipBillingService {
         event: 'checkout_created',
         userIdPrefix: userId.slice(0, 8),
         sessionIdPrefix: result.sessionId.slice(0, 12),
+        planCode: plan.code,
+        priceThb: plan.finalPriceThb,
       }),
     );
 
@@ -255,7 +270,7 @@ export class MembershipBillingService {
   }
 
   /**
-   * One-time PromptPay payment → PRO for PRO_PASS_DAYS. Extends from the end of
+   * One-time PromptPay payment → PRO for the plan's days. Extends from the end of
    * any PRO the user still has (paid, trial or promo), otherwise from now.
    * Idempotent per Checkout Session: Stripe can send both
    * checkout.session.completed and async_payment_succeeded for one payment.
@@ -277,8 +292,19 @@ export class MembershipBillingService {
       // QR shown but not paid yet — async_payment_succeeded will follow.
       return;
     }
-    const expectedAmount = PRO_MONTHLY_PRICE_THB * 100;
-    if (obj.currency !== 'thb' || obj.amount_total !== expectedAmount) {
+    // Server-set at checkout (signed webhook): exact price and days bought.
+    const priceThb = Number(metadata.priceThb);
+    const days = Number(metadata.passDays);
+    const expectedAmount = priceThb * 100;
+    if (
+      !Number.isInteger(priceThb) ||
+      priceThb < 1 ||
+      !Number.isInteger(days) ||
+      days < 1 ||
+      days > 3650 ||
+      obj.currency !== 'thb' ||
+      obj.amount_total !== expectedAmount
+    ) {
       this.logger.error(
         JSON.stringify({
           event: 'promptpay_pass_amount_mismatch',
@@ -289,11 +315,6 @@ export class MembershipBillingService {
       );
       return;
     }
-    const passDays = Number(metadata.passDays);
-    const days =
-      Number.isInteger(passDays) && passDays > 0 && passDays <= 365
-        ? passDays
-        : PRO_PASS_DAYS;
     const customerId =
       typeof obj.customer === 'string'
         ? obj.customer
@@ -308,6 +329,7 @@ export class MembershipBillingService {
             providerEventId: `pass:${sessionId}`,
             eventType: 'promptpay_pass_granted',
             payloadSummary: JSON.stringify({
+              planCode: metadata.planCode ?? null,
               days,
               amountTotal: expectedAmount,
             }),
@@ -352,6 +374,7 @@ export class MembershipBillingService {
         event: 'promptpay_pass_granted',
         userIdPrefix: userId.slice(0, 8),
         sessionIdPrefix: sessionId.slice(0, 12),
+        planCode: metadata.planCode ?? null,
         days,
       }),
     );

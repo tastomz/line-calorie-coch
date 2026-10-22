@@ -208,3 +208,86 @@ function redeemErrorTh(code) {
       return typeof code === 'string' ? code : 'ใช้โค้ดไม่สำเร็จ';
   }
 }
+
+/**
+ * Render Pro packages (from /api/membership/plans) with a PromptPay buy
+ * button each. Prices come from the server; the client only sends planCode.
+ */
+async function renderPlanPicker(container, opts = {}) {
+  if (!container) return;
+  const esc = (s) =>
+    String(s ?? '').replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+    );
+  const baht = (n) => '฿' + Number(n).toLocaleString('th-TH');
+  container.innerHTML = '<p class="muted">กำลังโหลดแพ็กเกจ...</p>';
+  let data;
+  try {
+    data = await api('/api/membership/plans');
+  } catch (e) {
+    container.innerHTML = `<p class="err">${esc(e.message)}</p>`;
+    return;
+  }
+  const plans = data.plans || [];
+  if (!plans.length) {
+    container.innerHTML = '<p class="muted">ยังไม่มีแพ็กเกจเปิดขายครับ</p>';
+    return;
+  }
+  // Highlight the best per-month value among multi-month plans.
+  const best = plans.reduce(
+    (b, p) => (p.days > 30 && (!b || p.perMonthThb < b.perMonthThb) ? p : b),
+    null,
+  );
+  container.innerHTML = `
+    <div class="plans">
+      ${plans
+        .map((p) => {
+          const tags = [
+            p.discountActive ? `<span class="badge hot">${esc(p.discountLabel || 'ลดราคา')}</span>` : '',
+            best && best.code === p.code ? '<span class="badge">คุ้มสุด</span>' : '',
+          ].join(' ');
+          const until =
+            p.discountActive && p.discountEndsAt
+              ? `<div class="muted small">ราคานี้ถึง ${esc(fmtDateShort(p.discountEndsAt))}</div>`
+              : '';
+          return `
+          <button type="button" class="plan" data-code="${esc(p.code)}" ${data.checkoutEnabled ? '' : 'disabled'}>
+            <div class="plan-top"><b>${esc(p.labelTh)}</b> ${tags}</div>
+            <div class="plan-price">
+              ${p.discountActive ? `<s>${baht(p.priceThb)}</s>` : ''}
+              <span>${baht(p.finalPriceThb)}</span>
+            </div>
+            <div class="muted small">${p.days} วัน${p.days > 30 ? ` · ตกเดือนละ ${baht(p.perMonthThb)}` : ''}</div>
+            ${until}
+          </button>`;
+        })
+        .join('')}
+    </div>
+    <p class="muted small">${
+      data.checkoutEnabled
+        ? 'กดเลือกแพ็กเกจ แล้วสแกน QR พร้อมเพย์ด้วยแอปธนาคาร · จ่ายครั้งเดียว ไม่ตัดเงินอัตโนมัติ · ถ้ายังเป็น Pro อยู่ จะบวกวันต่อจากวันหมดอายุเดิม'
+        : 'การชำระเงินยังไม่เปิดให้บริการ — ใช้โค้ดโปรโมชั่นที่หน้าบัญชีได้ถ้ามี'
+    }</p>
+    <div class="plan-msg muted"></div>`;
+  const msg = container.querySelector('.plan-msg');
+  container.querySelectorAll('button.plan').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      container.querySelectorAll('button.plan').forEach((b) => (b.disabled = true));
+      msg.className = 'plan-msg muted';
+      msg.textContent = 'กำลังสร้าง QR...';
+      try {
+        const r = await api('/api/membership/checkout', {
+          method: 'POST',
+          body: JSON.stringify({ planCode: btn.dataset.code }),
+        });
+        location.href = r.url;
+      } catch (e) {
+        if (redirectToLoginIfUnauthorized(e)) return;
+        msg.className = 'plan-msg err';
+        msg.textContent = e.message;
+        container.querySelectorAll('button.plan').forEach((b) => (b.disabled = false));
+        if (opts.onError) opts.onError(e);
+      }
+    });
+  });
+}

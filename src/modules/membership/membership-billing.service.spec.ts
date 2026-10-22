@@ -31,6 +31,7 @@ describe('MembershipBillingService webhook idempotency', () => {
     prisma as never,
     config as never,
     entitlement as never,
+    {} as never,
     payments as never,
   );
 

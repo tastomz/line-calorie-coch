@@ -7,7 +7,7 @@ import {
   parsePromoCommand,
 } from './membership.messages';
 import { AiQuotaExceededError } from './membership.errors';
-import { FREE_AI_LIMITS, PRO_MONTHLY_PRICE_THB } from './plan.config';
+import { FREE_AI_LIMITS } from './plan.config';
 
 describe('membership.messages', () => {
   it('recognizes membership commands', () => {
@@ -47,7 +47,7 @@ describe('membership.messages', () => {
     );
     expect(text).toContain('Free');
     expect(text).toContain(`3/${FREE_AI_LIMITS.FOOD_TEXT}`);
-    expect(text).toContain(`${PRO_MONTHLY_PRICE_THB} บาท`);
+    expect(text).toContain('จ่ายผ่าน QR พร้อมเพย์');
     expect(text).toContain('ใช้งาน AI ได้มากขึ้น');
     expect(text).not.toContain('ไม่จำกัด');
   });

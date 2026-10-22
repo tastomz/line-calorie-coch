@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'crypto';
-import { PRO_MONTHLY_PRICE_THB } from './plan.config';
 import {
   CheckoutSessionRequest,
   CheckoutSessionResult,
@@ -45,10 +44,8 @@ export class MockPaymentProvider implements PaymentProviderPort {
   async createCheckoutSession(
     request: CheckoutSessionRequest,
   ): Promise<CheckoutSessionResult> {
-    if (request.priceThbMonthly !== PRO_MONTHLY_PRICE_THB) {
-      throw new Error(
-        `Checkout price must be ${PRO_MONTHLY_PRICE_THB} THB/month`,
-      );
+    if (!Number.isInteger(request.priceThb) || request.priceThb < 1) {
+      throw new Error('Checkout price must be a positive whole baht amount');
     }
     const sessionId = `cs_mock_${randomBytes(8).toString('hex')}`;
     const customerId =

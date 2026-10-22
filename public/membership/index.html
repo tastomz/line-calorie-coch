@@ -23,7 +23,7 @@
 
     <div class="card">
       <div class="muted">PRO</div>
-      <div class="price">฿50 <span>/ 30 วัน</span></div>
+      <div class="price">เริ่ม ฿<b id="fromPrice">60</b> <span>/ เดือน</span></div>
       <ul>
         <li>วิเคราะห์อาหารด้วย AI ได้มากขึ้น</li>
         <li>วิเคราะห์รูปอาหารได้มากขึ้น</li>
@@ -59,11 +59,15 @@
   <script>
     (async () => {
       try {
+        api('/api/membership/plans').then((d) => {
+          const monthly = (d.plans || []).map((p) => p.perMonthThb);
+          if (monthly.length) document.getElementById('fromPrice').textContent = Math.min(...monthly);
+        }).catch(() => {});
         const cfg = await api('/api/membership/config');
         const cta = document.getElementById('ctaUpgrade');
         if (cfg.checkoutEnabled) {
           cta.href = '/upgrade';
-          cta.textContent = 'สมัคร Pro 50 บาท / 30 วัน';
+          cta.textContent = 'ดูแพ็กเกจ Pro';
         }
       } catch {}
     })();

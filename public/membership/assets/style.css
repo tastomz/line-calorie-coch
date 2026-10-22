@@ -98,3 +98,27 @@ a { color: var(--accent); }
   color: var(--accent);
   font-size: 0.85rem;
 }
+.small { font-size: 0.85rem; }
+.plans {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+.plan {
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  background: #0d1611;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  cursor: pointer;
+}
+.plan:hover:not(:disabled) { border-color: var(--accent); }
+.plan:disabled { opacity: 0.6; cursor: not-allowed; }
+.plan-top { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.plan-price { margin: 6px 0 2px; }
+.plan-price span { font-size: 1.5rem; font-weight: 700; }
+.plan-price s { color: var(--muted); margin-right: 6px; }
+.badge.hot { background: #4a2a1e; color: var(--warn); }

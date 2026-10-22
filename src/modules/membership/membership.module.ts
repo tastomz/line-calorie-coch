@@ -1,3 +1,4 @@
+import { ProPlanService } from './pro-plan.service';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PrismaModule } from '../../prisma/prisma.module';
@@ -38,6 +39,7 @@ import { SubscriptionEntitlementService } from './subscription-entitlement.servi
     MembershipService,
     MembershipAuthService,
     MembershipBillingService,
+    ProPlanService,
     MembershipSessionGuard,
     StripePaymentProvider,
     MockPaymentProvider,
@@ -78,6 +80,7 @@ import { SubscriptionEntitlementService } from './subscription-entitlement.servi
     MembershipService,
     MembershipAuthService,
     MembershipBillingService,
+    ProPlanService,
     MockPaymentProvider,
     PAYMENT_PROVIDER,
   ],

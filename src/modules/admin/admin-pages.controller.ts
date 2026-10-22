@@ -13,6 +13,7 @@ export class AdminPagesController {
     'admin/login',
     'admin/dashboard',
     'admin/promos',
+    'admin/plans',
     'admin/ai-usage',
   ])
   serve(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
@@ -22,6 +23,7 @@ export class AdminPagesController {
       '/admin/login': 'login.html',
       '/admin/dashboard': 'dashboard.html',
       '/admin/promos': 'promos.html',
+      '/admin/plans': 'plans.html',
       '/admin/ai-usage': 'ai-usage.html',
     };
     const file = map[path];

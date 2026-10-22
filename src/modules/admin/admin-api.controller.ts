@@ -15,6 +15,11 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 import { parsePromoParams } from '../membership/promo-code.generator';
+import {
+  PlanValidationError,
+  ProPlanService,
+} from '../membership/pro-plan.service';
+import type { ProPlanInput } from '../membership/pro-plan.service';
 import { membershipRateLimiter } from '../membership/membership-rate-limiter';
 import { ADMIN_SESSION_COOKIE, AdminAuthService } from './admin-auth.service';
 import { AdminAiUsageService } from './admin-ai-usage.service';
@@ -29,7 +34,61 @@ export class AdminApiController {
     private readonly dashboard: AdminDashboardService,
     private readonly aiUsage: AdminAiUsageService,
     private readonly config: ConfigService,
+    private readonly plans: ProPlanService,
   ) {}
+
+  private planError(error: unknown): never {
+    if (error instanceof PlanValidationError) {
+      throw new BadRequestException(error.message);
+    }
+    throw error;
+  }
+
+  /** PRO packages (incl. inactive) with the price users currently see. */
+  @Get('plans')
+  @UseGuards(AdminSessionGuard)
+  async listPlans() {
+    return this.plans.adminList();
+  }
+
+  @Post('plans')
+  @UseGuards(AdminSessionGuard)
+  async createPlan(@AdminId() adminId: string, @Body() body: ProPlanInput) {
+    try {
+      const plan = await this.plans.create(body ?? {});
+      await this.auth.audit(adminId, 'plan_create', 'ProPlan', plan.id, {
+        code: plan.code,
+        priceThb: plan.priceThb,
+        days: plan.days,
+      });
+      return plan;
+    } catch (error) {
+      this.planError(error);
+    }
+  }
+
+  @Patch('plans/:id')
+  @UseGuards(AdminSessionGuard)
+  async patchPlan(
+    @AdminId() adminId: string,
+    @Param('id') id: string,
+    @Body() body: ProPlanInput,
+  ) {
+    try {
+      const plan = await this.plans.update(id, body ?? {});
+      await this.auth.audit(adminId, 'plan_update', 'ProPlan', plan.id, {
+        code: plan.code,
+        priceThb: plan.priceThb,
+        days: plan.days,
+        active: plan.active,
+        discountType: plan.discountType,
+        discountValue: plan.discountValue,
+      });
+      return plan;
+    } catch (error) {
+      this.planError(error);
+    }
+  }
 
   private promoParams(body: {
     trialDays?: unknown;

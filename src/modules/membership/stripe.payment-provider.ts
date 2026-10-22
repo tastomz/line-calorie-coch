@@ -8,7 +8,7 @@ import {
   PaymentProviderPort,
   ProviderSubscriptionSnapshot,
 } from './payment-provider.port';
-import { PRO_MONTHLY_PRICE_THB } from './plan.config';
+import { MIN_CHARGE_THB } from './pro-plan.service';
 
 /** Marks a Checkout Session as a one-time PromptPay PRO pass. */
 export const PRO_PASS_KIND = 'pro_pass';
@@ -80,10 +80,13 @@ export class StripePaymentProvider implements PaymentProviderPort {
     request: CheckoutSessionRequest,
   ): Promise<CheckoutSessionResult> {
     const stripe = this.requireClient();
-    if (request.priceThbMonthly !== PRO_MONTHLY_PRICE_THB) {
-      throw new Error(
-        `Checkout price must be ${PRO_MONTHLY_PRICE_THB} THB/month`,
-      );
+    if (
+      !Number.isInteger(request.priceThb) ||
+      request.priceThb < MIN_CHARGE_THB ||
+      !Number.isInteger(request.passDays) ||
+      request.passDays < 1
+    ) {
+      throw new Error('Checkout needs a whole-baht price ≥ 10 and days ≥ 1');
     }
 
     let customerId = request.providerCustomerId;
@@ -95,6 +98,9 @@ export class StripePaymentProvider implements PaymentProviderPort {
     const metadata = {
       internalUserId: request.userId,
       kind: PRO_PASS_KIND,
+      planCode: request.planCode,
+      // The webhook grants exactly what was priced here (signed by Stripe).
+      priceThb: String(request.priceThb),
       passDays: String(request.passDays),
     };
     const session = await stripe.checkout.sessions.create({
@@ -107,9 +113,9 @@ export class StripePaymentProvider implements PaymentProviderPort {
           price_data: {
             currency: 'thb',
             // Stripe amounts are in satang (1 THB = 100).
-            unit_amount: request.priceThbMonthly * 100,
+            unit_amount: request.priceThb * 100,
             product_data: {
-              name: `Kcal Coach Pro ${request.passDays} วัน`,
+              name: `Tastom Pro ${request.planLabelTh} (${request.passDays} วัน)`,
             },
           },
         },
