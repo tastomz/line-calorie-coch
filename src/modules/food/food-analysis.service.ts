@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { openAiCircuitBreaker } from '../../common/openai-circuit-breaker';
 import {
-  OPENAI_CALL_TIMEOUT_MS,
+  OPENAI_FOOD_TIMEOUT_MS,
   TimeoutError,
   withTimeout,
 } from '../../common/with-timeout';
@@ -56,26 +56,28 @@ export class FoodImageUnreadableError extends FoodAnalysisError {
 /**
  * GPT-5 / o-series models reject `temperature` and `max_tokens`, and spend
  * part of the budget on reasoning, so they need a larger completion limit.
- * Effort is 'minimal': at 'low', gpt-5 often took 10–15 s per call, so the
- * classify + food-analysis chain blew the 15 s call / 25 s LINE budget and
- * users got "temporarily unavailable". These are short structured-JSON tasks.
+ * Default effort is 'low' (food estimates need some reasoning). The quick
+ * routing classifier passes 'minimal' so it leaves the food call enough of the
+ * 25 s LINE budget — at 'low' both calls together took 12–19 s and timed out.
  */
+export type ReasoningEffort = 'minimal' | 'low';
 const REASONING_MODEL = /^(gpt-5|o\d)/;
 const REASONING_MAX_COMPLETION_TOKENS = 2000;
 
 export function completionLimits(
   model: string,
   maxTokens: number = FOOD_ANALYSIS_MAX_TOKENS,
+  effort: ReasoningEffort = 'low',
 ):
   | { temperature: number; max_tokens: number }
   | {
       max_completion_tokens: number;
-      reasoning_effort: 'minimal';
+      reasoning_effort: ReasoningEffort;
     } {
   return REASONING_MODEL.test(model)
     ? {
         max_completion_tokens: REASONING_MAX_COMPLETION_TOKENS,
-        reasoning_effort: 'minimal',
+        reasoning_effort: effort,
       }
     : { temperature: 0, max_tokens: maxTokens };
 }
@@ -341,7 +343,7 @@ export class FoodAnalysisService {
             json_schema: schema,
           },
         }),
-        OPENAI_CALL_TIMEOUT_MS,
+        OPENAI_FOOD_TIMEOUT_MS,
         'OpenAI food analysis',
       );
 

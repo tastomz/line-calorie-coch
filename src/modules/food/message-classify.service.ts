@@ -2,7 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { openAiCircuitBreaker } from '../../common/openai-circuit-breaker';
-import { OPENAI_CALL_TIMEOUT_MS, withTimeout } from '../../common/with-timeout';
+import {
+  OPENAI_CLASSIFY_TIMEOUT_MS,
+  withTimeout,
+} from '../../common/with-timeout';
 import { WEIGHT_MAX_KG, WEIGHT_MIN_KG } from '../weight/weight-parse';
 import { parseCoachHint } from './coach-hint';
 import { completionLimits } from './food-analysis.service';
@@ -74,6 +77,7 @@ export class MessageClassifyService {
           ...completionLimits(
             MESSAGE_CLASSIFY_MODEL,
             MESSAGE_CLASSIFY_MAX_TOKENS,
+            'minimal',
           ),
           messages: [
             { role: 'system', content: MESSAGE_CLASSIFY_SYSTEM_PROMPT },
@@ -84,7 +88,7 @@ export class MessageClassifyService {
             json_schema: MESSAGE_CLASSIFY_JSON_SCHEMA,
           },
         }),
-        OPENAI_CALL_TIMEOUT_MS,
+        OPENAI_CLASSIFY_TIMEOUT_MS,
         'OpenAI message classify',
       );
 
