@@ -102,4 +102,24 @@ describe('Admin free-PRO code generation (typed inputs)', () => {
     });
     expect(create.mock.calls[1][0].data.description).toBe('Campaign A');
   });
+
+  it('uses the prefix the admin typed (normalized to uppercase)', async () => {
+    await controller.generatePromo('admin-1', { prefix: ' simply ' });
+    expect(create.mock.calls[0][0].data.code).toMatch(/^SIMPLY-[A-Z0-9]{6}$/);
+  });
+
+  it('falls back to TASTOM when the prefix is blank', async () => {
+    await controller.generatePromo('admin-1', { prefix: '   ' });
+    expect(create.mock.calls[0][0].data.code).toMatch(/^TASTOM-[A-Z0-9]{6}$/);
+  });
+
+  it.each([['A'], ['WAY-TOO-LONG-PREFIX'], ['HAS SPACE'], ['DASH-X'], ['ไทย']])(
+    'rejects prefix %j with 400 and writes nothing',
+    async (prefix) => {
+      await expect(
+        controller.generatePromo('admin-1', { prefix }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(create).not.toHaveBeenCalled();
+    },
+  );
 });

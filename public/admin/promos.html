@@ -15,8 +15,11 @@
     <h1>🎁 Free PRO Codes</h1>
     <p><a href="/admin">Dashboard</a></p>
     <form class="card" id="gen" novalidate>
-      <p>สร้าง Code Free PRO · server-generated TASTOM-XXXXXX</p>
+      <p>สร้าง Code Free PRO · รูปแบบ <b><span id="preview">TASTOM</span>-XXXXXX</b> (ส่วน XXXXXX สุ่มจาก server)</p>
       <div class="grid">
+        <label>คำนำหน้าโค้ด (A–Z, 0–9 · 2–12 ตัว)
+          <input class="input" id="prefix" type="text" value="TASTOM" maxlength="12" autocomplete="off" spellcheck="false" style="text-transform:uppercase" required />
+        </label>
         <label>จำนวนวัน (1–365)
           <input class="input" id="days" type="number" min="1" max="365" step="1" value="30" required />
         </label>
@@ -48,10 +51,17 @@
       const n = Number(raw);
       return raw !== '' && Number.isInteger(n) && n >= min && n <= max ? n : null;
     }
-    async function gen(trialDays, maxRedemptions) {
+    function cleanPrefix(raw) {
+      const p = raw.trim().toUpperCase();
+      return /^[A-Z0-9]{2,12}$/.test(p) ? p : null;
+    }
+    document.getElementById('prefix').addEventListener('input', (e) => {
+      document.getElementById('preview').textContent = e.target.value.trim().toUpperCase() || 'TASTOM';
+    });
+    async function gen(prefix, trialDays, maxRedemptions) {
       const promo = await api('/admin/api/promos/generate', {
         method: 'POST',
-        body: JSON.stringify({ trialDays, maxRedemptions }),
+        body: JSON.stringify({ prefix, trialDays, maxRedemptions }),
       });
       document.getElementById('created').innerHTML = `
         <div>Code: <b>${promo.code}</b>
@@ -64,13 +74,15 @@
       const err = document.getElementById('formerr');
       const button = document.getElementById('submit');
       err.textContent = '';
+      const prefix = cleanPrefix(document.getElementById('prefix').value);
       const trialDays = intInRange(document.getElementById('days').value.trim(), 1, 365);
       const maxRedemptions = intInRange(document.getElementById('max').value.trim(), 1, 1000);
+      if (prefix === null) { err.textContent = 'คำนำหน้าต้องเป็น A–Z หรือ 0–9 ยาว 2–12 ตัว (ห้ามมีขีดหรือเว้นวรรค)'; return; }
       if (trialDays === null) { err.textContent = 'จำนวนวันต้องเป็นเลขจำนวนเต็ม 1–365'; return; }
       if (maxRedemptions === null) { err.textContent = 'จำนวนคนที่ใช้ได้ต้องเป็นเลขจำนวนเต็ม 1–1000'; return; }
       button.disabled = true;
       try {
-        await gen(trialDays, maxRedemptions);
+        await gen(prefix, trialDays, maxRedemptions);
       } catch (error) {
         if (error.message !== 'auth' && error.message !== 'forbidden') err.textContent = error.message;
       } finally {

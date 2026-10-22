@@ -34,7 +34,8 @@ export class AdminApiController {
   private promoParams(body: {
     trialDays?: unknown;
     maxRedemptions?: unknown;
-  }): { trialDays: number; maxRedemptions: number } {
+    prefix?: unknown;
+  }): { trialDays: number; maxRedemptions: number; prefix: string } {
     try {
       return parsePromoParams(body);
     } catch (error) {
@@ -121,15 +122,17 @@ export class AdminApiController {
     body: {
       trialDays?: number;
       maxRedemptions?: number | null;
+      prefix?: string;
       description?: string;
       expiresAt?: string | null;
     },
   ) {
-    const { trialDays, maxRedemptions } = this.promoParams(body);
+    const { trialDays, maxRedemptions, prefix } = this.promoParams(body);
     try {
       const promo = await this.dashboard.generateFreeProCode({
         trialDays,
         maxRedemptions,
+        prefix,
         description: body.description,
         expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
       });
