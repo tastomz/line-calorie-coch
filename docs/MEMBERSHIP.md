@@ -104,15 +104,28 @@ Production rejects these routes at the guard + env validation.
 2. `/membership/mock-checkout` → choose success/fail/past_due/cancel  
 3. `POST /api/membership/mock/complete` → `PaymentEvent` + Subscription via billing service  
 
-## Stripe TEST (optional)
+## Stripe TEST — PromptPay QR (30-day pass)
+
+Checkout is a **one-time PromptPay payment** (`mode: payment`, THB 50 = 5000 satang).
+PromptPay cannot back a Stripe subscription, so each payment buys PRO for
+`PRO_PASS_DAYS` (30) days — no auto-renew. Paying while still PRO (paid, trial
+or promo) adds 30 days on top of the current expiry.
+
+Requires a **Thailand** Stripe account with PromptPay enabled
+(Settings → Payment methods). No price/product needed (`price_data` inline).
 
 ```bash
 PAYMENT_MODE=STRIPE
+ENABLE_MEMBERSHIP_CHECKOUT=true
 STRIPE_SECRET_KEY=sk_test_…
 STRIPE_WEBHOOK_SECRET=whsec_…
-STRIPE_PRICE_ID=price_…
 stripe listen --forward-to localhost:3000/webhooks/stripe
 ```
+
+Webhook endpoint `POST /webhooks/stripe`, events:
+`checkout.session.completed`, `checkout.session.async_payment_succeeded`.
+PRO is granted only when `payment_status=paid`, currency `thb` and the amount
+matches; once per Checkout Session (`PaymentEvent` id `pass:<cs_id>`).
 
 Live keys (`sk_live_`) remain blocked.
 

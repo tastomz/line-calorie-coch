@@ -10,8 +10,13 @@ import {
 } from './payment-provider.port';
 import { PRO_MONTHLY_PRICE_THB } from './plan.config';
 
+/** Marks a Checkout Session as a one-time PromptPay PRO pass. */
+export const PRO_PASS_KIND = 'pro_pass';
+
 /**
  * Stripe adapter — TEST/SANDBOX keys only (`sk_test_…`).
+ * Checkout = one-time PromptPay QR payment that buys a PRO pass
+ * (PromptPay cannot be used for Stripe subscriptions).
  * Live keys (`sk_live_…`) are rejected.
  * PAYMENT LIVE = NOT ACTIVE.
  */
@@ -20,14 +25,12 @@ export class StripePaymentProvider implements PaymentProviderPort {
   private readonly logger = new Logger(StripePaymentProvider.name);
   private readonly client: Stripe | null;
   private readonly webhookSecret: string;
-  private readonly priceId: string;
 
   constructor(private readonly config: ConfigService) {
     const secret = (this.config.get<string>('STRIPE_SECRET_KEY') ?? '').trim();
     this.webhookSecret = (
       this.config.get<string>('STRIPE_WEBHOOK_SECRET') ?? ''
     ).trim();
-    this.priceId = (this.config.get<string>('STRIPE_PRICE_ID') ?? '').trim();
 
     if (!secret) {
       this.client = null;
@@ -51,14 +54,12 @@ export class StripePaymentProvider implements PaymentProviderPort {
   }
 
   isConfigured(): boolean {
-    return this.client !== null && this.priceId.length > 0;
+    return this.client !== null;
   }
 
   private requireClient(): Stripe {
     if (!this.client) {
-      throw new Error(
-        'Stripe TEST mode is not configured (STRIPE_SECRET_KEY / STRIPE_PRICE_ID)',
-      );
+      throw new Error('Stripe TEST mode is not configured (STRIPE_SECRET_KEY)');
     }
     return this.client;
   }
@@ -79,9 +80,6 @@ export class StripePaymentProvider implements PaymentProviderPort {
     request: CheckoutSessionRequest,
   ): Promise<CheckoutSessionResult> {
     const stripe = this.requireClient();
-    if (!this.priceId) {
-      throw new Error('STRIPE_PRICE_ID is required');
-    }
     if (request.priceThbMonthly !== PRO_MONTHLY_PRICE_THB) {
       throw new Error(
         `Checkout price must be ${PRO_MONTHLY_PRICE_THB} THB/month`,
@@ -94,17 +92,33 @@ export class StripePaymentProvider implements PaymentProviderPort {
       customerId = created.customerId;
     }
 
+    const metadata = {
+      internalUserId: request.userId,
+      kind: PRO_PASS_KIND,
+      passDays: String(request.passDays),
+    };
     const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
+      mode: 'payment',
+      payment_method_types: ['promptpay'],
       customer: customerId,
-      line_items: [{ price: this.priceId, quantity: 1 }],
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: 'thb',
+            // Stripe amounts are in satang (1 THB = 100).
+            unit_amount: request.priceThbMonthly * 100,
+            product_data: {
+              name: `Kcal Coach Pro ${request.passDays} วัน`,
+            },
+          },
+        },
+      ],
       success_url: request.successUrl,
       cancel_url: request.cancelUrl,
       client_reference_id: request.userId,
-      metadata: { internalUserId: request.userId },
-      subscription_data: {
-        metadata: { internalUserId: request.userId },
-      },
+      metadata,
+      payment_intent_data: { metadata },
     });
 
     if (!session.url) {
@@ -181,7 +195,9 @@ export class StripePaymentProvider implements PaymentProviderPort {
     stripeType: string,
   ): FuturePaymentWebhookEvent | 'ignored' {
     switch (stripeType) {
+      // PromptPay may confirm after the session completes.
       case 'checkout.session.completed':
+      case 'checkout.session.async_payment_succeeded':
         return 'checkout_completed';
       case 'customer.subscription.created':
         return 'subscription_created';

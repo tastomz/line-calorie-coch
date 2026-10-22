@@ -289,6 +289,8 @@ export class MembershipApiController {
       status: ent.status,
       hasProAccess: ent.hasProAccess,
       periodEnd: ent.periodEnd,
+      /** Legacy Stripe subscription renews itself; PromptPay passes do not. */
+      autoRenew: Boolean(ent.subscription?.providerSubscriptionId),
       subscription: ent.subscription
         ? {
             startedAt: ent.subscription.startedAt,

@@ -93,6 +93,10 @@
             actionsHtml = `<a class="btn" href="/upgrade">สมัคร Pro</a>`;
           } else if (m.status === 'TRIALING') {
             actionsHtml = `<a class="btn" href="/upgrade">สมัคร Pro (ชำระเงิน)</a>`;
+          } else if (!m.autoRenew) {
+            actionsHtml = `
+              <a class="btn" href="/upgrade">ต่ออายุ Pro +30 วัน (QR พร้อมเพย์)</a>
+              <p class="muted">ใช้ได้ถึง ${fmtDate(m.periodEnd)} · ไม่ตัดเงินอัตโนมัติ</p>`;
           } else if (m.status === 'CANCELED') {
             actionsHtml = `
               <button class="btn" id="resume">กลับมาใช้งานต่อ</button>

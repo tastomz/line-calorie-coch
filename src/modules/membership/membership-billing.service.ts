@@ -12,7 +12,8 @@ import {
   FuturePaymentWebhookEvent,
   type PaymentProviderPort,
 } from './payment-provider.port';
-import { PRO_MONTHLY_PRICE_THB } from './plan.config';
+import { PRO_MONTHLY_PRICE_THB, PRO_PASS_DAYS } from './plan.config';
+import { PRO_PASS_KIND } from './stripe.payment-provider';
 import { mapStripeSubscriptionStatus } from './stripe-status.mapper';
 import { SubscriptionEntitlementService } from './subscription-entitlement.service';
 
@@ -41,13 +42,16 @@ export class MembershipBillingService {
 
     const existing = await this.entitlement.getLatestSubscription(userId);
     const ent = this.entitlement.resolveEntitlement(existing);
+    // PromptPay passes stack (renew early = days added on top). Only a legacy
+    // auto-renewing Stripe subscription blocks buying another pass.
     if (
       ent.hasProAccess &&
       this.entitlement.isPaidActivePro(existing) &&
       existing?.status === SubscriptionStatus.ACTIVE &&
+      Boolean(existing.providerSubscriptionId) &&
       !existing.canceledAt
     ) {
-      throw new Error('คุณมี Pro อยู่แล้วครับ');
+      throw new Error('คุณมี Pro แบบต่ออายุอัตโนมัติอยู่แล้วครับ');
     }
 
     const webBase = (this.config.get<string>('MEMBERSHIP_WEB_URL') ?? '')
@@ -60,6 +64,7 @@ export class MembershipBillingService {
     const result = await this.payments.createCheckoutSession({
       userId,
       priceThbMonthly: PRO_MONTHLY_PRICE_THB,
+      passDays: PRO_PASS_DAYS,
       providerCustomerId: existing?.providerCustomerId ?? undefined,
       successUrl: `${webBase}/membership/success?session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${webBase}/membership/cancel`,
@@ -153,6 +158,11 @@ export class MembershipBillingService {
   ): Promise<void> {
     const obj = data as Record<string, unknown>;
 
+    if (type === 'checkout_completed' && obj.mode === 'payment') {
+      await this.grantPromptPayPass(obj);
+      return;
+    }
+
     if (type === 'checkout_completed') {
       const userId =
         (obj.client_reference_id as string | undefined) ||
@@ -242,6 +252,109 @@ export class MembershipBillingService {
       }
       await this.applyProviderSnapshot(userId, snap, snap.cancelAtPeriodEnd);
     }
+  }
+
+  /**
+   * One-time PromptPay payment → PRO for PRO_PASS_DAYS. Extends from the end of
+   * any PRO the user still has (paid, trial or promo), otherwise from now.
+   * Idempotent per Checkout Session: Stripe can send both
+   * checkout.session.completed and async_payment_succeeded for one payment.
+   */
+  private async grantPromptPayPass(
+    obj: Record<string, unknown>,
+  ): Promise<void> {
+    const sessionId = obj.id as string | undefined;
+    const metadata = (obj.metadata ?? {}) as Record<string, string | undefined>;
+    const userId =
+      (obj.client_reference_id as string | undefined) ||
+      metadata.internalUserId ||
+      null;
+    if (!sessionId || !userId || metadata.kind !== PRO_PASS_KIND) {
+      this.logger.warn('promptpay pass: missing session/user/kind');
+      return;
+    }
+    if (obj.payment_status !== 'paid') {
+      // QR shown but not paid yet — async_payment_succeeded will follow.
+      return;
+    }
+    const expectedAmount = PRO_MONTHLY_PRICE_THB * 100;
+    if (obj.currency !== 'thb' || obj.amount_total !== expectedAmount) {
+      this.logger.error(
+        JSON.stringify({
+          event: 'promptpay_pass_amount_mismatch',
+          sessionIdPrefix: sessionId.slice(0, 12),
+          currency: obj.currency,
+          amountTotal: obj.amount_total,
+        }),
+      );
+      return;
+    }
+    const passDays = Number(metadata.passDays);
+    const days =
+      Number.isInteger(passDays) && passDays > 0 && passDays <= 365
+        ? passDays
+        : PRO_PASS_DAYS;
+    const customerId =
+      typeof obj.customer === 'string'
+        ? obj.customer
+        : ((obj.customer as { id?: string } | null)?.id ?? null);
+
+    const now = new Date();
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.paymentEvent.create({
+          data: {
+            provider: PaymentProvider.STRIPE,
+            providerEventId: `pass:${sessionId}`,
+            eventType: 'promptpay_pass_granted',
+            payloadSummary: JSON.stringify({
+              days,
+              amountTotal: expectedAmount,
+            }),
+          },
+        });
+        const latest = await tx.subscription.findFirst({
+          where: { userId },
+          orderBy: { updatedAt: 'desc' },
+        });
+        const ent = this.entitlement.resolveEntitlement(latest, now);
+        const start =
+          ent.hasProAccess &&
+          ent.periodEnd &&
+          ent.periodEnd.getTime() > now.getTime()
+            ? ent.periodEnd
+            : now;
+        const end = new Date(start.getTime() + days * 24 * 60 * 60 * 1000);
+        await tx.subscription.create({
+          data: {
+            userId,
+            plan: Plan.PRO,
+            status: SubscriptionStatus.ACTIVE,
+            provider: PaymentProvider.STRIPE,
+            providerCustomerId: customerId,
+            startedAt: now,
+            currentPeriodStart: now,
+            currentPeriodEnd: end,
+          },
+        });
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        return; // already granted for this session
+      }
+      throw error;
+    }
+    this.logger.log(
+      JSON.stringify({
+        event: 'promptpay_pass_granted',
+        userIdPrefix: userId.slice(0, 8),
+        sessionIdPrefix: sessionId.slice(0, 12),
+        days,
+      }),
+    );
   }
 
   private async applyProviderSnapshot(

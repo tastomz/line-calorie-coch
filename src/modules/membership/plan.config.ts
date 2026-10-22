@@ -5,6 +5,9 @@
 
 export const PRO_MONTHLY_PRICE_THB = 50;
 
+/** Days of PRO granted per PromptPay payment (one-time pass, no auto-renew). */
+export const PRO_PASS_DAYS = 30;
+
 export const TRIAL_DEFAULT_DAYS = 7;
 
 export type PlanId = 'FREE' | 'PRO';

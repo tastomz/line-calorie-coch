@@ -85,11 +85,11 @@ export function buildMembershipStatusMessage(
       entitlement.status === 'TRIALING'
         ? 'ทดลองใช้ (Trial)'
         : entitlement.status === 'CANCELED'
-          ? 'ยกเลิกแล้ว (ใช้ได้ถึงสิ้นรอบบิล)'
+          ? 'ยกเลิกต่ออายุแล้ว (ใช้ได้ถึงวันหมดอายุ)'
           : 'ใช้งานอยู่';
     return `👑 Tastom Pro
 
-${PRO_MONTHLY_PRICE_THB} บาท/เดือน
+${PRO_MONTHLY_PRICE_THB} บาท / 30 วัน (จ่ายผ่าน QR พร้อมเพย์)
 สถานะ: ${statusLabel}
 
 ${usageBlock}
@@ -101,12 +101,12 @@ Pro ใช้งาน AI ได้มากขึ้น`;
 
   const upgrade =
     opts?.upgradeUrl != null
-      ? `\n\n👑 Pro\n${PRO_MONTHLY_PRICE_THB} บาท/เดือน\nใช้งาน AI ได้มากขึ้น\n\nสมัคร Pro:\n${opts.upgradeUrl}`
-      : `\n\n👑 Pro\n${PRO_MONTHLY_PRICE_THB} บาท/เดือน\nใช้งาน AI ได้มากขึ้น\n(ตั้งค่า MEMBERSHIP_WEB_URL เพื่อเปิดลิงก์สมัคร)`;
+      ? `\n\n👑 Pro\n${PRO_MONTHLY_PRICE_THB} บาท / 30 วัน (จ่ายผ่าน QR พร้อมเพย์)\nใช้งาน AI ได้มากขึ้น\n\nสมัคร Pro:\n${opts.upgradeUrl}`
+      : `\n\n👑 Pro\n${PRO_MONTHLY_PRICE_THB} บาท / 30 วัน (จ่ายผ่าน QR พร้อมเพย์)\nใช้งาน AI ได้มากขึ้น\n(ตั้งค่า MEMBERSHIP_WEB_URL เพื่อเปิดลิงก์สมัคร)`;
 
   const payNote = opts?.paymentConfigured
     ? ''
-    : '\n(Stripe ยังเป็นโหมดทดสอบ / ยังไม่เปิด LIVE)';
+    : '\n(ระบบชำระเงินยังไม่เปิด LIVE)';
 
   return `👤 สมาชิก
 
@@ -139,7 +139,7 @@ export function buildQuotaExceededMessage(
 
   const upgrade =
     error.plan === 'FREE'
-      ? `\n\n👑 Pro ${PRO_MONTHLY_PRICE_THB} บาท/เดือน\nใช้งาน AI ได้มากขึ้น${
+      ? `\n\n👑 Pro ${PRO_MONTHLY_PRICE_THB} บาท / 30 วัน (จ่ายผ่าน QR พร้อมเพย์)\nใช้งาน AI ได้มากขึ้น${
           upgradeUrl ? `\n${upgradeUrl}` : ''
         }`
       : '';

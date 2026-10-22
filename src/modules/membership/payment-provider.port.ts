@@ -12,6 +12,8 @@ export type CheckoutSessionRequest = {
   priceThbMonthly: number;
   /** Existing Stripe customer id when known. */
   providerCustomerId?: string;
+  /** Days of PRO this one-time PromptPay payment buys. */
+  passDays: number;
 };
 
 export type CheckoutSessionResult = {
