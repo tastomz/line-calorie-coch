@@ -149,7 +149,6 @@
       return data;
     }
     const fmtTime = (t) => t ? new Date(t).toLocaleString('th-TH') : '-';
-    const escHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     function renderCodex(s) {
       const el = document.getElementById('codexStatus');
       if (!s.keyOk) { el.innerHTML = '⚠️ ยังไม่ได้ตั้ง <code>CODEX_VAULT_KEY</code> ใน Railway (' + escHtml(s.keyError) + ')'; return; }
