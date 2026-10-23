@@ -2,9 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { createOpenAiClient } from '../../common/openai-client';
+import { currentAiRoute } from '../../common/ai-route';
 import { openAiCircuitBreaker } from '../../common/openai-circuit-breaker';
 import {
   OPENAI_FOOD_TIMEOUT_MS,
+  CODEX_FOOD_TIMEOUT_MS,
   TimeoutError,
   withTimeout,
 } from '../../common/with-timeout';
@@ -349,7 +351,9 @@ export class FoodAnalysisService {
             json_schema: schema,
           },
         }),
-        OPENAI_FOOD_TIMEOUT_MS,
+        currentAiRoute() === 'codex'
+          ? CODEX_FOOD_TIMEOUT_MS
+          : OPENAI_FOOD_TIMEOUT_MS,
         'OpenAI food analysis',
       );
 

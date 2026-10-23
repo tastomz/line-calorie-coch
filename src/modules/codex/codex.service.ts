@@ -70,6 +70,12 @@ export class CodexService
   private get timeoutMs() {
     return intEnv(this.config.get('CODEX_TIMEOUT_SECONDS'), 25, 5, 120) * 1000;
   }
+  /** Photo analysis is slower through Codex than text. */
+  private get imageTimeoutMs() {
+    return (
+      intEnv(this.config.get('CODEX_IMAGE_TIMEOUT_SECONDS'), 38, 5, 120) * 1000
+    );
+  }
   /** Runs allowed in the queue (running + waiting) before Trial uses the API. */
   private get maxPending() {
     return intEnv(this.config.get('CODEX_MAX_PENDING'), 2, 1, 10);
@@ -251,17 +257,21 @@ export class CodexService
     const authJson = this.authJson;
     if (!authJson) throw new Error('Codex signed out');
     const request = toCodexRequest(params);
+    const started = Date.now();
     try {
       const result = await runCodexExec({
         bin: this.bin,
         authJson,
         model: this.model,
         request,
-        timeoutMs: this.timeoutMs,
+        timeoutMs: request.images.length ? this.imageTimeoutMs : this.timeoutMs,
         runDir:
           (this.config.get<string>('CODEX_RUN_DIR') ?? '').trim() || undefined,
         onAuthUpdated: (updated) => this.persistRotated(authJson, updated),
       });
+      this.logger.log(
+        `Codex ok ms=${Date.now() - started} images=${request.images.length} tokens=${result.usage?.inputTokens ?? '?'}/${result.usage?.outputTokens ?? '?'} [${result.trail}]`,
+      );
       await this.recordOk();
       return {
         text: result.text,

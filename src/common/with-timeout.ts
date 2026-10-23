@@ -38,6 +38,12 @@ export const OPENAI_CALL_TIMEOUT_MS = 30_000;
  */
 export const OPENAI_CLASSIFY_TIMEOUT_MS = 10_000;
 export const OPENAI_FOOD_TIMEOUT_MS = 35_000;
+/**
+ * Trial users' food analysis runs through Codex (slower, esp. photos):
+ * Codex gets up to 38s, so the call as a whole gets 44s — still inside the
+ * 50s webhook budget (photo download + kind check take a few seconds).
+ */
+export const CODEX_FOOD_TIMEOUT_MS = 44_000;
 
 /** Google Sheets outbound budget (reporting only; never blocks UX). */
 export const SHEETS_CALL_TIMEOUT_MS = 10_000;

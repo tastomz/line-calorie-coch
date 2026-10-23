@@ -33,6 +33,8 @@ export type CodexRunInput = {
 export type CodexRunResult = {
   text: string;
   usage: CodexUsage | null;
+  /** Compact list of what the agent did (no content), for logs. */
+  trail: string;
 };
 
 export class CodexRunError extends Error {}
@@ -50,6 +52,28 @@ export function redactSecrets(s: string): string {
     /(eyJ[\w-]+\.[\w-]+\.[\w-]+)|((access|refresh|id)_token["':\s]+[^\s"']+)/gi,
     '[redacted]',
   );
+}
+
+/**
+ * "thread.started > turn.started > item.completed:reasoning > …" — event and
+ * item types only, never text, so it's safe to log. Shows whether a slow run
+ * was thinking, running commands, or retrying.
+ */
+export function codexEventTrail(stdout: string, max = 12): string {
+  const steps: string[] = [];
+  for (const line of stdout.split('\n')) {
+    const s = line.trim();
+    if (!s.startsWith('{')) continue;
+    try {
+      const ev = JSON.parse(s) as { type?: string; item?: { type?: string } };
+      if (!ev.type) continue;
+      const step = ev.item?.type ? `${ev.type}:${ev.item.type}` : ev.type;
+      if (steps[steps.length - 1] !== step) steps.push(step);
+    } catch {
+      // log line
+    }
+  }
+  return steps.slice(-max).join(' > ') || 'no events';
 }
 
 export function buildCodexArgs(opts: {
@@ -100,7 +124,8 @@ export async function runCodexExec(
 
     const imagePaths: string[] = [];
     for (const [i, img] of input.request.images.entries()) {
-      const p = join(workdir, `photo-${i + 1}.${EXT[img.mime] ?? 'jpg'}`);
+      // Outside the agent's working dir so it doesn't try to inspect files.
+      const p = join(home, `photo-${i + 1}.${EXT[img.mime] ?? 'jpg'}`);
       await writeFile(p, img.data, { mode: 0o600 });
       imagePaths.push(p);
     }
@@ -156,7 +181,9 @@ export async function runCodexExec(
         clearTimeout(timer);
         if (timedOut) {
           reject(
-            new CodexRunError(`codex timed out after ${input.timeoutMs}ms`),
+            new CodexRunError(
+              `codex timed out after ${input.timeoutMs}ms [${codexEventTrail(out)}]`,
+            ),
           );
         } else if (code === 0) {
           resolve(out);
@@ -181,6 +208,7 @@ export async function runCodexExec(
     return {
       text,
       usage: usageFromCodexEvents(stdout),
+      trail: codexEventTrail(stdout),
     };
   } finally {
     const updated = await readFile(authPath, 'utf8').catch(() => null);

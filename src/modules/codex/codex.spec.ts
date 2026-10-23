@@ -14,7 +14,7 @@ import {
   unseal,
   validateAuthJson,
 } from './codex-vault';
-import { buildCodexArgs, runCodexExec } from './codex-runner';
+import { buildCodexArgs, codexEventTrail, runCodexExec } from './codex-runner';
 
 const AUTH = JSON.stringify({
   tokens: {
@@ -208,5 +208,23 @@ echo '{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5}}'
     expect(args.join(' ')).toContain('-i /w/p.jpg');
     expect(args.join(' ')).toContain('--output-schema /s.json');
     expect(args[args.length - 1]).toBe('-');
+  });
+});
+
+describe('codexEventTrail', () => {
+  it('lists event/item types without content', () => {
+    const out = [
+      '{"type":"thread.started","thread_id":"x"}',
+      '{"type":"turn.started"}',
+      '{"type":"item.started","item":{"type":"command_execution","command":"ls secret"}}',
+      '{"type":"item.started","item":{"type":"command_execution","command":"cat x"}}',
+      'WARNING log',
+    ].join('\n');
+    const trail = codexEventTrail(out);
+    expect(trail).toBe(
+      'thread.started > turn.started > item.started:command_execution',
+    );
+    expect(trail).not.toContain('secret');
+    expect(codexEventTrail('')).toBe('no events');
   });
 });
