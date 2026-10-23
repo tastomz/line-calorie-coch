@@ -21,11 +21,11 @@ export class AiGatewayService {
   ) {}
 
   /**
-   * Trial package (PRO + TRIALING) → the owner's ChatGPT sign-in via Codex.
-   * Everyone else → OPENAI_API_KEY. Errors here never block the reply.
+   * Trial package (PRO + TRIALING) → the owner's ChatGPT sign-in via Codex,
+   * for every AI call (no API fallback). Everyone else → OPENAI_API_KEY.
    */
   async routeFor(userId: string): Promise<AiRoute> {
-    if (!getCodexBackend()?.available()) return 'api';
+    if (!getCodexBackend()?.routesTrial()) return 'api';
     try {
       const ent = await this.entitlement.getEntitlement(userId);
       return ent.hasProAccess && ent.status === 'TRIALING' ? 'codex' : 'api';

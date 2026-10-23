@@ -10,7 +10,9 @@ export type CodexChatResult = {
 };
 
 export interface CodexBackend {
-  /** Signed in, not paused after repeated failures, and not overloaded. */
+  /** Trial is routed to Codex (CODEX_TRIAL_ENABLED is not "false"). */
+  routesTrial(): boolean;
+  /** Signed in and not paused after repeated failures. */
   available(): boolean;
   chat(params: unknown): Promise<CodexChatResult>;
 }

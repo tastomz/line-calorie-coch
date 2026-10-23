@@ -7,17 +7,29 @@
  *   structured-JSON tasks where latency matters most.
  *
  * Override without a rebuild via Railway variables AI_MODEL_SMART /
- * AI_MODEL_FAST (e.g. set back to `gpt-5` if a new model misbehaves).
- * FOOD_VISION_MODEL, when set, still overrides the model for food photos.
+ * AI_MODEL_FAST / FOOD_VISION_MODEL — GPT-6 or newer only; anything older
+ * (gpt-4o, gpt-5…) is ignored and the default is used.
  */
 export const DEFAULT_SMART_MODEL = 'gpt-6.1-sol';
 export const DEFAULT_FAST_MODEL = 'gpt-6-luna';
 
 const MODEL_ID = /^[\w.-]{1,64}$/;
 
+/** gpt-6, gpt-6.1-sol, gpt-7…, gpt-10… */
+const GPT6_PLUS = /^gpt-([6-9]|[1-9]\d+)(\.\d+)?(-[\w.-]+)?$/;
+
+export function isGpt6Plus(model: string): boolean {
+  return MODEL_ID.test(model) && GPT6_PLUS.test(model);
+}
+
+/** A configured model if it is GPT-6+, otherwise the fallback. */
+export function gpt6PlusOr(raw: string | undefined, fallback: string): string {
+  const m = (raw ?? '').trim();
+  return m && isGpt6Plus(m) ? m : fallback;
+}
+
 function fromEnv(name: string, fallback: string): string {
-  const raw = (process.env[name] ?? '').trim();
-  return raw && MODEL_ID.test(raw) ? raw : fallback;
+  return gpt6PlusOr(process.env[name], fallback);
 }
 
 export function smartModel(): string {

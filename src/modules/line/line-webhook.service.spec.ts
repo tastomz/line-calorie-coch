@@ -254,7 +254,7 @@ describe('LineWebhookService', () => {
         message: { type: 'image', id: 'img-1' },
       });
       expect(line.showLoadingAnimation).toHaveBeenCalledTimes(2);
-      expect(line.showLoadingAnimation).toHaveBeenCalledWith('U123', 50);
+      expect(line.showLoadingAnimation).toHaveBeenCalledWith('U123', 60);
     });
 
     it('skips group chats and non-message events', async () => {

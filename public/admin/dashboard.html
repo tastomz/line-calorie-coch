@@ -36,7 +36,7 @@
     </div>
     <div class="card">
       <h3>🧪 AI ของแพ็คเกจ Trial (ChatGPT sign-in)</h3>
-      <p style="color:var(--muted)">ผู้ใช้ Trial (PRO จากโค้ด) ใช้ AI ผ่าน Codex ด้วยบัญชี ChatGPT ของเรา — ไม่เสียค่า API · ถ้า Codex ล่ม/ช้า/คิวเต็ม จะใช้ API key แทนอัตโนมัติ · ข้อความสั้นๆ ที่ใช้แยกประเภทข้อความยังใช้ API (เพื่อให้ตอบไว)</p>
+      <p style="color:var(--muted)">ผู้ใช้ Trial (PRO จากโค้ด) ใช้ AI <b>ทุกขั้น</b> ผ่าน Codex ด้วยบัญชี ChatGPT ของเรา — ไม่ใช้ API key เลย (ไม่มี fallback) · ถ้ายังไม่เชื่อม/Codex ล่ม Trial จะใช้ AI ไม่ได้ · Free/Pro ใช้ API key + GPT-6 ขึ้นไปเท่านั้น</p>
       <div id="codexStatus" style="margin-bottom:10px">กำลังโหลด...</div>
       <details>
         <summary style="cursor:pointer">เชื่อม / เปลี่ยนบัญชี ChatGPT</summary>
@@ -153,8 +153,8 @@
       const el = document.getElementById('codexStatus');
       if (!s.keyOk) { el.innerHTML = '⚠️ ยังไม่ได้ตั้ง <code>CODEX_VAULT_KEY</code> ใน Railway (' + escHtml(s.keyError) + ')'; return; }
       const state = !s.enabled ? '⏸ ปิดอยู่ (CODEX_TRIAL_ENABLED=false)'
-        : !s.signedIn ? '⚪ ยังไม่ได้เชื่อม — Trial ใช้ API key ไปก่อน'
-        : s.pausedUntil ? '🟠 พักชั่วคราวถึง ' + fmtTime(s.pausedUntil) + ' (ล้มเหลวติดกัน) — ระหว่างนี้ใช้ API key'
+        : !s.signedIn ? '🔴 ยังไม่ได้เชื่อม — ผู้ใช้ Trial ใช้ AI ไม่ได้'
+        : s.pausedUntil ? '🟠 พักชั่วคราวถึง ' + fmtTime(s.pausedUntil) + ' (ล้มเหลวติดกัน) — ระหว่างนี้ Trial ใช้ AI ไม่ได้'
         : '🟢 ใช้งานอยู่';
       el.innerHTML = '<b>' + state + '</b>' + (s.signedIn ? '<br><span style="color:var(--muted);font-size:13px">บัญชี ' + escHtml(s.account || '-') + ' · โมเดล ' + escHtml(s.model || 'ค่าเริ่มต้น') + ' · ตอบสำเร็จล่าสุด ' + fmtTime(s.lastOkAt) + ' · refresh token ล่าสุด ' + fmtTime(s.lastRefresh) + '</span>' : '') + (s.lastError ? '<br><span style="color:var(--danger);font-size:13px">error ล่าสุด: ' + escHtml(s.lastError) + '</span>' : '');
       document.getElementById('codexModel').value = s.model || '';
@@ -193,7 +193,7 @@
       return '✅ ตอบใน ' + (r.ms / 1000).toFixed(1) + ' วิ: ' + r.answer;
     });
     codexAction('codexRemove', async () => {
-      if (!confirm('ลบการเชื่อม ChatGPT? ผู้ใช้ Trial จะกลับไปใช้ API key')) return 'ยกเลิก';
+      if (!confirm('ลบการเชื่อม ChatGPT? ผู้ใช้ Trial จะใช้ AI ไม่ได้จนกว่าจะเชื่อมใหม่')) return 'ยกเลิก';
       renderCodex(await codexApi('codex/remove', {}));
       return '✅ ลบแล้ว';
     });

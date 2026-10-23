@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import { runWithAiRoute } from './ai-route';
 import { CodexBackend, setCodexBackend } from './codex-bridge';
-import { createOpenAiClient } from './openai-client';
+import { CodexRouteError, createOpenAiClient } from './openai-client';
 import { fastModel, smartModel } from './ai-models';
 
 type Create = (
@@ -31,6 +31,7 @@ function clientWithFakeApi() {
 describe('createOpenAiClient routing', () => {
   const state = { calls: 0, fail: false, up: true };
   const backend: CodexBackend = {
+    routesTrial: () => true,
     available: () => state.up,
     chat: () => {
       state.calls += 1;
@@ -74,24 +75,26 @@ describe('createOpenAiClient routing', () => {
     expect(apiCalls).toHaveLength(1);
   });
 
-  it('keeps fast-model calls on the API even for Trial', async () => {
-    const { create } = clientWithFakeApi();
+  it('sends fast-model calls (classifier, photo type) to Codex for Trial', async () => {
+    const { create, apiCalls } = clientWithFakeApi();
     const r = await runWithAiRoute('codex', () =>
       create({ model: fastModel(), messages: [] }),
     );
-    expect(r.choices[0].message.content).toBe('from api');
-    expect(state.calls).toBe(0);
+    expect(r.choices[0].message.content).toBe('from codex');
+    expect(apiCalls).toHaveLength(0);
   });
 
-  it('falls back to the API when Codex fails or is unavailable', async () => {
-    const { create } = clientWithFakeApi();
+  it('never falls back to the API for Trial', async () => {
+    const { create, apiCalls } = clientWithFakeApi();
     state.fail = true;
-    const r1 = await runWithAiRoute('codex', () => create(smart()));
-    expect(r1.choices[0].message.content).toBe('from api');
+    await expect(
+      runWithAiRoute('codex', () => create(smart())),
+    ).rejects.toThrow('codex down');
     state.fail = false;
     state.up = false;
-    const r2 = await runWithAiRoute('codex', () => create(smart()));
-    expect(r2.choices[0].message.content).toBe('from api');
-    expect(state.calls).toBe(1);
+    await expect(
+      runWithAiRoute('codex', () => create(smart())),
+    ).rejects.toThrow(CodexRouteError);
+    expect(apiCalls).toHaveLength(0);
   });
 });

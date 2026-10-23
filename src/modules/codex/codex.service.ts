@@ -13,6 +13,7 @@ import {
 } from '../../common/codex-bridge';
 import { ChatParams, codexModelLabel, toCodexRequest } from './codex-chat';
 import { runCodexExec } from './codex-runner';
+import { fastModel } from '../../common/ai-models';
 import {
   describeAuthJson,
   parseVaultKey,
@@ -23,10 +24,11 @@ import {
 
 const CREDENTIAL_ID = 'codex';
 const MODEL_ID = /^[\w.-]{1,64}$/;
-/** After this many failures in a row, skip Codex for PAUSE_MS (API answers). */
+/** After this many failures in a row, fail fast for PAUSE_MS (no API fallback). */
 const FAILURE_THRESHOLD = 3;
-const PAUSE_MS = 5 * 60_000;
-const MAX_QUEUE_WAIT_MS = 5_000;
+const PAUSE_MS = 2 * 60_000;
+/** A run waiting longer than this behind others gives up (LINE reply budget). */
+const MAX_QUEUE_WAIT_MS = 12_000;
 
 export class CodexBusyError extends Error {}
 
@@ -67,19 +69,24 @@ export class CodexService
   private get bin() {
     return (this.config.get<string>('CODEX_BIN') ?? '').trim() || 'codex';
   }
-  private get timeoutMs() {
-    return intEnv(this.config.get('CODEX_TIMEOUT_SECONDS'), 25, 5, 120) * 1000;
+  /**
+   * Per-run limits, sized so classify + analysis fit the webhook budget:
+   * fast (classifier / photo type) 13s · text 25s · photo analysis 36s.
+   */
+  timeoutFor(params: ChatParams, imageCount: number): number {
+    const sec = (name: string, fallback: number) =>
+      intEnv(this.config.get(name), fallback, 5, 120) * 1000;
+    if (params.model && params.model === fastModel()) {
+      return sec('CODEX_FAST_TIMEOUT_SECONDS', 13);
+    }
+    if (imageCount > 0) return sec('CODEX_IMAGE_TIMEOUT_SECONDS', 36);
+    return sec('CODEX_TIMEOUT_SECONDS', 25);
   }
-  /** Photo analysis is slower through Codex than text. */
-  private get imageTimeoutMs() {
-    return (
-      intEnv(this.config.get('CODEX_IMAGE_TIMEOUT_SECONDS'), 38, 5, 120) * 1000
-    );
+
+  routesTrial(): boolean {
+    return this.enabled();
   }
-  /** Runs allowed in the queue (running + waiting) before Trial uses the API. */
-  private get maxPending() {
-    return intEnv(this.config.get('CODEX_MAX_PENDING'), 2, 1, 10);
-  }
+
   private enabled() {
     return (
       (this.config.get<string>('CODEX_TRIAL_ENABLED') ?? 'true').trim() !==
@@ -119,10 +126,7 @@ export class CodexService
 
   available(): boolean {
     return (
-      this.enabled() &&
-      this.authJson !== null &&
-      Date.now() >= this.pausedUntil &&
-      this.inFlight < this.maxPending
+      this.enabled() && this.authJson !== null && Date.now() >= this.pausedUntil
     );
   }
 
@@ -264,7 +268,7 @@ export class CodexService
         authJson,
         model: this.model,
         request,
-        timeoutMs: request.images.length ? this.imageTimeoutMs : this.timeoutMs,
+        timeoutMs: this.timeoutFor(params, request.images.length),
         runDir:
           (this.config.get<string>('CODEX_RUN_DIR') ?? '').trim() || undefined,
         onAuthUpdated: (updated) => this.persistRotated(authJson, updated),

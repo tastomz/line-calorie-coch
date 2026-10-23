@@ -1,22 +1,18 @@
-import { Logger } from '@nestjs/common';
 import OpenAI from 'openai';
 import { currentAiRoute } from './ai-route';
 import { getCodexBackend } from './codex-bridge';
-import { fastModel } from './ai-models';
 import { toChatCompletion } from '../modules/codex/codex-chat';
-
-const logger = new Logger('OpenAiClient');
 
 type CreateFn = (...args: unknown[]) => Promise<unknown>;
 
+export class CodexRouteError extends Error {}
+
 /**
  * Same as `new OpenAI({ apiKey })`, except that inside a Trial user's
- * AiGateway run (route = 'codex') chat completions are answered by the
- * owner's ChatGPT sign-in through Codex. Falls back to the API key when
- * Codex is signed out, paused, busy or fails.
- *
- * FAST-model calls (message routing, photo-kind pre-check) always use the
- * API: they are tiny, and a Codex run (~several seconds) would slow every reply.
+ * AiGateway run (route = 'codex') EVERY chat completion — routing classifier
+ * and photo-type check included — is answered by the owner's ChatGPT sign-in
+ * through Codex. There is no API fallback for Trial: if Codex is signed out,
+ * paused or fails, the call fails and the caller's own fallback applies.
  */
 export function createOpenAiClient(apiKey: string): OpenAI {
   const client = new OpenAI({ apiKey });
@@ -24,27 +20,20 @@ export function createOpenAiClient(apiKey: string): OpenAI {
   const original = completions.create.bind(completions) as CreateFn;
 
   const routed: CreateFn = async (...args: unknown[]) => {
-    const params = (args[0] ?? {}) as { model?: string; stream?: boolean };
+    if (currentAiRoute() !== 'codex') return original(...args);
+    const params = (args[0] ?? {}) as { stream?: boolean };
     const codex = getCodexBackend();
-    if (
-      currentAiRoute() === 'codex' &&
-      codex?.available() &&
-      !params.stream &&
-      params.model !== fastModel()
-    ) {
-      try {
-        const r = await codex.chat(params);
-        return toChatCompletion(r.text, r.model, {
-          inputTokens: r.inputTokens,
-          outputTokens: r.outputTokens,
-        });
-      } catch (error) {
-        logger.warn(
-          `Codex failed, falling back to API: ${error instanceof Error ? error.message.slice(0, 200) : 'unknown'}`,
-        );
-      }
+    if (!codex?.available()) {
+      throw new CodexRouteError('Codex is not available for Trial');
     }
-    return original(...args);
+    if (params.stream) {
+      throw new CodexRouteError('streaming is not supported via Codex');
+    }
+    const r = await codex.chat(params);
+    return toChatCompletion(r.text, r.model, {
+      inputTokens: r.inputTokens,
+      outputTokens: r.outputTokens,
+    });
   };
 
   (completions as unknown as { create: CreateFn }).create = routed;

@@ -522,48 +522,36 @@ describe('FoodAnalysisService', () => {
       ).model;
     }
 
-    it('uses FOOD_VISION_MODEL for photos only', async () => {
+    it('uses a GPT-6+ FOOD_VISION_MODEL for photos only', async () => {
       const create = jest.fn().mockResolvedValue(okResponse('อกไก่ย่าง'));
       const service = serviceWithConfig(create, {
-        FOOD_VISION_MODEL: 'gpt-4o',
+        FOOD_VISION_MODEL: 'gpt-6-luna',
       });
       await service.analyzeImage({ imageBytes: Buffer.from([1, 2, 3]) });
-      expect(modelOf(create)).toBe('gpt-4o');
+      expect(modelOf(create)).toBe('gpt-6-luna');
 
       const textCreate = jest.fn().mockResolvedValue(okResponse('ข้าว'));
       await serviceWithConfig(textCreate, {
-        FOOD_VISION_MODEL: 'gpt-4o',
+        FOOD_VISION_MODEL: 'gpt-6-luna',
       }).analyzeText('ข้าว');
       expect(modelOf(textCreate)).toBe('gpt-6.1-sol');
     });
 
-    it('sends GPT-5 style limits (no temperature/max_tokens) for gpt-5 models', async () => {
-      const create = jest.fn().mockResolvedValue(okResponse('อกไก่ย่าง'));
-      await serviceWithConfig(create, {
-        FOOD_VISION_MODEL: 'gpt-5',
-      }).analyzeImage({ imageBytes: Buffer.from([1, 2, 3]) });
-      const body = (
-        create.mock.calls[create.mock.calls.length - 1] as unknown[]
-      )[0] as Record<string, unknown>;
-      expect(body.temperature).toBeUndefined();
-      expect(body.max_tokens).toBeUndefined();
-      expect(body.max_completion_tokens).toBe(2000);
-      expect(body.reasoning_effort).toBe('low');
-    });
-
-    it('keeps temperature 0 and max_tokens for gpt-4o family', async () => {
-      const create = jest.fn().mockResolvedValue(okResponse('อกไก่ย่าง'));
-      await serviceWithConfig(create, {
-        FOOD_VISION_MODEL: 'gpt-4o',
-      }).analyzeImage({ imageBytes: Buffer.from([1, 2, 3]) });
-      const body = (
-        create.mock.calls[create.mock.calls.length - 1] as unknown[]
-      )[0] as Record<string, unknown>;
-      expect(body.temperature).toBe(0);
-      // Photo analysis is itemised, so it gets a larger output budget.
-      expect(body.max_tokens).toBe(650);
-      expect(body.reasoning_effort).toBeUndefined();
-    });
+    it.each(['gpt-4o', 'gpt-5'])(
+      'ignores pre-GPT-6 FOOD_VISION_MODEL=%s (Pro must be GPT-6+)',
+      async (old) => {
+        const create = jest.fn().mockResolvedValue(okResponse('อกไก่ย่าง'));
+        await serviceWithConfig(create, {
+          FOOD_VISION_MODEL: old,
+        }).analyzeImage({ imageBytes: Buffer.from([1, 2, 3]) });
+        expect(modelOf(create)).toBe('gpt-6.1-sol');
+        const body = (
+          create.mock.calls[create.mock.calls.length - 1] as unknown[]
+        )[0] as Record<string, unknown>;
+        expect(body.temperature).toBeUndefined();
+        expect(body.reasoning_effort).toBe('low');
+      },
+    );
 
     it('falls back to the default model when FOOD_VISION_MODEL is unset or odd', async () => {
       for (const value of ['', 'bad model!']) {

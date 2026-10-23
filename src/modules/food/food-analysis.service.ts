@@ -44,6 +44,7 @@ import {
   REASONING_MODEL,
   reasoningEffortFor,
   fastModel,
+  gpt6PlusOr,
   smartModel,
 } from '../../common/ai-models';
 
@@ -113,7 +114,12 @@ export class FoodAnalysisService {
     // 'low' is the cheap default; 'high'/'auto' read small pack labels better.
     const model = this.configService.get<string>('FOOD_VISION_MODEL')?.trim();
     // Photos can use a stronger model than text; unset keeps the cheap default.
-    this.visionModel = model && /^[\w.-]+$/.test(model) ? model : smartModel();
+    this.visionModel = gpt6PlusOr(model, smartModel());
+    if (model && this.visionModel !== model) {
+      this.logger.warn(
+        `FOOD_VISION_MODEL=${model} ignored (GPT-6+ only); using ${this.visionModel}`,
+      );
+    }
     this.visionDetail = detail === 'high' || detail === 'auto' ? detail : 'low';
     this.client = apiKey ? createOpenAiClient(apiKey) : null;
   }

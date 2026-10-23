@@ -39,11 +39,14 @@ export const OPENAI_CALL_TIMEOUT_MS = 30_000;
 export const OPENAI_CLASSIFY_TIMEOUT_MS = 10_000;
 export const OPENAI_FOOD_TIMEOUT_MS = 35_000;
 /**
- * Trial users' food analysis runs through Codex (slower, esp. photos):
- * Codex gets up to 38s, so the call as a whole gets 44s — still inside the
- * 50s webhook budget (photo download + kind check take a few seconds).
+ * Trial users run everything through Codex (slower than the API, no API
+ * fallback). Worst cases inside the 58s event budget:
+ *   text  = classify 15s + analysis 40s
+ *   photo = download ~1s + photo-type 15s + analysis 40s
+ * Codex's own run limits (13s fast / 25s text / 36s photo) sit inside these.
  */
-export const CODEX_FOOD_TIMEOUT_MS = 44_000;
+export const CODEX_CLASSIFY_TIMEOUT_MS = 15_000;
+export const CODEX_FOOD_TIMEOUT_MS = 40_000;
 
 /** Google Sheets outbound budget (reporting only; never blocks UX). */
 export const SHEETS_CALL_TIMEOUT_MS = 10_000;
@@ -51,9 +54,9 @@ export const SHEETS_CALL_TIMEOUT_MS = 10_000;
 /**
  * Per-event processing budget. LINE reply tokens are valid for ~1 minute
  * after the webhook ("use beyond one minute isn't guaranteed"; the limit may
- * change), so stay well inside it.
+ * change), so stay inside it; a late reply falls back to pushMessage.
  */
-export const WEBHOOK_EVENT_BUDGET_MS = 50_000;
+export const WEBHOOK_EVENT_BUDGET_MS = 58_000;
 
 /** LINE loading indicator length — multiple of 5, max 60; cleared on reply. */
-export const LINE_LOADING_SECONDS = 50;
+export const LINE_LOADING_SECONDS = 60;

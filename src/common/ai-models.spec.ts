@@ -19,11 +19,13 @@ describe('ai-models', () => {
     expect(fastModel()).toBe('gpt-6-luna');
   });
 
-  it('can be switched back by env without a rebuild; rejects junk', () => {
-    process.env.AI_MODEL_SMART = 'gpt-5';
+  it('can be switched by env (GPT-6+ only); rejects older models and junk', () => {
+    process.env.AI_MODEL_SMART = 'gpt-6-luna';
     process.env.AI_MODEL_FAST = 'bad model; drop';
-    expect(smartModel()).toBe('gpt-5');
+    expect(smartModel()).toBe('gpt-6-luna');
     expect(fastModel()).toBe('gpt-6-luna');
+    process.env.AI_MODEL_SMART = 'gpt-5';
+    expect(smartModel()).toBe('gpt-6.1-sol');
   });
 
   it('treats gpt-5, gpt-6 and o-series as reasoning models', () => {

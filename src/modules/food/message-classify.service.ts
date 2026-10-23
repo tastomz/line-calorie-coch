@@ -2,9 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { createOpenAiClient } from '../../common/openai-client';
+import { currentAiRoute } from '../../common/ai-route';
 import { openAiCircuitBreaker } from '../../common/openai-circuit-breaker';
 import {
   OPENAI_CLASSIFY_TIMEOUT_MS,
+  CODEX_CLASSIFY_TIMEOUT_MS,
   withTimeout,
 } from '../../common/with-timeout';
 import { WEIGHT_MAX_KG, WEIGHT_MIN_KG } from '../weight/weight-parse';
@@ -86,7 +88,9 @@ export class MessageClassifyService {
             json_schema: MESSAGE_CLASSIFY_JSON_SCHEMA,
           },
         }),
-        OPENAI_CLASSIFY_TIMEOUT_MS,
+        currentAiRoute() === 'codex'
+          ? CODEX_CLASSIFY_TIMEOUT_MS
+          : OPENAI_CLASSIFY_TIMEOUT_MS,
         'OpenAI message classify',
       );
 

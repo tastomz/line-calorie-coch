@@ -14,12 +14,13 @@ describe('AiGatewayService Trial routing', () => {
     aiUsage as unknown as AiUsageService,
     ent as unknown as SubscriptionEntitlementService,
   );
-  let codexUp = true;
+  let routesTrial = true;
 
   beforeEach(() => {
-    codexUp = true;
+    routesTrial = true;
     setCodexBackend({
-      available: () => codexUp,
+      routesTrial: () => routesTrial,
+      available: () => false,
       chat: () => Promise.reject(new Error('unused')),
     });
   });
@@ -49,8 +50,16 @@ describe('AiGatewayService Trial routing', () => {
     await expect(routeInside()).resolves.toBe('api');
   });
 
-  it('uses the API when Codex is not signed in, without a DB lookup', async () => {
-    codexUp = false;
+  it('routes Trial to Codex even when Codex is signed out (no API fallback)', async () => {
+    ent.getEntitlement.mockResolvedValue({
+      hasProAccess: true,
+      status: 'TRIALING',
+    });
+    await expect(routeInside()).resolves.toBe('codex');
+  });
+
+  it('uses the API for everyone when CODEX_TRIAL_ENABLED=false, without a DB lookup', async () => {
+    routesTrial = false;
     ent.getEntitlement.mockClear();
     await expect(routeInside()).resolves.toBe('api');
     expect(ent.getEntitlement).not.toHaveBeenCalled();
