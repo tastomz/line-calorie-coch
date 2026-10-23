@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { MembershipModule } from '../membership/membership.module';
+import { LineModule } from '../line/line.module';
 import { UsersModule } from '../users/users.module';
 import { AdminApiController } from './admin-api.controller';
 import { AdminAiUsageService } from './admin-ai-usage.service';
@@ -10,7 +11,7 @@ import { AdminPagesController } from './admin-pages.controller';
 import { AdminSessionGuard } from './admin-session.guard';
 
 @Module({
-  imports: [PrismaModule, MembershipModule, UsersModule],
+  imports: [PrismaModule, MembershipModule, UsersModule, LineModule],
   controllers: [AdminApiController, AdminPagesController],
   providers: [
     AdminAuthService,

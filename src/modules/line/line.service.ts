@@ -8,6 +8,12 @@ import {
 import { LineOutboundError } from './line-outbound.error';
 import { lineReplyCapture } from './line-reply-capture';
 import { LineButtonItem, LineQuickReplyItem } from './line.types';
+import {
+  buildRichMenu,
+  RICH_MENU_ALIAS,
+  RICH_MENU_NAME_PREFIX,
+  RichMenuTab,
+} from './rich-menu';
 
 @Injectable()
 export class LineService implements OnModuleInit {
@@ -157,6 +163,84 @@ export class LineService implements OnModuleInit {
     } catch (error) {
       this.logger.warn(
         `LINE showLoadingAnimation failed status=${this.extractHttpStatus(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Create the tabbed rich menu (โค้ช / แอดมิน) via the Messaging API, upload
+   * both images, point the aliases at them and make โค้ช the default. Old menus
+   * from earlier runs are removed afterwards. Overrides the OA Manager menu.
+   */
+  async setupTabbedRichMenu(params: {
+    liffId: string | null;
+    images: Record<RichMenuTab, Buffer>;
+  }): Promise<Record<RichMenuTab, string>> {
+    if (!this.client || !this.blobClient) {
+      throw new Error('LINE_CHANNEL_ACCESS_TOKEN is not configured');
+    }
+    const client = this.client;
+    const before = await client.getRichMenuList();
+    const ids = {} as Record<RichMenuTab, string>;
+    for (const tab of ['coach', 'admin'] as RichMenuTab[]) {
+      const { richMenuId } = await client.createRichMenu(
+        buildRichMenu(tab, params.liffId),
+      );
+      await this.blobClient.setRichMenuImage(
+        richMenuId,
+        new Blob([new Uint8Array(params.images[tab])], { type: 'image/jpeg' }),
+      );
+      ids[tab] = richMenuId;
+    }
+    const aliases = await client.getRichMenuAliasList();
+    const existing = new Set(
+      (aliases.aliases ?? []).map((a) => a.richMenuAliasId),
+    );
+    for (const tab of ['coach', 'admin'] as RichMenuTab[]) {
+      const richMenuAliasId = RICH_MENU_ALIAS[tab];
+      if (existing.has(richMenuAliasId)) {
+        await client.updateRichMenuAlias(richMenuAliasId, {
+          richMenuId: ids[tab],
+        });
+      } else {
+        await client.createRichMenuAlias({
+          richMenuAliasId,
+          richMenuId: ids[tab],
+        });
+      }
+    }
+    await client.setDefaultRichMenu(ids.coach);
+    for (const menu of before.richmenus ?? []) {
+      if (menu.name?.startsWith(RICH_MENU_NAME_PREFIX)) {
+        try {
+          await client.deleteRichMenu(menu.richMenuId);
+        } catch {
+          // A stale menu left behind is harmless.
+        }
+      }
+    }
+    this.logger.log(
+      `Tabbed rich menu installed coach=${ids.coach} admin=${ids.admin}`,
+    );
+    return ids;
+  }
+
+  /**
+   * Keep a user's menu in sync with handoff state when it changed by typing
+   * (tab taps already switch on the device). Best-effort, never throws.
+   */
+  async showRichMenuTab(lineUserId: string, tab: RichMenuTab): Promise<void> {
+    if (!this.client || !lineUserId) return;
+    try {
+      if (tab === 'coach') {
+        await this.client.unlinkRichMenuIdFromUser(lineUserId);
+        return;
+      }
+      const alias = await this.client.getRichMenuAlias(RICH_MENU_ALIAS.admin);
+      await this.client.linkRichMenuIdToUser(lineUserId, alias.richMenuId);
+    } catch (error) {
+      this.logger.warn(
+        `LINE rich menu sync failed tab=${tab} status=${this.extractHttpStatus(error)}`,
       );
     }
   }

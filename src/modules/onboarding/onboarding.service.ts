@@ -43,6 +43,9 @@ import {
   ADMIN_CHAT_EXIT_TEXT,
   ADMIN_CHAT_NOT_ACTIVE_TEXT,
   ADMIN_CHAT_STARTED_TEXT,
+  ADMIN_CHAT_TAB_STARTED_TEXT,
+  TAB_POSTBACK_ADMIN,
+  TAB_POSTBACK_COACH,
   isAdminChatEnter,
   isAdminChatExit,
   isMenuCommand,
@@ -162,6 +165,34 @@ export class OnboardingService {
     replyToken: string,
     text: string,
   ): Promise<boolean> {
+    // Rich-menu tab taps: the device already switched the menu.
+    if (text === TAB_POSTBACK_ADMIN) {
+      if (!user.adminChatSince) {
+        await this.usersService.setAdminChat(user.id, new Date());
+        this.logger.log(
+          `Admin chat started (tab) userIdPrefix=${user.id.slice(0, 8)}`,
+        );
+        await this.lineService.replyText(
+          replyToken,
+          ADMIN_CHAT_TAB_STARTED_TEXT,
+        );
+      }
+      await this.lineService.showRichMenuTab(user.lineUserId ?? '', 'admin');
+      return true;
+    }
+    if (text === TAB_POSTBACK_COACH) {
+      if (user.adminChatSince) {
+        await this.usersService.setAdminChat(user.id, null);
+        this.logger.log(
+          `Admin chat ended (tab) userIdPrefix=${user.id.slice(0, 8)}`,
+        );
+        await this.lineService.replyText(replyToken, ADMIN_CHAT_ENDED_TEXT);
+      }
+      // A per-user admin menu (set when they typed) would otherwise stick.
+      await this.lineService.showRichMenuTab(user.lineUserId ?? '', 'coach');
+      return true;
+    }
+
     if (isAdminChatEnter(text)) {
       if (!user.adminChatSince) {
         await this.usersService.setAdminChat(user.id, new Date());
@@ -169,6 +200,7 @@ export class OnboardingService {
           `Admin chat started userIdPrefix=${user.id.slice(0, 8)}`,
         );
       }
+      await this.lineService.showRichMenuTab(user.lineUserId ?? '', 'admin');
       await this.lineService.replyButtons(replyToken, ADMIN_CHAT_STARTED_TEXT, [
         { label: ADMIN_CHAT_EXIT_TEXT, text: ADMIN_CHAT_EXIT_TEXT },
       ]);
@@ -179,6 +211,7 @@ export class OnboardingService {
       if (user.adminChatSince) {
         await this.usersService.setAdminChat(user.id, null);
         this.logger.log(`Admin chat ended userIdPrefix=${user.id.slice(0, 8)}`);
+        await this.lineService.showRichMenuTab(user.lineUserId ?? '', 'coach');
         await this.lineService.replyText(replyToken, ADMIN_CHAT_ENDED_TEXT);
       } else {
         await this.lineService.replyText(

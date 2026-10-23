@@ -33,6 +33,16 @@ export class AdminPagesController {
     return res.sendFile(full);
   }
 
+  /** Rich-menu image previews for the dashboard (fixed allow-list). */
+  @Get('admin/richmenu/:file')
+  richMenuImage(@Req() req: Request, @Res() res: Response) {
+    const name = String(req.params.file ?? '');
+    if (name !== 'coach.jpg' && name !== 'admin.jpg') {
+      return res.status(404).send('Not found');
+    }
+    return res.sendFile(join(process.cwd(), 'public', 'richmenu', name));
+  }
+
   @Get('admin/assets/:file')
   assets(@Req() req: Request, @Res() res: Response) {
     const name = String(req.params.file ?? '').replace(/[^a-zA-Z0-9._-]/g, '');

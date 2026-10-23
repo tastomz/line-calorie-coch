@@ -45,6 +45,7 @@ describe('OnboardingService admin handoff', () => {
   const lineService = {
     replyText: jest.fn(),
     replyButtons: jest.fn(),
+    showRichMenuTab: jest.fn(),
   };
   const foodLoggingService = {
     handleCompletedText: jest.fn(),
@@ -126,5 +127,50 @@ describe('OnboardingService admin handoff', () => {
     await expect(service.isAdminChatActive('U1')).resolves.toBe(true);
     usersService.findByLineUserId.mockResolvedValueOnce({ ...baseUser });
     await expect(service.isAdminChatActive('U1')).resolves.toBe(false);
+  });
+
+  it('typing a keyword also switches the rich menu tab', async () => {
+    usersService.findByLineUserId.mockResolvedValue({ ...baseUser });
+    await service.handleTextMessage('U1', 'tok', 'คุยกับแอดมิน');
+    expect(lineService.showRichMenuTab).toHaveBeenCalledWith('U1', 'admin');
+  });
+
+  it('tapping the แอดมิน tab starts handoff with a short reply, once', async () => {
+    usersService.findByLineUserId.mockResolvedValueOnce({ ...baseUser });
+    await service.handleTextMessage('U1', 'tok', 'richmenu:admin');
+    expect(usersService.setAdminChat).toHaveBeenCalledWith(
+      'user-12345678',
+      expect.any(Date),
+    );
+    expect(lineService.replyText).toHaveBeenCalledTimes(1);
+
+    usersService.findByLineUserId.mockResolvedValueOnce({
+      ...baseUser,
+      adminChatSince: new Date(),
+    });
+    await service.handleTextMessage('U1', 'tok2', 'richmenu:admin');
+    expect(lineService.replyText).toHaveBeenCalledTimes(1);
+    expect(handleCompleted).not.toHaveBeenCalled();
+  });
+
+  it('tapping the โค้ช tab ends handoff; silent when already with the bot', async () => {
+    usersService.findByLineUserId.mockResolvedValueOnce({
+      ...baseUser,
+      adminChatSince: new Date(),
+    });
+    await service.handleTextMessage('U1', 'tok', 'richmenu:coach');
+    expect(usersService.setAdminChat).toHaveBeenCalledWith(
+      'user-12345678',
+      null,
+    );
+    expect(lineService.replyText).toHaveBeenCalledWith(
+      'tok',
+      ADMIN_CHAT_ENDED_TEXT,
+    );
+
+    usersService.findByLineUserId.mockResolvedValueOnce({ ...baseUser });
+    await service.handleTextMessage('U1', 'tok2', 'richmenu:coach');
+    expect(lineService.replyText).toHaveBeenCalledTimes(1);
+    expect(handleCompleted).not.toHaveBeenCalled();
   });
 });

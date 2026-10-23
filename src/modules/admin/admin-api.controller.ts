@@ -14,6 +14,9 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
+import { readFile } from 'fs/promises';
+import { join } from 'path';
+import { LineService } from '../line/line.service';
 import { parsePromoParams } from '../membership/promo-code.generator';
 import {
   PlanValidationError,
@@ -35,7 +38,37 @@ export class AdminApiController {
     private readonly aiUsage: AdminAiUsageService,
     private readonly config: ConfigService,
     private readonly plans: ProPlanService,
+    private readonly line: LineService,
   ) {}
+
+  /**
+   * Install the tabbed rich menu (โค้ช / แอดมิน) from public/richmenu/*.jpg.
+   * Replaces the OA Manager menu as the default for everyone.
+   */
+  @Post('rich-menu/setup')
+  @UseGuards(AdminSessionGuard)
+  async setupRichMenu(@AdminId() adminId: string) {
+    const dir = join(process.cwd(), 'public', 'richmenu');
+    try {
+      const [coach, admin] = await Promise.all([
+        readFile(join(dir, 'coach.jpg')),
+        readFile(join(dir, 'admin.jpg')),
+      ]);
+      const liffId = (this.config.get<string>('LIFF_ID') ?? '').trim() || null;
+      const ids = await this.line.setupTabbedRichMenu({
+        liffId,
+        images: { coach, admin },
+      });
+      await this.auth.audit(adminId, 'rich_menu_setup', 'RichMenu', ids.coach, {
+        ...ids,
+      });
+      return { ok: true, ...ids };
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'rich menu setup failed',
+      );
+    }
+  }
 
   private planError(error: unknown): never {
     if (error instanceof PlanValidationError) {

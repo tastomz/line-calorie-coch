@@ -18,6 +18,15 @@
       <div id="users"></div>
     </div>
     <div class="card" id="detail"></div>
+    <div class="card">
+      <h3>📱 Rich menu (แท็บ โค้ช / แอดมิน)</h3>
+      <p style="color:var(--muted)">ติดตั้งเมนูแบบแท็บให้ผู้ใช้ทุกคน (แทนเมนูที่ตั้งใน LINE OA Manager) · กดซ้ำได้ถ้าเปลี่ยนรูป</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <img src="/admin/richmenu/coach.jpg" alt="แท็บโค้ช" style="width:48%;min-width:220px;border-radius:8px" />
+        <img src="/admin/richmenu/admin.jpg" alt="แท็บแอดมิน" style="width:48%;min-width:220px;border-radius:8px" />
+      </div>
+      <div style="margin-top:12px"><button class="btn" id="richmenu">ติดตั้ง Rich menu</button> <span id="richmenuMsg"></span></div>
+    </div>
   </div>
   <script>
     async function api(path, opt) {
@@ -58,6 +67,18 @@
       e.preventDefault();
       await api('/admin/api/logout', { method: 'POST', body: '{}' });
       location.href = '/admin/login';
+    };
+    document.getElementById('richmenu').onclick = async () => {
+      const btn = document.getElementById('richmenu');
+      const msg = document.getElementById('richmenuMsg');
+      if (!confirm('ติดตั้ง Rich menu แบบแท็บให้ผู้ใช้ทุกคน?')) return;
+      btn.disabled = true; msg.textContent = 'กำลังติดตั้ง...'; msg.style.color = '';
+      try {
+        await api('/admin/api/rich-menu/setup', { method: 'POST', body: '{}' });
+        msg.textContent = '✅ ติดตั้งแล้ว — ปิดแล้วเปิดแชท LINE ใหม่เพื่อดูเมนู';
+      } catch (e) {
+        msg.textContent = '❌ ' + e.message; msg.style.color = 'var(--danger)';
+      } finally { btn.disabled = false; }
     };
     load().catch(() => location.href = '/admin/login');
   </script>

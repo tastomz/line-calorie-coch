@@ -1,0 +1,95 @@
+import { messagingApi } from '@line/bot-sdk';
+
+/**
+ * Tabbed rich menu: "โค้ช" (bot answers) ↔ "แอดมิน" (human handoff).
+ * Images: public/richmenu/{coach,admin}.jpg, 2500 × 1686.
+ * Tabs use `richmenuswitch`: LINE swaps the menu on the device instantly and
+ * sends a postback whose `data` the bot handles (see admin-handoff.ts).
+ */
+export const RICH_MENU_SIZE = { width: 2500, height: 1686 };
+export const RICH_MENU_NAME_PREFIX = 'kcal-tabs';
+export const RICH_MENU_ALIAS = {
+  coach: 'kcal-coach',
+  admin: 'kcal-admin',
+} as const;
+export type RichMenuTab = keyof typeof RICH_MENU_ALIAS;
+
+/** Postback data sent when a tab is tapped. */
+export const RICH_MENU_POSTBACK = {
+  coach: 'richmenu:coach',
+  admin: 'richmenu:admin',
+} as const;
+
+const TAB_HEIGHT = 240;
+const TILE_TOP = 1030;
+const TILE_HEIGHT = RICH_MENU_SIZE.height - TILE_TOP;
+
+type Area = messagingApi.RichMenuArea;
+
+function tabAreas(): Area[] {
+  return [
+    {
+      bounds: { x: 0, y: 0, width: 1250, height: TAB_HEIGHT },
+      action: {
+        type: 'richmenuswitch',
+        richMenuAliasId: RICH_MENU_ALIAS.coach,
+        data: RICH_MENU_POSTBACK.coach,
+      },
+    },
+    {
+      bounds: { x: 1250, y: 0, width: 1250, height: TAB_HEIGHT },
+      action: {
+        type: 'richmenuswitch',
+        richMenuAliasId: RICH_MENU_ALIAS.admin,
+        data: RICH_MENU_POSTBACK.admin,
+      },
+    },
+  ];
+}
+
+/** The three bottom tiles are the same on both tabs. */
+function tileAreas(liffId: string | null): Area[] {
+  const profileAction: messagingApi.Action = liffId
+    ? { type: 'uri', label: 'โปรไฟล์', uri: `https://liff.line.me/${liffId}` }
+    : { type: 'message', label: 'โปรไฟล์', text: 'โปรไฟล์' };
+  return [
+    {
+      bounds: { x: 0, y: TILE_TOP, width: 860, height: TILE_HEIGHT },
+      action: { type: 'message', label: 'อาหาร', text: 'อาหาร' },
+    },
+    {
+      bounds: { x: 860, y: TILE_TOP, width: 790, height: TILE_HEIGHT },
+      action: { type: 'message', label: 'โค้ช', text: 'โค้ช' },
+    },
+    {
+      bounds: { x: 1650, y: TILE_TOP, width: 850, height: TILE_HEIGHT },
+      action: profileAction,
+    },
+  ];
+}
+
+export function buildRichMenu(
+  tab: RichMenuTab,
+  liffId: string | null,
+): messagingApi.RichMenuRequest {
+  const areas = [...tabAreas(), ...tileAreas(liffId)];
+  if (tab === 'coach') {
+    // Hero banner with the "ดูภาพรวมวันนี้" button.
+    areas.push({
+      bounds: {
+        x: 0,
+        y: TAB_HEIGHT,
+        width: RICH_MENU_SIZE.width,
+        height: TILE_TOP - TAB_HEIGHT,
+      },
+      action: { type: 'message', label: 'ดูภาพรวมวันนี้', text: 'วันนี้' },
+    });
+  }
+  return {
+    size: RICH_MENU_SIZE,
+    selected: true,
+    name: `${RICH_MENU_NAME_PREFIX}-${tab}`,
+    chatBarText: 'เมนู',
+    areas,
+  };
+}

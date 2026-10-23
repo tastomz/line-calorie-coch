@@ -1,8 +1,19 @@
 # LINE Rich Menu
 
-The Rich Menu is configured in **LINE Official Account Manager** (Chat → Rich menus),
-not in this repo. Set every tile to a **Text** action; the bot recognises these
-exact messages (`FOOD_COMMANDS` in `src/modules/food/food-logging.service.ts`).
+The rich menu is a **tabbed menu created through the Messaging API** (it
+overrides any menu set in LINE OA Manager). Images live in
+`public/richmenu/coach.jpg` and `admin.jpg` (2500 × 1686, < 1 MB); areas are in
+`src/modules/line/rich-menu.ts`. Install or re-install from **/admin →
+"ติดตั้ง Rich menu"** (`POST /admin/api/rich-menu/setup`).
+
+- Tab **โค้ช** / **แอดมิน** (top 240 px) use `richmenuswitch` with aliases
+  `kcal-coach` / `kcal-admin`; the postback data (`richmenu:coach` /
+  `richmenu:admin`) turns the human handoff off/on.
+- Both tabs keep the อาหาร / โค้ช / โปรไฟล์ tiles; only the โค้ช tab has the
+  "ดูภาพรวมวันนี้" banner. โปรไฟล์ opens `https://liff.line.me/$LIFF_ID`.
+
+Tiles send these exact texts (`FOOD_COMMANDS` in
+`src/modules/food/food-logging.service.ts`):
 
 | Tile | Message to send | Bot reply |
 | --- | --- | --- |

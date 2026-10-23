@@ -27,6 +27,10 @@ const EXIT = ['คุยกับบอท', 'กลับไปคุยกั�
 
 export const ADMIN_CHAT_EXIT_TEXT = 'คุยกับบอท';
 
+/** Postback data from the rich-menu tabs (see line/rich-menu.ts). */
+export const TAB_POSTBACK_ADMIN = 'richmenu:admin';
+export const TAB_POSTBACK_COACH = 'richmenu:coach';
+
 export function isAdminChatEnter(text: string): boolean {
   return ENTER.includes(normalize(text));
 }
@@ -52,7 +56,11 @@ export const ADMIN_CHAT_STARTED_TEXT = `👩‍💼 ส่งเรื่อง�
 พิมพ์ข้อความหรือส่งรูปได้เลย แอดมินจะตอบกลับในแชทนี้
 
 ระหว่างนี้บอทจะหยุดตอบข้อความ (กดเมนูด้านล่างได้ตามปกติ)
-พิมพ์ "${ADMIN_CHAT_EXIT_TEXT}" เมื่อต้องการกลับมาใช้บอท`;
+แตะแท็บ "โค้ช" หรือพิมพ์ "${ADMIN_CHAT_EXIT_TEXT}" เมื่อต้องการกลับมาใช้บอท`;
+
+/** Shorter reply when the user switched by tapping the แอดมิน tab. */
+export const ADMIN_CHAT_TAB_STARTED_TEXT = `👩‍💼 คุยกับแอดมินได้เลยครับ
+พิมพ์ข้อความหรือส่งรูป แอดมินจะตอบกลับในแชทนี้`;
 
 export const ADMIN_CHAT_ENDED_TEXT = `🤖 กลับมาคุยกับบอทแล้วครับ
 ส่งเมนูอาหาร รูปอาหาร หรือคำถามได้เลย`;
