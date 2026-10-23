@@ -47,23 +47,63 @@ function tabAreas(): Area[] {
   ];
 }
 
-/** The three bottom tiles are the same on both tabs. */
-function tileAreas(liffId: string | null): Area[] {
-  const profileAction: messagingApi.Action = liffId
-    ? { type: 'uri', label: 'โปรไฟล์', uri: `https://liff.line.me/${liffId}` }
+function liffUri(liffId: string, path = ''): string {
+  return `https://liff.line.me/${liffId}${path}`;
+}
+
+function profileAction(liffId: string | null): messagingApi.Action {
+  return liffId
+    ? { type: 'uri', label: 'โปรไฟล์', uri: liffUri(liffId) }
     : { type: 'message', label: 'โปรไฟล์', text: 'โปรไฟล์' };
+}
+
+/** โค้ช tab: banner = today overview; tiles = โค้ชแนะนำ / ประวัติ / โปรไฟล์. */
+function coachAreas(liffId: string | null): Area[] {
+  const historyAction: messagingApi.Action = liffId
+    ? { type: 'uri', label: 'ประวัติ', uri: liffUri(liffId, '/history') }
+    : { type: 'message', label: 'ประวัติ', text: 'ประวัติ' };
   return [
     {
+      bounds: {
+        x: 0,
+        y: TAB_HEIGHT,
+        width: RICH_MENU_SIZE.width,
+        height: TILE_TOP - TAB_HEIGHT,
+      },
+      action: { type: 'message', label: 'ดูภาพรวมวันนี้', text: 'วันนี้' },
+    },
+    {
       bounds: { x: 0, y: TILE_TOP, width: 860, height: TILE_HEIGHT },
-      action: { type: 'message', label: 'อาหาร', text: 'อาหาร' },
+      action: { type: 'message', label: 'โค้ชแนะนำ', text: 'โค้ชแนะนำ' },
     },
     {
       bounds: { x: 860, y: TILE_TOP, width: 790, height: TILE_HEIGHT },
-      action: { type: 'message', label: 'โค้ช', text: 'โค้ช' },
+      action: historyAction,
     },
     {
       bounds: { x: 1650, y: TILE_TOP, width: 850, height: TILE_HEIGHT },
-      action: profileAction,
+      action: profileAction(liffId),
+    },
+  ];
+}
+
+/**
+ * แอดมิน tab: no bot features — only "back to โค้ช" and the profile page.
+ * The banner has no action on purpose.
+ */
+function adminAreas(liffId: string | null): Area[] {
+  return [
+    {
+      bounds: { x: 0, y: TILE_TOP, width: 1293, height: TILE_HEIGHT },
+      action: {
+        type: 'richmenuswitch',
+        richMenuAliasId: RICH_MENU_ALIAS.coach,
+        data: RICH_MENU_POSTBACK.coach,
+      },
+    },
+    {
+      bounds: { x: 1293, y: TILE_TOP, width: 1207, height: TILE_HEIGHT },
+      action: profileAction(liffId),
     },
   ];
 }
@@ -72,19 +112,10 @@ export function buildRichMenu(
   tab: RichMenuTab,
   liffId: string | null,
 ): messagingApi.RichMenuRequest {
-  const areas = [...tabAreas(), ...tileAreas(liffId)];
-  if (tab === 'coach') {
-    // Hero banner with the "ดูภาพรวมวันนี้" button.
-    areas.push({
-      bounds: {
-        x: 0,
-        y: TAB_HEIGHT,
-        width: RICH_MENU_SIZE.width,
-        height: TILE_TOP - TAB_HEIGHT,
-      },
-      action: { type: 'message', label: 'ดูภาพรวมวันนี้', text: 'วันนี้' },
-    });
-  }
+  const areas = [
+    ...tabAreas(),
+    ...(tab === 'coach' ? coachAreas(liffId) : adminAreas(liffId)),
+  ];
   return {
     size: RICH_MENU_SIZE,
     selected: true,

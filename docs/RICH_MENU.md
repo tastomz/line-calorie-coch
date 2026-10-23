@@ -9,8 +9,10 @@ overrides any menu set in LINE OA Manager). Images live in
 - Tab **โค้ช** / **แอดมิน** (top 240 px) use `richmenuswitch` with aliases
   `kcal-coach` / `kcal-admin`; the postback data (`richmenu:coach` /
   `richmenu:admin`) turns the human handoff off/on.
-- Both tabs keep the อาหาร / โค้ช / โปรไฟล์ tiles; only the โค้ช tab has the
-  "ดูภาพรวมวันนี้" banner. โปรไฟล์ opens `https://liff.line.me/$LIFF_ID`.
+- **โค้ช tab:** banner → `วันนี้`; tiles → `โค้ชแนะนำ` (next-meal advice),
+  ประวัติ (`https://liff.line.me/$LIFF_ID/history`), โปรไฟล์ (LIFF).
+- **แอดมิน tab:** no bot commands at all — only "กลับไปคุยกับโค้ช"
+  (`richmenuswitch` → `richmenu:coach`) and โปรไฟล์ (LIFF).
 
 Tiles send these exact texts (`FOOD_COMMANDS` in
 `src/modules/food/food-logging.service.ts`):

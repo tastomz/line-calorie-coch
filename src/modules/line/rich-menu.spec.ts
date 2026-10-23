@@ -32,35 +32,47 @@ describe('tabbed rich menu', () => {
     },
   );
 
-  it('both tabs keep the อาหาร / โค้ช / โปรไฟล์ tiles; profile opens LIFF', () => {
-    for (const tab of ['coach', 'admin'] as const) {
-      const actions = buildRichMenu(tab, 'liff-123').areas.map((a) => a.action);
-      expect(actions).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ type: 'message', text: 'อาหาร' }),
-          expect.objectContaining({ type: 'message', text: 'โค้ช' }),
-          expect.objectContaining({
-            type: 'uri',
-            uri: 'https://liff.line.me/liff-123',
-          }),
-        ]),
-      );
-    }
+  const actionsOf = (tab: 'coach' | 'admin', liff: string | null) =>
+    (buildRichMenu(tab, liff).areas ?? []).map((a) => a.action);
+
+  it('coach tab: วันนี้ banner, โค้ชแนะนำ, ประวัติ (LIFF /history), โปรไฟล์', () => {
+    expect(actionsOf('coach', 'liff-123')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'message', text: 'วันนี้' }),
+        expect.objectContaining({ type: 'message', text: 'โค้ชแนะนำ' }),
+        expect.objectContaining({
+          type: 'uri',
+          uri: 'https://liff.line.me/liff-123/history',
+        }),
+        expect.objectContaining({
+          type: 'uri',
+          uri: 'https://liff.line.me/liff-123',
+        }),
+      ]),
+    );
   });
 
-  it('only the coach tab has the "ดูภาพรวมวันนี้" banner', () => {
-    const today = (tab: 'coach' | 'admin') =>
-      buildRichMenu(tab, null).areas.some(
-        (a) => a.action.type === 'message' && a.action.text === 'วันนี้',
-      );
-    expect(today('coach')).toBe(true);
-    expect(today('admin')).toBe(false);
+  it('admin tab: only tabs, back-to-โค้ช and โปรไฟล์ — no bot commands', () => {
+    const actions = actionsOf('admin', 'liff-123');
+    expect(actions).toHaveLength(4);
+    expect(actions.some((a) => a.type === 'message')).toBe(false);
+    expect(actions[2]).toMatchObject({
+      type: 'richmenuswitch',
+      richMenuAliasId: RICH_MENU_ALIAS.coach,
+      data: RICH_MENU_POSTBACK.coach,
+    });
+    expect(actions[3]).toMatchObject({
+      type: 'uri',
+      uri: 'https://liff.line.me/liff-123',
+    });
   });
 
-  it('falls back to the โปรไฟล์ text command without a LIFF id', () => {
-    const actions = buildRichMenu('coach', null).areas.map((a) => a.action);
-    expect(actions).toContainEqual(
-      expect.objectContaining({ type: 'message', text: 'โปรไฟล์' }),
+  it('falls back to text commands without a LIFF id', () => {
+    expect(actionsOf('coach', null)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'message', text: 'ประวัติ' }),
+        expect.objectContaining({ type: 'message', text: 'โปรไฟล์' }),
+      ]),
     );
   });
 });
