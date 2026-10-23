@@ -35,6 +35,14 @@ export class LineWebhookService {
     @Optional() private readonly lineService?: LineService,
   ) {}
 
+  private async isAdminChatActive(lineUserId: string): Promise<boolean> {
+    try {
+      return await this.onboardingService.isAdminChatActive(lineUserId);
+    } catch {
+      return false;
+    }
+  }
+
   /** Fire-and-forget "typing…" indicator for messages that may hit the AI. */
   private startLoading(event: LineWebhookEvent): void {
     const userId = event.source?.userId;
@@ -220,7 +228,11 @@ export class LineWebhookService {
       return;
     }
 
-    if (event.message?.type === 'image' || event.message?.type === 'text') {
+    if (
+      (event.message?.type === 'image' || event.message?.type === 'text') &&
+      !(await this.isAdminChatActive(lineUserId))
+    ) {
+      // No typing dots while an admin is handling the chat.
       this.startLoading(event);
     }
 

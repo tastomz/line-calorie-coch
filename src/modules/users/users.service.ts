@@ -133,6 +133,14 @@ export class UsersService {
     });
   }
 
+  /** Turn human-admin handoff on (date) or off (null). */
+  async setAdminChat(userId: string, since: Date | null) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { adminChatSince: since },
+    });
+  }
+
   async updateOnboardingDraft(userId: string, data: Prisma.UserUpdateInput) {
     return this.prisma.user.update({
       where: { id: userId },

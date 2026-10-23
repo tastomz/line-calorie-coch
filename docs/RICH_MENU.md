@@ -21,3 +21,13 @@ data (e.g. sleep) instead of guessing.
 **LINE Login channel** is still in *Developing*. Only people with a role on the channel
 can log in. In LINE Developers Console, either switch the channel to **Published**, or
 add the person under the channel's **Roles**.
+
+## Talk to an admin (human handoff)
+
+- User types **คุยกับแอดมิน** (also: ติดต่อแอดมิน, แอดมิน, คุยกับคน, admin) →
+  `User.adminChatSince` is set and the bot stops answering that user's free
+  text and photos (no typing indicator either). Rich-menu command texts
+  (e.g. วันนี้, สมาชิก) are still answered by the bot.
+- Admin replies in **LINE Official Account Manager → Chat**. Requires
+  Response settings: **Chat ON** and **Webhook ON**.
+- User types **คุยกับบอท** (quick-reply button provided) → bot resumes.

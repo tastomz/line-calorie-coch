@@ -84,6 +84,8 @@ model User {
   pictureUrl           String?
   role                 UserRole             @default(USER)
   onboardingState      OnboardingState      @default(NOT_STARTED)
+  /// Set while the user is talking to a human admin (bot stays quiet).
+  adminChatSince       DateTime?
   draftSex             Sex?
   draftAge             Int?
   draftHeightCm        Float?

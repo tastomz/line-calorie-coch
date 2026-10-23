@@ -39,6 +39,15 @@ import {
 } from './onboarding.messages';
 import { buildGoalConfirmationFlex } from './onboarding.flex';
 import {
+  ADMIN_CHAT_ENDED_TEXT,
+  ADMIN_CHAT_EXIT_TEXT,
+  ADMIN_CHAT_NOT_ACTIVE_TEXT,
+  ADMIN_CHAT_STARTED_TEXT,
+  isAdminChatEnter,
+  isAdminChatExit,
+  isMenuCommand,
+} from './admin-handoff';
+import {
   parseActivityLevel,
   parseAge,
   parseGoal,
@@ -120,6 +129,10 @@ export class OnboardingService {
       user = result.user;
     }
 
+    if (await this.handleAdminChatText(user, replyToken, text)) {
+      return;
+    }
+
     if (user.onboardingState === OnboardingState.COMPLETED) {
       await this.handleCompletedUserMessage(replyToken, text, user);
       return;
@@ -132,6 +145,55 @@ export class OnboardingService {
 
     const outbound = await this.processOnboardingInput(user, text.trim());
     await this.dispatch(replyToken, outbound);
+  }
+
+  /** Whether the bot is quiet for this user (used to skip the typing dots). */
+  async isAdminChatActive(lineUserId: string): Promise<boolean> {
+    const user = await this.usersService.findByLineUserId(lineUserId);
+    return Boolean(user?.adminChatSince);
+  }
+
+  /**
+   * Human handoff keywords. Returns true when the message was fully handled
+   * (including "stay quiet so the admin can answer").
+   */
+  private async handleAdminChatText(
+    user: User,
+    replyToken: string,
+    text: string,
+  ): Promise<boolean> {
+    if (isAdminChatEnter(text)) {
+      if (!user.adminChatSince) {
+        await this.usersService.setAdminChat(user.id, new Date());
+        this.logger.log(
+          `Admin chat started userIdPrefix=${user.id.slice(0, 8)}`,
+        );
+      }
+      await this.lineService.replyButtons(replyToken, ADMIN_CHAT_STARTED_TEXT, [
+        { label: ADMIN_CHAT_EXIT_TEXT, text: ADMIN_CHAT_EXIT_TEXT },
+      ]);
+      return true;
+    }
+
+    if (isAdminChatExit(text)) {
+      if (user.adminChatSince) {
+        await this.usersService.setAdminChat(user.id, null);
+        this.logger.log(`Admin chat ended userIdPrefix=${user.id.slice(0, 8)}`);
+        await this.lineService.replyText(replyToken, ADMIN_CHAT_ENDED_TEXT);
+      } else {
+        await this.lineService.replyText(
+          replyToken,
+          ADMIN_CHAT_NOT_ACTIVE_TEXT,
+        );
+      }
+      return true;
+    }
+
+    if (user.adminChatSince && !isMenuCommand(text)) {
+      // Free text goes to the admin; no reply so OA Manager owns the thread.
+      return true;
+    }
+    return false;
   }
 
   async handleImageMessage(
@@ -147,6 +209,14 @@ export class OnboardingService {
         profile,
       );
       user = result.user;
+    }
+
+    if (user.adminChatSince) {
+      // Handoff: the photo is for the admin, who replies in OA Manager.
+      this.logger.log(
+        `Admin chat active — bot skips image userIdPrefix=${user.id.slice(0, 8)}`,
+      );
+      return;
     }
 
     if (user.onboardingState !== OnboardingState.COMPLETED) {
