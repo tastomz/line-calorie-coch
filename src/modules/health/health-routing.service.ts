@@ -69,8 +69,7 @@ import {
   BodyScanAnalysisService,
   WeeklyReviewService,
 } from './weekly-review.service';
-
-const MEAL_PLAN_MODEL = 'gpt-5';
+import { smartModel } from '../../common/ai-models';
 
 const EXERCISE_TYPE_FROM_CLASSIFY: Record<
   NonNullable<ClassifiedMessage['exerciseType']>,
@@ -683,8 +682,8 @@ export class HealthRoutingService {
         'MEAL_PLAN',
         async () => {
           const completion = await this.openai!.chat.completions.create({
-            model: MEAL_PLAN_MODEL,
-            ...completionLimits(MEAL_PLAN_MODEL, 320),
+            model: smartModel(),
+            ...completionLimits(smartModel(), 320),
             messages: [
               {
                 role: 'system',
@@ -701,7 +700,7 @@ export class HealthRoutingService {
               },
             ],
           });
-          const meta = usageFromOpenAiCompletion(completion, MEAL_PLAN_MODEL);
+          const meta = usageFromOpenAiCompletion(completion, smartModel());
           if (meta) reportAiTokenUsage(meta);
           return (
             completion.choices[0]?.message?.content?.trim() ||

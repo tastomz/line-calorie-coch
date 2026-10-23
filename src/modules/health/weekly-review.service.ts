@@ -18,9 +18,7 @@ import { BodyScanDraft, BodyScanService } from './body-scan.service';
 import { dateKeyFromParts } from './program-week';
 import { getZonedDateParts } from '../food/day-bounds';
 import { completionLimits } from '../food/food-analysis.service';
-
-const WEEKLY_REVIEW_MODEL = 'gpt-5';
-const BODY_SCAN_EXTRACT_MODEL = 'gpt-5';
+import { smartModel } from '../../common/ai-models';
 
 export type WeeklyMetrics = {
   weightChangeKg: number | null;
@@ -202,8 +200,8 @@ export class WeeklyReviewService {
           'WEEKLY_REVIEW',
           async () => {
             const completion = await this.openai!.chat.completions.create({
-              model: WEEKLY_REVIEW_MODEL,
-              ...completionLimits(WEEKLY_REVIEW_MODEL, 280),
+              model: smartModel(),
+              ...completionLimits(smartModel(), 280),
               messages: [
                 {
                   role: 'system',
@@ -216,10 +214,7 @@ export class WeeklyReviewService {
                 },
               ],
             });
-            const meta = usageFromOpenAiCompletion(
-              completion,
-              WEEKLY_REVIEW_MODEL,
-            );
+            const meta = usageFromOpenAiCompletion(completion, smartModel());
             if (meta) reportAiTokenUsage(meta);
             const raw = completion.choices[0]?.message?.content ?? '{}';
             return JSON.parse(raw.replace(/```json|```/g, '').trim()) as {
@@ -318,8 +313,8 @@ export class BodyScanAnalysisService {
     const draft = await this.aiGateway.run(userId, 'BODY_SCAN', async () => {
       const b64 = imageBytes.toString('base64');
       const completion = await this.openai!.chat.completions.create({
-        model: BODY_SCAN_EXTRACT_MODEL,
-        ...completionLimits(BODY_SCAN_EXTRACT_MODEL, 500),
+        model: smartModel(),
+        ...completionLimits(smartModel(), 500),
         response_format: { type: 'json_object' },
         messages: [
           {
@@ -345,10 +340,7 @@ export class BodyScanAnalysisService {
           },
         ],
       });
-      const meta = usageFromOpenAiCompletion(
-        completion,
-        BODY_SCAN_EXTRACT_MODEL,
-      );
+      const meta = usageFromOpenAiCompletion(completion, smartModel());
       if (meta) reportAiTokenUsage(meta);
       const raw = completion.choices[0]?.message?.content ?? '{}';
       return JSON.parse(raw) as BodyScanDraft;

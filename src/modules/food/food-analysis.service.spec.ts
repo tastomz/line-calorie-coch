@@ -380,7 +380,7 @@ describe('FoodAnalysisService', () => {
       expect(result.kind).toBe('food');
       expect(create).toHaveBeenCalledTimes(2);
       const check = callBody(create, 0);
-      expect(check.model).toBe('gpt-5');
+      expect(check.model).toBe('gpt-6-luna');
       expect(check.max_completion_tokens).toBe(2000);
       expect(check.response_format.json_schema.name).toBe('photo_kind');
       const parts = check.messages[1].content as Array<{
@@ -410,7 +410,7 @@ describe('FoodAnalysisService', () => {
         workout: { durationMinutes: 59, caloriesBurned: 400 },
       });
       expect(create).toHaveBeenCalledTimes(2);
-      expect(callBody(create, 1).model).toBe('gpt-5');
+      expect(callBody(create, 1).model).toBe('gpt-6.1-sol');
       expect(callBody(create, 1).response_format.json_schema.name).toBe(
         'workout_screenshot',
       );
@@ -534,7 +534,7 @@ describe('FoodAnalysisService', () => {
       await serviceWithConfig(textCreate, {
         FOOD_VISION_MODEL: 'gpt-4o',
       }).analyzeText('ข้าว');
-      expect(modelOf(textCreate)).toBe('gpt-5');
+      expect(modelOf(textCreate)).toBe('gpt-6.1-sol');
     });
 
     it('sends GPT-5 style limits (no temperature/max_tokens) for gpt-5 models', async () => {
@@ -571,7 +571,7 @@ describe('FoodAnalysisService', () => {
         await serviceWithConfig(create, {
           FOOD_VISION_MODEL: value,
         }).analyzeImage({ imageBytes: Buffer.from([1, 2, 3]) });
-        expect(modelOf(create)).toBe('gpt-5');
+        expect(modelOf(create)).toBe('gpt-6.1-sol');
       }
     });
 

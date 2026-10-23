@@ -14,6 +14,7 @@ import {
   buildMealRecommendationFallback,
 } from './daily-coach.messages';
 import { completionLimits } from './food-analysis.service';
+import { smartModel } from '../../common/ai-models';
 
 export class DailyCoachError extends Error {
   constructor(message: string) {
@@ -22,7 +23,6 @@ export class DailyCoachError extends Error {
   }
 }
 
-const COACH_MODEL = 'gpt-5';
 const COACH_MAX_TOKENS = 140;
 
 const COACH_SYSTEM_PROMPT = `You are a Thai LINE nutrition coach.
@@ -170,8 +170,8 @@ export class DailyCoachService {
     try {
       const completion = await withTimeout(
         this.client.chat.completions.create({
-          model: COACH_MODEL,
-          ...completionLimits(COACH_MODEL, COACH_MAX_TOKENS),
+          model: smartModel(),
+          ...completionLimits(smartModel(), COACH_MAX_TOKENS),
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userContent },
@@ -186,7 +186,7 @@ export class DailyCoachService {
         this.logger.log(
           `OpenAI coach usage prompt=${usage.prompt_tokens} completion=${usage.completion_tokens} total=${usage.total_tokens}`,
         );
-        const meta = usageFromOpenAiCompletion(completion, COACH_MODEL);
+        const meta = usageFromOpenAiCompletion(completion, smartModel());
         if (meta) reportAiTokenUsage(meta);
       }
 

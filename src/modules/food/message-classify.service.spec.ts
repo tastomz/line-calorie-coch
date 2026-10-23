@@ -46,7 +46,7 @@ describe('MessageClassifyService', () => {
     const firstCall = create.mock.calls[0] as
       [{ max_completion_tokens: number; reasoning_effort: string }] | undefined;
     expect(firstCall?.[0].max_completion_tokens).toBe(2000);
-    expect(firstCall?.[0].reasoning_effort).toBe('minimal');
+    expect(firstCall?.[0].reasoning_effort).toBe('none');
   });
 
   it('extracts exercise type + duration from a natural sentence', async () => {

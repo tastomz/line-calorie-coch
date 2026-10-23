@@ -45,8 +45,6 @@ export type ClassifiedMessage = {
   waterAmountMl: number | null;
 };
 
-/** GPT-5 handles the wider category set (incl. exercise/sleep/water) more reliably than 4o-mini. */
-export const MESSAGE_CLASSIFY_MODEL = 'gpt-5';
 export const MESSAGE_CLASSIFY_MAX_TOKENS = 60;
 
 export const MESSAGE_CLASSIFY_SYSTEM_PROMPT = `Classify Thai LINE text for a health/nutrition bot. JSON only.

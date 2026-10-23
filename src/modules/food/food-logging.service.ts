@@ -151,8 +151,7 @@ import {
   parseQuantityAdjustment,
   resolveConsumedQuantity,
 } from './quantity-adjustment';
-
-const COACH_QA_MODEL = 'gpt-5';
+import { smartModel } from '../../common/ai-models';
 
 export const FOOD_COMMANDS = {
   START: ['เริ่ม', 'แก้ไขโปรไฟล์'],
@@ -713,8 +712,8 @@ export class FoodLoggingService {
       const openai = new OpenAI({ apiKey });
       const answer = await this.aiGateway.run(user.id, 'COACH', async () => {
         const completion = await openai.chat.completions.create({
-          model: COACH_QA_MODEL,
-          ...completionLimits(COACH_QA_MODEL, overview ? 420 : 280),
+          model: smartModel(),
+          ...completionLimits(smartModel(), overview ? 420 : 280),
           messages: [
             {
               role: 'system',
@@ -754,7 +753,7 @@ export class FoodLoggingService {
             },
           ],
         });
-        const meta = usageFromOpenAiCompletion(completion, COACH_QA_MODEL);
+        const meta = usageFromOpenAiCompletion(completion, smartModel());
         if (meta) reportAiTokenUsage(meta);
         return (
           completion.choices[0]?.message?.content?.trim() ||

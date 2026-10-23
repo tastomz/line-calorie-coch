@@ -15,7 +15,21 @@ export const OPENAI_MODEL_PRICING_USD: Record<string, ModelTokenPricing> = {
   'gpt-4.1-mini': { inputPer1MUsd: 0.4, outputPer1MUsd: 1.6 },
   'gpt-4.1': { inputPer1MUsd: 2, outputPer1MUsd: 8 },
   'gpt-5': { inputPer1MUsd: 1.25, outputPer1MUsd: 10 },
+  'gpt-6.1-sol': { inputPer1MUsd: 2, outputPer1MUsd: 10 },
+  'gpt-6-luna': { inputPer1MUsd: 0.1, outputPer1MUsd: 0.5 },
 };
+
+/**
+ * OpenAI reports dated snapshots (e.g. `gpt-5-2025-08-07`); price them as the
+ * base model. Only a trailing `-YYYY-MM-DD` is stripped, so `gpt-5-mini`
+ * is never priced as `gpt-5`.
+ */
+export function pricingFor(model: string): ModelTokenPricing | undefined {
+  const exact = OPENAI_MODEL_PRICING_USD[model];
+  if (exact) return exact;
+  const base = model.replace(/-\d{4}-\d{2}-\d{2}$/, '');
+  return base !== model ? OPENAI_MODEL_PRICING_USD[base] : undefined;
+}
 
 /** Fallback FX for display in THB (membership currency). Override via OPENAI_USD_THB_RATE. */
 export const DEFAULT_USD_THB_RATE = 35;
@@ -40,7 +54,7 @@ export function estimateTokenCostUsd(
   outputCostUsd: number;
   totalCostUsd: number;
 } {
-  const pricing = OPENAI_MODEL_PRICING_USD[model];
+  const pricing = pricingFor(model);
   if (!pricing) {
     return {
       known: false,

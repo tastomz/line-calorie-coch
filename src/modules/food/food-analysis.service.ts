@@ -10,7 +10,6 @@ import {
 import {
   FOOD_ANALYSIS_JSON_SCHEMA,
   FOOD_ANALYSIS_MAX_TOKENS,
-  FOOD_ANALYSIS_MODEL,
   FOOD_ANALYSIS_SYSTEM_PROMPT,
   FOOD_COMPOSITION_ADJUST_PROMPT,
   FOOD_PHOTO_JSON_SCHEMA,
@@ -18,7 +17,6 @@ import {
   FOOD_PHOTO_SYSTEM_PROMPT,
   PHOTO_KIND_JSON_SCHEMA,
   PHOTO_KIND_MAX_TOKENS,
-  PHOTO_KIND_MODEL,
   PHOTO_KIND_PROMPT,
   WORKOUT_EXTRACT_PROMPT,
   WORKOUT_JSON_SCHEMA,
@@ -37,6 +35,14 @@ import {
   reportAiTokenUsage,
   usageFromOpenAiCompletion,
 } from '../membership/ai-token-capture';
+import {
+  AiSpeed,
+  ReasoningEffortValue,
+  REASONING_MODEL,
+  reasoningEffortFor,
+  fastModel,
+  smartModel,
+} from '../../common/ai-models';
 
 export class FoodAnalysisError extends Error {
   constructor(message: string) {
@@ -54,30 +60,28 @@ export class FoodImageUnreadableError extends FoodAnalysisError {
 }
 
 /**
- * GPT-5 / o-series models reject `temperature` and `max_tokens`, and spend
- * part of the budget on reasoning, so they need a larger completion limit.
- * Default effort is 'low' (food estimates need some reasoning). The quick
- * routing classifier passes 'minimal' so it leaves the food call enough of the
- * 25 s LINE budget — at 'low' both calls together took 12–19 s and timed out.
+ * Reasoning models (gpt-5, gpt-6, o-series) reject `temperature` and
+ * `max_tokens`, and spend part of the budget on reasoning, so they need a
+ * larger completion limit. 'normal' = effort 'low' (food estimates need some
+ * reasoning); 'fast' = the lowest effort the model supports, for the quick
+ * routing/photo-kind calls so the food call keeps most of the LINE budget.
  */
-export type ReasoningEffort = 'minimal' | 'low';
-const REASONING_MODEL = /^(gpt-5|o\d)/;
 const REASONING_MAX_COMPLETION_TOKENS = 2000;
 
 export function completionLimits(
   model: string,
   maxTokens: number = FOOD_ANALYSIS_MAX_TOKENS,
-  effort: ReasoningEffort = 'low',
+  speed: AiSpeed = 'normal',
 ):
   | { temperature: number; max_tokens: number }
   | {
       max_completion_tokens: number;
-      reasoning_effort: ReasoningEffort;
+      reasoning_effort: ReasoningEffortValue;
     } {
   return REASONING_MODEL.test(model)
     ? {
         max_completion_tokens: REASONING_MAX_COMPLETION_TOKENS,
-        reasoning_effort: effort,
+        reasoning_effort: reasoningEffortFor(model, speed),
       }
     : { temperature: 0, max_tokens: maxTokens };
 }
@@ -106,8 +110,7 @@ export class FoodAnalysisService {
     // 'low' is the cheap default; 'high'/'auto' read small pack labels better.
     const model = this.configService.get<string>('FOOD_VISION_MODEL')?.trim();
     // Photos can use a stronger model than text; unset keeps the cheap default.
-    this.visionModel =
-      model && /^[\w.-]+$/.test(model) ? model : FOOD_ANALYSIS_MODEL;
+    this.visionModel = model && /^[\w.-]+$/.test(model) ? model : smartModel();
     this.visionDetail = detail === 'high' || detail === 'auto' ? detail : 'low';
     this.client = apiKey ? new OpenAI({ apiKey }) : null;
   }
@@ -178,7 +181,7 @@ export class FoodAnalysisService {
           },
         ],
         WORKOUT_EXTRACT_PROMPT,
-        PHOTO_KIND_MODEL,
+        smartModel(),
         WORKOUT_JSON_SCHEMA,
         parseWorkoutJson,
       );
@@ -236,10 +239,11 @@ export class FoodAnalysisService {
           },
         ],
         PHOTO_KIND_PROMPT,
-        PHOTO_KIND_MODEL,
+        fastModel(),
         PHOTO_KIND_JSON_SCHEMA,
         parsePhotoKindJson,
         PHOTO_KIND_MAX_TOKENS,
+        'fast',
       );
     } catch (error) {
       this.logger.warn(
@@ -302,7 +306,7 @@ export class FoodAnalysisService {
   private requestAnalysis(
     userMessages: OpenAI.Chat.ChatCompletionMessageParam[],
     systemPrompt: string = FOOD_ANALYSIS_SYSTEM_PROMPT,
-    model: string = FOOD_ANALYSIS_MODEL,
+    model: string = smartModel(),
   ): Promise<FoodAnalysisResult> {
     return this.requestStructured(
       userMessages,
@@ -320,6 +324,7 @@ export class FoodAnalysisService {
     schema: { name: string; strict: true; schema: Record<string, unknown> },
     parse: (content: string) => T,
     maxOutputTokens?: number,
+    speed: AiSpeed = 'normal',
   ): Promise<T> {
     if (!this.client) {
       throw new FoodAnalysisError('OPENAI_API_KEY is not configured');
@@ -333,7 +338,7 @@ export class FoodAnalysisService {
       const completion = await withTimeout(
         this.client.chat.completions.create({
           model,
-          ...completionLimits(model, maxOutputTokens),
+          ...completionLimits(model, maxOutputTokens, speed),
           messages: [
             { role: 'system', content: systemPrompt },
             ...userMessages,

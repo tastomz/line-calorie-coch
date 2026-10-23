@@ -5,6 +5,7 @@ import {
   DEFAULT_USD_THB_RATE,
   estimateTokenCost,
   OPENAI_MODEL_PRICING_USD,
+  pricingFor,
 } from '../membership/openai-pricing';
 import { AiOperation } from '../membership/plan.config';
 import { SubscriptionEntitlementService } from '../membership/subscription-entitlement.service';
@@ -298,7 +299,7 @@ export class AdminAiUsageService {
             ? this.roundMoney(est.totalCostThb)
             : null,
           costKnown: est.known,
-          priced: !!OPENAI_MODEL_PRICING_USD[r.model],
+          priced: !!pricingFor(r.model),
         };
       })
       .sort((a, b) => b.totalTokens - a.totalTokens);

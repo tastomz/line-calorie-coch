@@ -14,13 +14,13 @@ import {
   ClassifiedMessageType,
   MESSAGE_CLASSIFY_JSON_SCHEMA,
   MESSAGE_CLASSIFY_MAX_TOKENS,
-  MESSAGE_CLASSIFY_MODEL,
   MESSAGE_CLASSIFY_SYSTEM_PROMPT,
 } from './message-classify.types';
 import {
   reportAiTokenUsage,
   usageFromOpenAiCompletion,
 } from '../membership/ai-token-capture';
+import { fastModel } from '../../common/ai-models';
 
 export class MessageClassifyError extends Error {
   constructor(message: string) {
@@ -70,15 +70,12 @@ export class MessageClassifyService {
       throw new MessageClassifyError('classify unavailable');
     }
 
+    const model = fastModel();
     try {
       const completion = await withTimeout(
         this.client.chat.completions.create({
-          model: MESSAGE_CLASSIFY_MODEL,
-          ...completionLimits(
-            MESSAGE_CLASSIFY_MODEL,
-            MESSAGE_CLASSIFY_MAX_TOKENS,
-            'minimal',
-          ),
+          model,
+          ...completionLimits(model, MESSAGE_CLASSIFY_MAX_TOKENS, 'fast'),
           messages: [
             { role: 'system', content: MESSAGE_CLASSIFY_SYSTEM_PROMPT },
             { role: 'user', content: trimmed },
@@ -97,10 +94,7 @@ export class MessageClassifyService {
         this.logger.log(
           `Classify usage prompt=${usage.prompt_tokens} completion=${usage.completion_tokens} total=${usage.total_tokens}`,
         );
-        const meta = usageFromOpenAiCompletion(
-          completion,
-          MESSAGE_CLASSIFY_MODEL,
-        );
+        const meta = usageFromOpenAiCompletion(completion, model);
         if (meta) reportAiTokenUsage(meta);
       }
 
