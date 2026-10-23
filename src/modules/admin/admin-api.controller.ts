@@ -17,6 +17,7 @@ import type { Response } from 'express';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { LineService } from '../line/line.service';
+import { AdminNotifyService } from '../users/admin-notify.service';
 import { parsePromoParams } from '../membership/promo-code.generator';
 import {
   PlanValidationError,
@@ -39,7 +40,36 @@ export class AdminApiController {
     private readonly config: ConfigService,
     private readonly plans: ProPlanService,
     private readonly line: LineService,
+    private readonly adminNotify: AdminNotifyService,
   ) {}
+
+  /** LINE accounts that get a push when someone asks for an admin. */
+  @Get('admin-notify')
+  @UseGuards(AdminSessionGuard)
+  async listAdminNotify() {
+    const rows = await this.adminNotify.listRecipients();
+    return rows.map((r) => ({ id: r.id, displayName: r.displayName }));
+  }
+
+  /** One-time code the admin sends to the bot from their own LINE. */
+  @Post('admin-notify/pair-code')
+  @UseGuards(AdminSessionGuard)
+  async createAdminNotifyCode(@AdminId() adminId: string) {
+    const result = this.adminNotify.createPairCode();
+    await this.auth.audit(adminId, 'admin_notify_code', 'User', '-', {});
+    return result;
+  }
+
+  @Post('admin-notify/:id/remove')
+  @UseGuards(AdminSessionGuard)
+  async removeAdminNotify(
+    @AdminId() adminId: string,
+    @Param('id') id: string,
+  ) {
+    await this.adminNotify.removeRecipient(id);
+    await this.auth.audit(adminId, 'admin_notify_remove', 'User', id, {});
+    return { ok: true };
+  }
 
   /**
    * Install the tabbed rich menu (โค้ช / แอดมิน) from public/richmenu/*.jpg.

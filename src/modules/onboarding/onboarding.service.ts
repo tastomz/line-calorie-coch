@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { OnboardingState, User } from '@prisma/client';
 import {
   FOOD_COMMANDS,
@@ -9,6 +9,10 @@ import { LineService } from '../line/line.service';
 import { calculateNutritionTargets } from '../nutrition/nutrition-calculator';
 import { NutritionProfileInput } from '../nutrition/nutrition.types';
 import { NutritionProfileService } from '../users/nutrition-profile.service';
+import {
+  AdminNotifyService,
+  PAIR_CODE_PATTERN,
+} from '../users/admin-notify.service';
 import { UsersService } from '../users/users.service';
 import {
   ACTIVITY_CHOICES,
@@ -83,6 +87,7 @@ export class OnboardingService {
     private readonly nutritionProfileService: NutritionProfileService,
     private readonly lineService: LineService,
     private readonly foodLoggingService: FoodLoggingService,
+    @Optional() private readonly adminNotify?: AdminNotifyService,
   ) {}
 
   async handleFollow(lineUserId: string, replyToken: string): Promise<void> {
@@ -150,6 +155,26 @@ export class OnboardingService {
     await this.dispatch(replyToken, outbound);
   }
 
+  /** Push a heads-up to admins who opted in (counts against LINE quota). */
+  private notifyAdmins(user: User): void {
+    if (!this.adminNotify) return;
+    const name = user.displayName?.trim() || 'ผู้ใช้';
+    const text = `🔔 ${name} ขอคุยกับแอดมิน\nเปิด LINE OA Manager → แชท เพื่อตอบกลับ\nhttps://chat.line.biz/`;
+    void this.adminNotify
+      .listRecipients()
+      .then(async (recipients) => {
+        for (const r of recipients) {
+          if (!r.lineUserId || r.id === user.id) continue;
+          try {
+            await this.lineService.pushText(r.lineUserId, text);
+          } catch {
+            this.logger.warn('Admin handoff notify push failed');
+          }
+        }
+      })
+      .catch(() => this.logger.warn('Admin handoff notify lookup failed'));
+  }
+
   /** Whether the bot is quiet for this user (used to skip the typing dots). */
   async isAdminChatActive(lineUserId: string): Promise<boolean> {
     const user = await this.usersService.findByLineUserId(lineUserId);
@@ -165,6 +190,18 @@ export class OnboardingService {
     replyToken: string,
     text: string,
   ): Promise<boolean> {
+    // An admin linking their LINE for handoff alerts (code from /admin).
+    if (this.adminNotify && PAIR_CODE_PATTERN.test(text.trim().toUpperCase())) {
+      const ok = await this.adminNotify.redeemPairCode(user.id, text);
+      await this.lineService.replyText(
+        replyToken,
+        ok
+          ? '🔔 เชื่อมต่อแล้ว บัญชี LINE นี้จะได้รับแจ้งเตือนเมื่อมีคนขอคุยกับแอดมินครับ'
+          : 'รหัสนี้ใช้ไม่ได้หรือหมดอายุแล้วครับ สร้างรหัสใหม่ในหน้า /admin',
+      );
+      return true;
+    }
+
     // Rich-menu tab taps: the device already switched the menu.
     if (text === TAB_POSTBACK_ADMIN) {
       if (!user.adminChatSince) {
@@ -172,6 +209,7 @@ export class OnboardingService {
         this.logger.log(
           `Admin chat started (tab) userIdPrefix=${user.id.slice(0, 8)}`,
         );
+        this.notifyAdmins(user);
         await this.lineService.replyText(
           replyToken,
           ADMIN_CHAT_TAB_STARTED_TEXT,
@@ -199,6 +237,7 @@ export class OnboardingService {
         this.logger.log(
           `Admin chat started userIdPrefix=${user.id.slice(0, 8)}`,
         );
+        this.notifyAdmins(user);
       }
       await this.lineService.showRichMenuTab(user.lineUserId ?? '', 'admin');
       await this.lineService.replyButtons(replyToken, ADMIN_CHAT_STARTED_TEXT, [

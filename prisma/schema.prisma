@@ -86,6 +86,8 @@ model User {
   onboardingState      OnboardingState      @default(NOT_STARTED)
   /// Set while the user is talking to a human admin (bot stays quiet).
   adminChatSince       DateTime?
+  /// Gets a LINE push when someone asks to talk to an admin.
+  adminNotify          Boolean              @default(false)
   draftSex             Sex?
   draftAge             Int?
   draftHeightCm        Float?

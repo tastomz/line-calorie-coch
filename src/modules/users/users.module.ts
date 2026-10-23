@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { SheetsModule } from '../sheets/sheets.module';
 import { NutritionProfileService } from './nutrition-profile.service';
+import { AdminNotifyService } from './admin-notify.service';
 import { UsersService } from './users.service';
 
 /**
@@ -9,7 +10,7 @@ import { UsersService } from './users.service';
  */
 @Module({
   imports: [SheetsModule],
-  providers: [UsersService, NutritionProfileService],
-  exports: [UsersService, NutritionProfileService],
+  providers: [UsersService, NutritionProfileService, AdminNotifyService],
+  exports: [UsersService, NutritionProfileService, AdminNotifyService],
 })
 export class UsersModule {}
