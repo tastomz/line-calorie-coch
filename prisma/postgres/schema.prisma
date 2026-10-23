@@ -634,3 +634,12 @@ model AiCredential {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 }
+
+/// Admin password set from /admin (overrides ADMIN_PASSWORD_HASH for that username).
+/// passwordHash = "scrypt$<salt b64>$<hash b64>". Sessions issued before changedAt are rejected.
+model AdminCredential {
+  username     String   @id
+  passwordHash String
+  changedAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

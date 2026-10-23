@@ -25,7 +25,11 @@ import {
 } from '../membership/pro-plan.service';
 import type { ProPlanInput } from '../membership/pro-plan.service';
 import { membershipRateLimiter } from '../membership/membership-rate-limiter';
-import { ADMIN_SESSION_COOKIE, AdminAuthService } from './admin-auth.service';
+import {
+  ADMIN_SESSION_COOKIE,
+  AdminAuthService,
+  AdminPasswordError,
+} from './admin-auth.service';
 import { AdminAiUsageService } from './admin-ai-usage.service';
 import { AdminDashboardService } from './admin-dashboard.service';
 import { AdminId } from './admin-session.decorator';
@@ -237,6 +241,45 @@ export class AdminApiController {
       maxAge: 8 * 60 * 60 * 1000,
     });
     await this.auth.audit(username, 'login_success');
+    return { ok: true };
+  }
+
+  /** Change the env admin's password; keeps this browser signed in. */
+  @Post('password')
+  @UseGuards(AdminSessionGuard)
+  async changePassword(
+    @AdminId() adminId: string,
+    @Body() body: { currentPassword?: unknown; newPassword?: unknown },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (!membershipRateLimiter.tryConsume(adminId, 'admin_login')) {
+      throw new HttpException(
+        'Too many attempts',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    const current =
+      typeof body.currentPassword === 'string' ? body.currentPassword : '';
+    const next = typeof body.newPassword === 'string' ? body.newPassword : '';
+    try {
+      await this.auth.changePassword(adminId, current, next);
+    } catch (error) {
+      if (error instanceof AdminPasswordError) {
+        await this.auth.audit(adminId, 'password_change_failed');
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+    await this.auth.audit(adminId, 'password_changed');
+    // Older sessions are now invalid — issue a fresh one for this browser.
+    const secure = (this.config.get<string>('NODE_ENV') ?? '') === 'production';
+    res.cookie(ADMIN_SESSION_COOKIE, this.auth.signSession(adminId), {
+      httpOnly: true,
+      sameSite: 'strict',
+      secure,
+      path: '/',
+      maxAge: 8 * 60 * 60 * 1000,
+    });
     return { ok: true };
   }
 

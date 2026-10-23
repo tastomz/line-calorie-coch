@@ -9,7 +9,7 @@
 <body>
   <div class="wrap">
     <h1>Admin Dashboard</h1>
-    <p><a href="/admin/promos">Promo codes</a> · <a href="/admin/plans">💰 แพ็กเกจ &amp; ราคา</a> · <a href="/admin/ai-usage">📊 AI Usage</a> · <a href="#" id="logout">Logout</a></p>
+    <p><a href="/admin/promos">Promo codes</a> · <a href="/admin/plans">💰 แพ็กเกจ &amp; ราคา</a> · <a href="/admin/ai-usage">📊 AI Usage</a> · <a href="#password">🔑 เปลี่ยนรหัสผ่าน</a> · <a href="#" id="logout">Logout</a></p>
     <div id="dash" class="card">Loading...</div>
     <div class="card">
       <h3>ค้นหาผู้ใช้</h3>
@@ -54,6 +54,15 @@
         <button class="btn" id="codexRemove" style="background:var(--danger)">ลบการเชื่อม</button>
       </div>
       <div id="codexMsg" style="margin-top:8px"></div>
+    </div>
+    <div class="card" id="password">
+      <h3>🔑 เปลี่ยนรหัสผ่าน Admin</h3>
+      <p style="color:var(--muted)">อย่างน้อย 12 ตัวอักษร · เปลี่ยนแล้วเครื่องอื่นที่ล็อกอินอยู่จะถูกออกจากระบบ</p>
+      <input class="input" id="pwCurrent" type="password" placeholder="รหัสผ่านปัจจุบัน" autocomplete="current-password" style="width:100%;margin-bottom:8px" />
+      <input class="input" id="pwNew" type="password" placeholder="รหัสผ่านใหม่ (12+ ตัว)" autocomplete="new-password" style="width:100%;margin-bottom:8px" />
+      <input class="input" id="pwConfirm" type="password" placeholder="ยืนยันรหัสผ่านใหม่" autocomplete="new-password" style="width:100%;margin-bottom:8px" />
+      <button class="btn" id="pwSave">เปลี่ยนรหัสผ่าน</button>
+      <div id="pwMsg" style="margin-top:8px"></div>
     </div>
   </div>
   <script>
@@ -166,7 +175,21 @@
     });
     codexAction('codexTest', async () => {
       const r = await codexApi('codex/test', {});
-      loadCodex();
+      document.getElementById('pwSave').onclick = async () => {
+      const btn = document.getElementById('pwSave'), msg = document.getElementById('pwMsg');
+      const cur = document.getElementById('pwCurrent').value, next = document.getElementById('pwNew').value;
+      msg.style.color = 'var(--danger)';
+      if (next.length < 12) { msg.textContent = 'รหัสผ่านใหม่ต้องยาวอย่างน้อย 12 ตัว'; return; }
+      if (next !== document.getElementById('pwConfirm').value) { msg.textContent = 'ยืนยันรหัสผ่านไม่ตรงกัน'; return; }
+      btn.disabled = true; msg.style.color = ''; msg.textContent = 'กำลังบันทึก...';
+      try {
+        await codexApi('password', { currentPassword: cur, newPassword: next });
+        ['pwCurrent', 'pwNew', 'pwConfirm'].forEach((id) => { document.getElementById(id).value = ''; });
+        msg.textContent = '✅ เปลี่ยนรหัสผ่านแล้ว — ครั้งหน้าล็อกอินด้วยรหัสใหม่';
+      } catch (e) { msg.style.color = 'var(--danger)'; msg.textContent = '❌ ' + e.message; }
+      finally { btn.disabled = false; }
+    };
+    loadCodex();
       if (!r.ok) throw new Error(r.error + ' (' + (r.ms / 1000).toFixed(1) + ' วิ)');
       return '✅ ตอบใน ' + (r.ms / 1000).toFixed(1) + ' วิ: ' + r.answer;
     });
