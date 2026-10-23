@@ -121,12 +121,58 @@
             ${L.WEEKLY_REVIEW != null ? `<div>Weekly ${u.weeklyReviewCalls ?? 0}/${L.WEEKLY_REVIEW}</div>` : ''}
           </div>
           ${actionsHtml ? `<div class="card" id="actions">${actionsHtml}</div>` : ''}
+          <a class="btn secondary" href="/history">📈 ดูประวัติ 7 วัน</a>
+          <div class="card">
+            <h3>🔄 ตั้งเป้าหมายใหม่</h3>
+            <p class="muted">เริ่มต้นใหม่ทั้งหมด: <b>ลบประวัติอาหาร น้ำหนัก การนอน ออกกำลังกาย น้ำ และแผนอาหารทั้งหมด</b> แล้วตั้งค่าเป้าหมายใหม่ในแชท · สมาชิก Pro ยังอยู่ครบ</p>
+            <button class="btn secondary" id="resetStart" style="border-color:var(--danger);color:var(--danger)">ตั้งเป้าหมายใหม่</button>
+            <div id="resetBox" hidden>
+              <p class="err" style="margin-top:12px">⚠️ ลบแล้วกู้คืนไม่ได้ พิมพ์คำว่า <b>ลบข้อมูล</b> เพื่อยืนยัน</p>
+              <div class="row">
+                <input class="input" id="resetConfirm" placeholder="ลบข้อมูล" autocomplete="off" />
+                <button class="btn" style="width:auto;margin:0;background:var(--danger);color:#fff" id="resetGo">ยืนยันลบ</button>
+              </div>
+              <div id="resetMsg" class="muted"></div>
+            </div>
+          </div>
           <div class="card">
             <button class="btn secondary" id="logout">ออกจากระบบ</button>
           </div>
         `;
 
         if (showPlans) renderPlanPicker(document.getElementById('plans'));
+        document.getElementById('resetStart')?.addEventListener('click', () => {
+          document.getElementById('resetBox').hidden = false;
+          document.getElementById('resetConfirm').focus();
+        });
+        document.getElementById('resetGo')?.addEventListener('click', async () => {
+          const msg = document.getElementById('resetMsg');
+          const confirmText = document.getElementById('resetConfirm').value.trim();
+          if (confirmText !== 'ลบข้อมูล') {
+            msg.className = 'err'; msg.textContent = 'พิมพ์คำว่า ลบข้อมูล ให้ตรงก่อนครับ';
+            return;
+          }
+          const btn = document.getElementById('resetGo');
+          btn.disabled = true;
+          try {
+            await api('/api/membership/reset-goal', { method: 'POST', body: JSON.stringify({ confirm: confirmText }) });
+            msg.className = 'ok';
+            msg.textContent = 'ลบข้อมูลแล้ว กำลังพากลับไปตั้งเป้าหมายใหม่ในแชท...';
+            try {
+              // Start onboarding in the chat as if the user typed "เริ่ม".
+              if (window.liff && liff.isInClient && liff.isInClient()) {
+                await liff.sendMessages([{ type: 'text', text: 'เริ่ม' }]);
+                liff.closeWindow();
+                return;
+              }
+            } catch {}
+            msg.textContent = 'ลบข้อมูลแล้ว ✅ กลับไปที่แชท LINE แล้วพิมพ์ "เริ่ม" เพื่อตั้งเป้าหมายใหม่';
+          } catch (e) {
+            if (redirectToLoginIfUnauthorized(e)) return;
+            msg.className = 'err'; msg.textContent = e.message;
+            btn.disabled = false;
+          }
+        });
         document.getElementById('redeem')?.addEventListener('click', async () => {
           const code = document.getElementById('promo').value;
           const msg = document.getElementById('promoMsg');

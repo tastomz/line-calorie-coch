@@ -138,6 +138,8 @@ model NutritionProfile {
   age             Int
   heightCm        Float
   currentWeightKg Float
+  /// Weight when this goal was set — base for progress %.
+  startWeightKg   Float?
   targetWeightKg  Float
   activityLevel   ActivityLevel
   goal            Goal

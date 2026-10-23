@@ -8,7 +8,8 @@ export type MembershipRateBucket =
   | 'link_consume'
   | 'checkout'
   | 'admin_login'
-  | 'dev_tools';
+  | 'dev_tools'
+  | 'reset_goal';
 
 const LIMITS: Record<MembershipRateBucket, { max: number; windowMs: number }> =
   {
@@ -18,6 +19,7 @@ const LIMITS: Record<MembershipRateBucket, { max: number; windowMs: number }> =
     checkout: { max: 5, windowMs: 60_000 },
     admin_login: { max: 10, windowMs: 60_000 },
     dev_tools: { max: 60, windowMs: 60_000 },
+    reset_goal: { max: 3, windowMs: 60 * 60_000 },
   };
 
 type WindowState = { count: number; windowStartMs: number };

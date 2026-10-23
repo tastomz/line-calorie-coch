@@ -11,6 +11,7 @@ export const HEALTH_COMMANDS = {
   WATER: ['น้ำ', 'ดื่มน้ำ', 'hydration', 'water'],
   RECOVERY: ['recovery', 'ฟื้นตัว', 'เช็คอิน'],
   MEAL_PLAN: ['แผนอาหาร', 'meal plan', 'mealplan'],
+  NEXT_MEAL: ['แนะนำมื้อถัดไป', 'มื้อถัดไป', 'โค้ชแนะนำ', 'กินอะไรต่อดี'],
   WEEKLY: ['สรุปสัปดาห์', 'weekly review', 'weekly'],
 } as const;
 

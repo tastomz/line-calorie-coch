@@ -102,10 +102,15 @@ export class NutritionProfileService {
     const existing = await this.prisma.nutritionProfile.findUnique({
       where: { userId },
     });
-    if (existing) {
-      return this.update(userId, dto);
-    }
-    return this.create(userId, dto);
+    // Onboarding (new or redone) sets a new goal → progress starts from here.
+    const result = existing
+      ? await this.update(userId, dto)
+      : await this.create(userId, dto);
+    await this.prisma.nutritionProfile.update({
+      where: { userId },
+      data: { startWeightKg: dto.currentWeightKg },
+    });
+    return result;
   }
 
   async update(userId: string, dto: UpdateNutritionProfileDto) {

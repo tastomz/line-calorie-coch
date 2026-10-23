@@ -15,6 +15,8 @@ export class MembershipPagesController {
   @Get([
     'login',
     'profile',
+    'history',
+    'profile/history',
     'account',
     'upgrade',
     'membership',
@@ -31,6 +33,9 @@ export class MembershipPagesController {
     const map: Record<string, string> = {
       '/login': 'login.html',
       '/profile': 'account.html',
+      '/history': 'history.html',
+      // LIFF opens liff.line.me/{id}/history as <endpoint>/history.
+      '/profile/history': 'history.html',
       '/account': 'account.html',
       '/upgrade': 'upgrade.html',
       '/membership': 'index.html',

@@ -30,6 +30,19 @@ export function getZonedDateParts(
   };
 }
 
+/** Local hour 0–23 for an instant in the given IANA timezone. */
+export function localHour(
+  instant: Date,
+  timeZone: string = APP_TIMEZONE,
+): number {
+  const h = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: '2-digit',
+    hourCycle: 'h23',
+  }).format(instant);
+  return Number(h) % 24;
+}
+
 /**
  * Offset of `timeZone` at `instant`: local = utc + offset.
  * Positive for zones east of UTC (e.g. Asia/Bangkok ≈ +7h).

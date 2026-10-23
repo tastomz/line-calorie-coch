@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { dayBounds } from '../food/day-bounds';
 import { todayDateKey } from './program-week';
 
 /** Deterministic meal allocation — 0 AI. */
@@ -16,6 +17,21 @@ export const MEAL_ALLOCATION: Record<
 @Injectable()
 export class MealPlanService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /** What the user has logged so far today (Bangkok day). */
+  async getTodayIntake(userId: string, now = new Date()) {
+    const { start, end } = dayBounds(now);
+    const logs = await this.prisma.foodLog.findMany({
+      where: { userId, eatenAt: { gte: start, lt: end } },
+      select: { foodName: true, calories: true, proteinG: true },
+      orderBy: { eatenAt: 'asc' },
+    });
+    return {
+      calories: logs.reduce((a, l) => a + l.calories, 0),
+      proteinG: logs.reduce((a, l) => a + l.proteinG, 0),
+      foods: logs.map((l) => l.foodName),
+    };
+  }
 
   async ensureTodayPlan(params: {
     userId: string;

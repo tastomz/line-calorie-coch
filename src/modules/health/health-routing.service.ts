@@ -65,6 +65,8 @@ import {
   buildWeeklyReviewFlex,
 } from './health.flex';
 import { MealPlanService } from './meal-plan.service';
+import { buildNextMealHeader, nextMealBudget } from './next-meal';
+import { localHour } from '../food/day-bounds';
 import {
   BodyScanAnalysisService,
   WeeklyReviewService,
@@ -157,6 +159,11 @@ export class HealthRoutingService {
 
     if (isExactHealthCommand(normalized, HEALTH_COMMANDS.WEEKLY)) {
       await this.replyWeeklyReview(user.id, replyToken);
+      return true;
+    }
+
+    if (isExactHealthCommand(normalized, HEALTH_COMMANDS.NEXT_MEAL)) {
+      await this.replyNextMeal(user.id, replyToken);
       return true;
     }
 
@@ -660,6 +667,77 @@ export class HealthRoutingService {
         replyToken,
         buildMealPlanMessage(plan.slots),
       );
+    }
+  }
+
+  /**
+   * "โค้ชแนะนำ": the next meal sized to what is left of today's calories and
+   * protein right now (meal-plan weights), with 3 concrete Thai options.
+   */
+  private async replyNextMeal(userId: string, replyToken: string) {
+    const profile = await this.nutritionProfile.findByUserId(userId);
+    if (!profile) {
+      await this.lineService.replyText(
+        replyToken,
+        'ต้องตั้งเป้าหมายก่อนครับ พิมพ์ "เริ่ม" เพื่อตั้งค่าโปรไฟล์',
+      );
+      return;
+    }
+    const intake = await this.mealPlan.getTodayIntake(userId);
+    const hour = localHour(new Date());
+    const budget = nextMealBudget({
+      hour,
+      eatenKcal: intake.calories,
+      eatenProteinG: intake.proteinG,
+      dailyCalories: profile.dailyCalories,
+      dailyProteinG: profile.dailyProteinG,
+    });
+    const header = buildNextMealHeader(budget, profile.dailyCalories);
+    if (!this.openai) {
+      await this.lineService.replyText(replyToken, header);
+      return;
+    }
+    try {
+      const ideas = await this.aiGateway.run(userId, 'MEAL_PLAN', async () => {
+        const model = smartModel();
+        const completion = await this.openai!.chat.completions.create({
+          model,
+          ...completionLimits(model, 400),
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You are Kcal Coach, a Thai meal coach. Suggest exactly 3 practical options for the requested meal that fit the calorie and protein budget (Thai food, street food or 7-Eleven items). Each line: emoji + dish + approx kcal + approx protein g. Prefer high protein. If budgetKcal is 0, suggest 0-kcal drinks or very light vegetables only. No diagnosis, no medical advice. Thai only, no intro or outro.',
+            },
+            {
+              role: 'user',
+              content: JSON.stringify({
+                meal: budget.labelTh,
+                budgetKcal: budget.budgetKcal,
+                budgetProteinG: budget.budgetProteinG,
+                eatenToday: intake.foods.slice(-8),
+              }),
+            },
+          ],
+        });
+        const meta = usageFromOpenAiCompletion(completion, model);
+        if (meta) reportAiTokenUsage(meta);
+        return completion.choices[0]?.message?.content?.trim() ?? '';
+      });
+      await this.lineService.replyText(
+        replyToken,
+        ideas ? `${header}\n\n${ideas}` : header,
+      );
+    } catch (error) {
+      if (error instanceof AiQuotaExceededError) {
+        await this.lineService.replyText(
+          replyToken,
+          `${header}\n\n${buildQuotaExceededMessage(error)}`,
+        );
+        return;
+      }
+      // AI down: the budget itself is still useful.
+      await this.lineService.replyText(replyToken, header);
     }
   }
 
