@@ -28,19 +28,26 @@ export async function withTimeout<T>(
   }
 }
 
-/** OpenAI call budget for V1 webhook-safe processing. */
-export const OPENAI_CALL_TIMEOUT_MS = 15_000;
+/** OpenAI call budget for single-call features (coach, reviews, plans). */
+export const OPENAI_CALL_TIMEOUT_MS = 30_000;
 
 /**
- * Text messages run classify → food analysis back to back inside the 25 s
- * event budget. Classify is a tiny 'minimal'-effort call; food analysis
- * ('low' effort) gets the rest. 7 s + 17 s leaves ~1 s for DB + LINE reply.
+ * Text messages run classify → food analysis back to back inside the event
+ * budget. Classify is a tiny 'minimal'-effort call; food analysis ('low'
+ * effort) gets the rest. 10 s + 35 s leaves ~5 s for DB + LINE reply.
  */
-export const OPENAI_CLASSIFY_TIMEOUT_MS = 7_000;
-export const OPENAI_FOOD_TIMEOUT_MS = 17_000;
+export const OPENAI_CLASSIFY_TIMEOUT_MS = 10_000;
+export const OPENAI_FOOD_TIMEOUT_MS = 35_000;
 
 /** Google Sheets outbound budget (reporting only; never blocks UX). */
 export const SHEETS_CALL_TIMEOUT_MS = 10_000;
 
-/** Per-event processing budget (replyToken ~30s). */
-export const WEBHOOK_EVENT_BUDGET_MS = 25_000;
+/**
+ * Per-event processing budget. LINE reply tokens are valid for ~1 minute
+ * after the webhook ("use beyond one minute isn't guaranteed"; the limit may
+ * change), so stay well inside it.
+ */
+export const WEBHOOK_EVENT_BUDGET_MS = 50_000;
+
+/** LINE loading indicator length — multiple of 5, max 60; cleared on reply. */
+export const LINE_LOADING_SECONDS = 50;

@@ -1,13 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { hashLineUserId, logEvent } from '../../common/structured-log';
 import {
+  LINE_LOADING_SECONDS,
   WEBHOOK_EVENT_BUDGET_MS,
   withTimeout,
 } from '../../common/with-timeout';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OnboardingService } from '../onboarding/onboarding.service';
 import { LineOutboundError } from './line-outbound.error';
+import { LineService } from './line.service';
 import { LineWebhookBody, LineWebhookEvent } from './line.types';
 
 /**
@@ -30,7 +32,15 @@ export class LineWebhookService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly onboardingService: OnboardingService,
+    @Optional() private readonly lineService?: LineService,
   ) {}
+
+  /** Fire-and-forget "typing…" indicator for messages that may hit the AI. */
+  private startLoading(event: LineWebhookEvent): void {
+    const userId = event.source?.userId;
+    if (!this.lineService || !userId || event.source?.type !== 'user') return;
+    void this.lineService.showLoadingAnimation(userId, LINE_LOADING_SECONDS);
+  }
 
   /**
    * Claim all events durably, then process them under budget.
@@ -208,6 +218,10 @@ export class LineWebhookService {
     if (!lineUserId || !replyToken) {
       this.logger.warn('Message event missing userId or replyToken');
       return;
+    }
+
+    if (event.message?.type === 'image' || event.message?.type === 'text') {
+      this.startLoading(event);
     }
 
     if (event.message?.type === 'image') {

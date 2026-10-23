@@ -227,4 +227,51 @@ describe('LineWebhookService', () => {
     });
     expect(onboarding.handleFollow).toHaveBeenCalled();
   });
+
+  describe('loading indicator', () => {
+    const line = {
+      showLoadingAnimation: jest.fn().mockResolvedValue(undefined),
+    };
+    const withLine = new LineWebhookService(
+      prisma as unknown as PrismaService,
+      onboarding as unknown as OnboardingService,
+      line as never,
+    );
+
+    it('shows it for 1:1 text and image messages before processing', async () => {
+      await withLine.handleEvent({
+        type: 'message',
+        webhookEventId: 'evt-load-text',
+        replyToken: 'token',
+        source: { type: 'user', userId: 'U123' },
+        message: { type: 'text', text: 'ข้าวมันไก่', id: 'm1' },
+      });
+      await withLine.handleEvent({
+        type: 'message',
+        webhookEventId: 'evt-load-img',
+        replyToken: 'token',
+        source: { type: 'user', userId: 'U123' },
+        message: { type: 'image', id: 'img-1' },
+      });
+      expect(line.showLoadingAnimation).toHaveBeenCalledTimes(2);
+      expect(line.showLoadingAnimation).toHaveBeenCalledWith('U123', 50);
+    });
+
+    it('skips group chats and non-message events', async () => {
+      await withLine.handleEvent({
+        type: 'message',
+        webhookEventId: 'evt-load-group',
+        replyToken: 'token',
+        source: { type: 'group', userId: 'U123' },
+        message: { type: 'text', text: 'hi', id: 'm2' },
+      });
+      await withLine.handleEvent({
+        type: 'follow',
+        webhookEventId: 'evt-load-follow',
+        replyToken: 'token',
+        source: { type: 'user', userId: 'U123' },
+      });
+      expect(line.showLoadingAnimation).not.toHaveBeenCalled();
+    });
+  });
 });

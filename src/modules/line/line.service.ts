@@ -135,6 +135,32 @@ export class LineService implements OnModuleInit {
     }
   }
 
+  /**
+   * Show LINE's "typing…" indicator in a 1:1 chat while the bot works.
+   * Free (not a message, no quota). Best-effort: never throws, never blocks.
+   * It disappears automatically when the bot replies.
+   */
+  async showLoadingAnimation(
+    chatId: string,
+    loadingSeconds: number,
+  ): Promise<void> {
+    if (!this.client || !chatId) return;
+    const seconds = Math.min(
+      60,
+      Math.max(5, Math.round(loadingSeconds / 5) * 5),
+    );
+    try {
+      await this.client.showLoadingAnimation({
+        chatId,
+        loadingSeconds: seconds,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `LINE showLoadingAnimation failed status=${this.extractHttpStatus(error)}`,
+      );
+    }
+  }
+
   async replyText(replyToken: string, text: string): Promise<void> {
     await this.replyMessages(replyToken, [
       { type: 'text', text } satisfies messagingApi.TextMessage,
