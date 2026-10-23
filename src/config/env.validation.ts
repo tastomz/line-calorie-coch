@@ -1,3 +1,4 @@
+import { stripeKeyMode } from '../modules/membership/stripe-key';
 export type AppEnv = {
   NODE_ENV: string;
   PORT: number;
@@ -126,9 +127,18 @@ export function validateEnv(raw: NodeJS.ProcessEnv = process.env): AppEnv {
     );
   }
 
-  if (STRIPE_SECRET_KEY.startsWith('sk_live_')) {
+  const stripeMode = stripeKeyMode(
+    STRIPE_SECRET_KEY,
+    read(raw, 'STRIPE_LIVE_ENABLED'),
+  );
+  if (stripeMode === 'live_blocked') {
     throw new EnvValidationError(
-      'STRIPE_SECRET_KEY live keys are blocked until production payment activation',
+      'STRIPE_SECRET_KEY is a live key (sk_live_) — set STRIPE_LIVE_ENABLED=true to accept real payments',
+    );
+  }
+  if (stripeMode === 'live' && !STRIPE_WEBHOOK_SECRET) {
+    throw new EnvValidationError(
+      'STRIPE_WEBHOOK_SECRET is required with a live Stripe key (payments would never be confirmed)',
     );
   }
 
@@ -152,7 +162,7 @@ export function validateEnv(raw: NodeJS.ProcessEnv = process.env): AppEnv {
     !STRIPE_SECRET_KEY
   ) {
     throw new EnvValidationError(
-      'ENABLE_MEMBERSHIP_CHECKOUT requires Stripe TEST keys when PAYMENT_MODE=STRIPE',
+      'ENABLE_MEMBERSHIP_CHECKOUT requires STRIPE_SECRET_KEY when PAYMENT_MODE=STRIPE',
     );
   }
 

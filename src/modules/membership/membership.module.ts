@@ -9,6 +9,7 @@ import { MembershipApiController } from './membership-api.controller';
 import { MembershipAuthService } from './membership-auth.service';
 import { MembershipBillingService } from './membership-billing.service';
 import { MembershipPagesController } from './membership-pages.controller';
+import { isUsableStripeKey } from './stripe-key';
 import { MembershipSessionGuard } from './membership-session.guard';
 import { MembershipService } from './membership.service';
 import { AuthLiffController } from './auth-liff.controller';
@@ -53,18 +54,14 @@ import { SubscriptionEntitlementService } from './subscription-entitlement.servi
         const mode = (config.get<string>('PAYMENT_MODE') ?? 'MOCK')
           .trim()
           .toUpperCase();
-        const secret = (config.get<string>('STRIPE_SECRET_KEY') ?? '').trim();
-        if (
-          mode === 'STRIPE' &&
-          secret.startsWith('sk_test_') &&
-          stripe.isConfigured()
-        ) {
+        const usable = isUsableStripeKey(stripe.mode) && stripe.isConfigured();
+        if (mode === 'STRIPE' && usable) {
           return stripe;
         }
         if (mode === 'MOCK' || mode === '') {
           return mock;
         }
-        if (secret.startsWith('sk_test_') && stripe.isConfigured()) {
+        if (usable) {
           return stripe;
         }
         return new UnimplementedPaymentProvider();

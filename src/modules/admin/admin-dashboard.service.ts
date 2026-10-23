@@ -73,8 +73,7 @@ export class AdminDashboardService {
         classify: usageAgg._sum.classifyCalls ?? 0,
         total: usageAgg._sum.totalCalls ?? 0,
       },
-      revenueNote:
-        'Revenue from Stripe LIVE is not enabled. Use Stripe Dashboard TEST mode for payment metrics.',
+      revenueNote: 'ยอดขายจริงดูได้ที่ Stripe Dashboard (Payments)',
     };
   }
 

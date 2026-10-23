@@ -9,22 +9,23 @@ import {
   ProviderSubscriptionSnapshot,
 } from './payment-provider.port';
 import { MIN_CHARGE_THB } from './pro-plan.service';
+import { StripeKeyMode, stripeKeyMode } from './stripe-key';
 
 /** Marks a Checkout Session as a one-time PromptPay PRO pass. */
 export const PRO_PASS_KIND = 'pro_pass';
 
 /**
- * Stripe adapter — TEST/SANDBOX keys only (`sk_test_…`).
+ * Stripe adapter. Test keys (`sk_test_…`) always work; live keys
+ * (`sk_live_…`) only with STRIPE_LIVE_ENABLED=true (see stripe-key.ts).
  * Checkout = one-time PromptPay QR payment that buys a PRO pass
  * (PromptPay cannot be used for Stripe subscriptions).
- * Live keys (`sk_live_…`) are rejected.
- * PAYMENT LIVE = NOT ACTIVE.
  */
 @Injectable()
 export class StripePaymentProvider implements PaymentProviderPort {
   private readonly logger = new Logger(StripePaymentProvider.name);
   private readonly client: Stripe | null;
   private readonly webhookSecret: string;
+  readonly mode: StripeKeyMode;
 
   constructor(private readonly config: ConfigService) {
     const secret = (this.config.get<string>('STRIPE_SECRET_KEY') ?? '').trim();
@@ -32,21 +33,28 @@ export class StripePaymentProvider implements PaymentProviderPort {
       this.config.get<string>('STRIPE_WEBHOOK_SECRET') ?? ''
     ).trim();
 
-    if (!secret) {
+    this.mode = stripeKeyMode(
+      secret,
+      this.config.get<string>('STRIPE_LIVE_ENABLED'),
+    );
+    if (this.mode === 'none') {
       this.client = null;
       return;
     }
-    if (secret.startsWith('sk_live_')) {
+    if (this.mode === 'live_blocked') {
       throw new Error(
-        'STRIPE_SECRET_KEY must be a TEST key (sk_test_…). Live keys are blocked.',
+        'STRIPE_SECRET_KEY is a live key but STRIPE_LIVE_ENABLED is not true',
       );
     }
-    if (!secret.startsWith('sk_test_')) {
+    if (this.mode === 'invalid') {
       this.logger.warn(
-        'STRIPE_SECRET_KEY does not look like sk_test_; Stripe client disabled',
+        'STRIPE_SECRET_KEY is not sk_test_/sk_live_; Stripe client disabled',
       );
       this.client = null;
       return;
+    }
+    if (this.mode === 'live') {
+      this.logger.log('Stripe LIVE mode — real payments are enabled');
     }
     this.client = new Stripe(secret, {
       apiVersion: '2026-08-26.dahlia',
@@ -59,7 +67,7 @@ export class StripePaymentProvider implements PaymentProviderPort {
 
   private requireClient(): Stripe {
     if (!this.client) {
-      throw new Error('Stripe TEST mode is not configured (STRIPE_SECRET_KEY)');
+      throw new Error('Stripe is not configured (STRIPE_SECRET_KEY)');
     }
     return this.client;
   }
