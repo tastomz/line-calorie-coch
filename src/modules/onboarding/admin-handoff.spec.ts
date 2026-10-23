@@ -8,7 +8,6 @@ import {
   ADMIN_CHAT_STARTED_TEXT,
   isAdminChatEnter,
   isAdminChatExit,
-  isMenuCommand,
 } from './admin-handoff';
 import { OnboardingService } from './onboarding.service';
 
@@ -23,11 +22,6 @@ describe('admin handoff keywords', () => {
   it('does not treat food text as a keyword', () => {
     expect(isAdminChatEnter('ข้าวมันไก่ แอดมินว่าไง')).toBe(false);
     expect(isAdminChatExit('ข้าวผัด')).toBe(false);
-  });
-  it('recognises rich-menu commands', () => {
-    expect(isMenuCommand('วันนี้')).toBe(true);
-    expect(isMenuCommand('สมาชิก')).toBe(true);
-    expect(isMenuCommand('หมูพริกไทยดำ')).toBe(false);
   });
 });
 
@@ -94,13 +88,16 @@ describe('OnboardingService admin handoff', () => {
     expect(foodLoggingService.handleImage).not.toHaveBeenCalled();
   });
 
-  it('still answers rich-menu commands during handoff', async () => {
+  it('stays silent on menu commands and repeat keywords during handoff', async () => {
     usersService.findByLineUserId.mockResolvedValue({
       ...baseUser,
       adminChatSince: new Date(),
     });
     await service.handleTextMessage('U1', 'tok', 'วันนี้');
-    expect(handleCompleted).toHaveBeenCalledTimes(1);
+    await service.handleTextMessage('U1', 'tok', 'คุยกับแอดมิน');
+    expect(handleCompleted).not.toHaveBeenCalled();
+    expect(lineService.replyText).not.toHaveBeenCalled();
+    expect(lineService.replyButtons).not.toHaveBeenCalled();
   });
 
   it('"คุยกับบอท" hands back to the bot', async () => {
@@ -135,21 +132,15 @@ describe('OnboardingService admin handoff', () => {
     expect(lineService.showRichMenuTab).toHaveBeenCalledWith('U1', 'admin');
   });
 
-  it('tapping the แอดมิน tab starts handoff with a short reply, once', async () => {
+  it('tapping the แอดมิน tab starts handoff silently', async () => {
     usersService.findByLineUserId.mockResolvedValueOnce({ ...baseUser });
     await service.handleTextMessage('U1', 'tok', 'richmenu:admin');
     expect(usersService.setAdminChat).toHaveBeenCalledWith(
       'user-12345678',
       expect.any(Date),
     );
-    expect(lineService.replyText).toHaveBeenCalledTimes(1);
-
-    usersService.findByLineUserId.mockResolvedValueOnce({
-      ...baseUser,
-      adminChatSince: new Date(),
-    });
-    await service.handleTextMessage('U1', 'tok2', 'richmenu:admin');
-    expect(lineService.replyText).toHaveBeenCalledTimes(1);
+    expect(lineService.replyText).not.toHaveBeenCalled();
+    expect(lineService.replyButtons).not.toHaveBeenCalled();
     expect(handleCompleted).not.toHaveBeenCalled();
   });
 
@@ -172,5 +163,56 @@ describe('OnboardingService admin handoff', () => {
     await service.handleTextMessage('U1', 'tok2', 'richmenu:coach');
     expect(lineService.replyText).toHaveBeenCalledTimes(1);
     expect(handleCompleted).not.toHaveBeenCalled();
+  });
+
+  describe('admin alerts', () => {
+    const adminNotify = {
+      redeemPairCode: jest.fn(),
+      listRecipients: jest.fn(),
+    };
+    const line2 = {
+      replyText: jest.fn(),
+      replyButtons: jest.fn(),
+      showRichMenuTab: jest.fn(),
+      pushText: jest.fn().mockResolvedValue(undefined),
+    };
+    const svc = new OnboardingService(
+      usersService as unknown as UsersService,
+      {} as NutritionProfileService,
+      line2 as unknown as LineService,
+      foodLoggingService as unknown as FoodLoggingService,
+      adminNotify as never,
+    );
+    const flush = () => new Promise((r) => setImmediate(r));
+
+    it('pushes a heads-up to linked admins when a handoff starts', async () => {
+      usersService.findByLineUserId.mockResolvedValue({
+        ...baseUser,
+        displayName: 'Ploy',
+      });
+      adminNotify.listRecipients.mockResolvedValue([
+        { id: 'admin-1', lineUserId: 'Uadmin', displayName: 'Sarin' },
+      ]);
+      await svc.handleTextMessage('U1', 'tok', 'richmenu:admin');
+      await flush();
+      expect(line2.pushText).toHaveBeenCalledWith(
+        'Uadmin',
+        expect.stringContaining('Ploy ขอคุยกับแอดมิน'),
+      );
+    });
+
+    it('links an admin LINE account with a pairing code', async () => {
+      usersService.findByLineUserId.mockResolvedValue({ ...baseUser });
+      adminNotify.redeemPairCode.mockResolvedValue(true);
+      await svc.handleTextMessage('U1', 'tok', 'admin-ab12cd');
+      expect(adminNotify.redeemPairCode).toHaveBeenCalledWith(
+        'user-12345678',
+        'admin-ab12cd',
+      );
+      expect(line2.replyText).toHaveBeenCalledWith(
+        'tok',
+        expect.stringContaining('เชื่อมต่อแล้ว'),
+      );
+    });
   });
 });

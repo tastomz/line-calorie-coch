@@ -18,13 +18,13 @@ describe('tabbed rich menu', () => {
       const menu = buildRichMenu(tab, 'liff-123');
       expect(menu.size).toEqual(RICH_MENU_SIZE);
       expect(menu.areas.every((a) => inside(a.bounds))).toBe(true);
-      const [left, right] = menu.areas;
-      expect(left.action).toMatchObject({
+      const areas = menu.areas ?? [];
+      expect(areas[0]?.action).toMatchObject({
         type: 'richmenuswitch',
         richMenuAliasId: RICH_MENU_ALIAS.coach,
         data: RICH_MENU_POSTBACK.coach,
       });
-      expect(right.action).toMatchObject({
+      expect(areas[1]?.action).toMatchObject({
         type: 'richmenuswitch',
         richMenuAliasId: RICH_MENU_ALIAS.admin,
         data: RICH_MENU_POSTBACK.admin,

@@ -1,12 +1,9 @@
-import { FOOD_COMMANDS } from '../food/food-logging.service';
-import { MEMBERSHIP_COMMANDS } from '../membership/membership.messages';
-
 /**
  * Human handoff: a user types "คุยกับแอดมิน" → the bot stops answering their
  * free text and photos so an admin can reply in LINE Official Account Manager
  * (Chat must be ON alongside Webhook). "คุยกับบอท" hands back to the bot.
- * Rich-menu commands still work during handoff — tapping a menu is a request
- * for the bot, and the reply is instant.
+ * While handoff is on, nothing automated replies (no AI, no menu commands);
+ * the แอดมิน rich menu only offers "back to โค้ช" and the profile page.
  */
 const normalize = (text: string) =>
   text.trim().toLowerCase().replace(/\s+/g, '');
@@ -39,28 +36,11 @@ export function isAdminChatExit(text: string): boolean {
   return EXIT.includes(normalize(text));
 }
 
-const foodCommands: string[] = Object.values(FOOD_COMMANDS).flatMap(
-  (v: string | readonly string[]) => (typeof v === 'string' ? [v] : [...v]),
-);
-const membershipCommands: string[] = [...MEMBERSHIP_COMMANDS];
-const MENU_COMMANDS = new Set(
-  [...foodCommands, ...membershipCommands].map(normalize),
-);
-
-/** Exact rich-menu / command texts the bot keeps answering during handoff. */
-export function isMenuCommand(text: string): boolean {
-  return MENU_COMMANDS.has(normalize(text));
-}
-
 export const ADMIN_CHAT_STARTED_TEXT = `👩‍💼 ส่งเรื่องถึงแอดมินแล้วครับ
 พิมพ์ข้อความหรือส่งรูปได้เลย แอดมินจะตอบกลับในแชทนี้
 
 ระหว่างนี้บอทจะหยุดตอบข้อความ (กดเมนูด้านล่างได้ตามปกติ)
 แตะแท็บ "โค้ช" หรือพิมพ์ "${ADMIN_CHAT_EXIT_TEXT}" เมื่อต้องการกลับมาใช้บอท`;
-
-/** Shorter reply when the user switched by tapping the แอดมิน tab. */
-export const ADMIN_CHAT_TAB_STARTED_TEXT = `👩‍💼 คุยกับแอดมินได้เลยครับ
-พิมพ์ข้อความหรือส่งรูป แอดมินจะตอบกลับในแชทนี้`;
 
 export const ADMIN_CHAT_ENDED_TEXT = `🤖 กลับมาคุยกับบอทแล้วครับ
 ส่งเมนูอาหาร รูปอาหาร หรือคำถามได้เลย`;

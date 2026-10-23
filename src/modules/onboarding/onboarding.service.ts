@@ -47,12 +47,10 @@ import {
   ADMIN_CHAT_EXIT_TEXT,
   ADMIN_CHAT_NOT_ACTIVE_TEXT,
   ADMIN_CHAT_STARTED_TEXT,
-  ADMIN_CHAT_TAB_STARTED_TEXT,
   TAB_POSTBACK_ADMIN,
   TAB_POSTBACK_COACH,
   isAdminChatEnter,
   isAdminChatExit,
-  isMenuCommand,
 } from './admin-handoff';
 import {
   parseActivityLevel,
@@ -210,11 +208,9 @@ export class OnboardingService {
           `Admin chat started (tab) userIdPrefix=${user.id.slice(0, 8)}`,
         );
         this.notifyAdmins(user);
-        await this.lineService.replyText(
-          replyToken,
-          ADMIN_CHAT_TAB_STARTED_TEXT,
-        );
       }
+      // Silent on purpose: in admin mode nothing automated answers the user;
+      // the แอดมิน menu image itself explains what to do.
       await this.lineService.showRichMenuTab(user.lineUserId ?? '', 'admin');
       return true;
     }
@@ -232,13 +228,12 @@ export class OnboardingService {
     }
 
     if (isAdminChatEnter(text)) {
-      if (!user.adminChatSince) {
-        await this.usersService.setAdminChat(user.id, new Date());
-        this.logger.log(
-          `Admin chat started userIdPrefix=${user.id.slice(0, 8)}`,
-        );
-        this.notifyAdmins(user);
+      if (user.adminChatSince) {
+        return true; // already with an admin — stay silent
       }
+      await this.usersService.setAdminChat(user.id, new Date());
+      this.logger.log(`Admin chat started userIdPrefix=${user.id.slice(0, 8)}`);
+      this.notifyAdmins(user);
       await this.lineService.showRichMenuTab(user.lineUserId ?? '', 'admin');
       await this.lineService.replyButtons(replyToken, ADMIN_CHAT_STARTED_TEXT, [
         { label: ADMIN_CHAT_EXIT_TEXT, text: ADMIN_CHAT_EXIT_TEXT },
@@ -261,8 +256,9 @@ export class OnboardingService {
       return true;
     }
 
-    if (user.adminChatSince && !isMenuCommand(text)) {
-      // Free text goes to the admin; no reply so OA Manager owns the thread.
+    if (user.adminChatSince) {
+      // Admin mode: no AI and no automatic reply to anything, menu commands
+      // included — the admin answers in OA Manager.
       return true;
     }
     return false;

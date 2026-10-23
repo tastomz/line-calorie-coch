@@ -62,10 +62,7 @@ export class AdminApiController {
 
   @Post('admin-notify/:id/remove')
   @UseGuards(AdminSessionGuard)
-  async removeAdminNotify(
-    @AdminId() adminId: string,
-    @Param('id') id: string,
-  ) {
+  async removeAdminNotify(@AdminId() adminId: string, @Param('id') id: string) {
     await this.adminNotify.removeRecipient(id);
     await this.auth.audit(adminId, 'admin_notify_remove', 'User', id, {});
     return { ok: true };

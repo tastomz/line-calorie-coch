@@ -19,6 +19,13 @@
     </div>
     <div class="card" id="detail"></div>
     <div class="card">
+      <h3>🔔 แจ้งเตือนเมื่อมีคนขอคุยกับแอดมิน</h3>
+      <p style="color:var(--muted)">bot จะส่งข้อความเข้า LINE ของแอดมินที่ผูกไว้ เฉพาะตอนที่ผู้ใช้กดแท็บ "แอดมิน" (1 ข้อความ/ครั้ง) — ปิดการแจ้งเตือนแชทในแอป LINE OA Manager ได้เลย</p>
+      <div id="notifyList" style="margin-bottom:10px">Loading...</div>
+      <button class="btn" id="pairCode">สร้างรหัสผูก LINE แอดมิน</button>
+      <div id="pairBox" style="margin-top:10px"></div>
+    </div>
+    <div class="card">
       <h3>📱 Rich menu (แท็บ โค้ช / แอดมิน)</h3>
       <p style="color:var(--muted)">ติดตั้งเมนูแบบแท็บให้ผู้ใช้ทุกคน (แทนเมนูที่ตั้งใน LINE OA Manager) · กดซ้ำได้ถ้าเปลี่ยนรูป</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -68,6 +75,30 @@
       await api('/admin/api/logout', { method: 'POST', body: '{}' });
       location.href = '/admin/login';
     };
+    const escHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    async function loadNotify() {
+      const el = document.getElementById('notifyList');
+      const rows = await api('/admin/api/admin-notify');
+      el.innerHTML = rows.length
+        ? rows.map((r) => `<div style="display:flex;gap:8px;align-items:center;margin:4px 0">✅ ${escHtml(r.displayName || r.id)} <button class="btn" style="background:transparent;color:var(--danger);border:1px solid var(--border)" data-rm="${escHtml(r.id)}">เอาออก</button></div>`).join('')
+        : '<span style="color:var(--muted)">ยังไม่มีแอดมินที่ผูกไว้</span>';
+      el.querySelectorAll('[data-rm]').forEach((b) => b.onclick = async () => {
+        if (!confirm('เลิกส่งแจ้งเตือนให้บัญชีนี้?')) return;
+        await api('/admin/api/admin-notify/' + encodeURIComponent(b.dataset.rm) + '/remove', { method: 'POST', body: '{}' });
+        loadNotify();
+      });
+    }
+    document.getElementById('pairCode').onclick = async () => {
+      const box = document.getElementById('pairBox');
+      try {
+        const r = await api('/admin/api/admin-notify/pair-code', { method: 'POST', body: '{}' });
+        const until = new Date(r.expiresAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+        box.innerHTML = `ส่งข้อความนี้ให้ bot จาก <b>LINE ของแอดมินเอง</b> (ใช้ได้ถึง ${until} น.):<div style="font-size:1.6rem;font-weight:700;letter-spacing:2px;margin:8px 0">${escHtml(r.code)}</div><button class="btn" id="copyCode">คัดลอก</button> <button class="btn" style="background:transparent;color:var(--text);border:1px solid var(--border)" id="refreshNotify">ส่งแล้ว รีเฟรช</button>`;
+        document.getElementById('copyCode').onclick = () => navigator.clipboard.writeText(r.code);
+        document.getElementById('refreshNotify').onclick = () => loadNotify();
+      } catch (e) { box.textContent = e.message; }
+    };
+    loadNotify().catch(() => {});
     document.getElementById('richmenu').onclick = async () => {
       const btn = document.getElementById('richmenu');
       const msg = document.getElementById('richmenuMsg');
