@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Plan, SubscriptionStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
-  generateTastomPromoCode,
+  generatePromoCode,
   parsePromoParams,
 } from '../membership/promo-code.generator';
 import { SubscriptionEntitlementService } from '../membership/subscription-entitlement.service';
@@ -219,12 +219,13 @@ export class AdminDashboardService {
   async generateFreeProCode(params: {
     trialDays: number;
     maxRedemptions?: number | null;
+    prefix?: string;
     description?: string;
     expiresAt?: Date | null;
   }) {
-    const { trialDays, maxRedemptions } = parsePromoParams(params);
+    const { trialDays, maxRedemptions, prefix } = parsePromoParams(params);
     for (let attempt = 0; attempt < 8; attempt += 1) {
-      const code = generateTastomPromoCode();
+      const code = generatePromoCode(prefix);
       try {
         return await this.prisma.promoCode.create({
           data: {

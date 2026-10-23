@@ -1,4 +1,5 @@
 import {
+  generatePromoCode,
   generateTastomPromoCode,
   isValidPromoDays,
   isValidPromoMaxRedemptions,
@@ -42,16 +43,20 @@ describe('promo-code.generator', () => {
       expect(parsePromoParams({})).toEqual({
         trialDays: 30,
         maxRedemptions: 1,
+        prefix: 'TASTOM',
       });
       expect(
         parsePromoParams({ trialDays: null, maxRedemptions: null }),
-      ).toEqual({ trialDays: 30, maxRedemptions: 1 });
+      ).toEqual({ trialDays: 30, maxRedemptions: 1, prefix: 'TASTOM' });
     });
 
     it('passes typed values through', () => {
-      expect(parsePromoParams({ trialDays: 7, maxRedemptions: 50 })).toEqual({
+      expect(
+        parsePromoParams({ trialDays: 7, maxRedemptions: 50, prefix: 'vip' }),
+      ).toEqual({
         trialDays: 7,
         maxRedemptions: 50,
+        prefix: 'VIP',
       });
     });
 
@@ -66,6 +71,11 @@ describe('promo-code.generator', () => {
     ])('rejects %j', (input, field) => {
       expect(() => parsePromoParams(input)).toThrow(field);
     });
+  });
+
+  it('generates codes with a custom prefix', () => {
+    expect(generatePromoCode('SIMPLY')).toMatch(/^SIMPLY-[A-Z0-9]{6}$/);
+    expect(() => generatePromoCode('BAD-PREFIX')).toThrow('prefix');
   });
 
   it('generates TASTOM-XXXXXX uppercase codes', () => {
