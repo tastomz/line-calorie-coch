@@ -4,7 +4,7 @@ import { Script } from 'vm';
 
 /** Inline <script> blocks of the static HTML pages must at least parse. */
 describe('static page scripts', () => {
-  const dirs = ['public/admin', 'public/membership'];
+  const dirs = ['public/dev'];
   const pages = dirs.flatMap((d) =>
     readdirSync(join(process.cwd(), d))
       .filter((f) => f.endsWith('.html'))

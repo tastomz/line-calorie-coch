@@ -1,36 +1,23 @@
-import { Controller, Get, Next, Req, Res } from '@nestjs/common';
-import type { NextFunction, Request, Response } from 'express';
-import { existsSync } from 'fs';
+import { Controller, Get, Req, Res } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { join } from 'path';
+import { sendWebApp } from '../../web/web-app';
 
 @Controller()
 export class AdminPagesController {
-  private readonly root = join(process.cwd(), 'public', 'admin');
-
+  /** Admin pages are rendered by the Angular app; APIs enforce auth. */
   @Get([
     'admin',
-    'admin/',
     'admin/login',
     'admin/dashboard',
+    'admin/users',
     'admin/promos',
     'admin/plans',
     'admin/ai-usage',
+    'admin/settings',
   ])
-  serve(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
-    const path = (req.path.replace(/\/$/, '') || '/admin').toLowerCase();
-    const map: Record<string, string> = {
-      '/admin': 'dashboard.html',
-      '/admin/login': 'login.html',
-      '/admin/dashboard': 'dashboard.html',
-      '/admin/promos': 'promos.html',
-      '/admin/plans': 'plans.html',
-      '/admin/ai-usage': 'ai-usage.html',
-    };
-    const file = map[path];
-    if (!file) return next();
-    const full = join(this.root, file);
-    if (!existsSync(full)) return res.status(404).send('Not found');
-    return res.sendFile(full);
+  serve(@Res() res: Response) {
+    sendWebApp(res);
   }
 
   /** Rich-menu image previews for the dashboard (fixed allow-list). */
@@ -41,13 +28,5 @@ export class AdminPagesController {
       return res.status(404).send('Not found');
     }
     return res.sendFile(join(process.cwd(), 'public', 'richmenu', name));
-  }
-
-  @Get('admin/assets/:file')
-  assets(@Req() req: Request, @Res() res: Response) {
-    const name = String(req.params.file ?? '').replace(/[^a-zA-Z0-9._-]/g, '');
-    const full = join(this.root, 'assets', name);
-    if (!existsSync(full)) return res.status(404).send('Not found');
-    return res.sendFile(full);
   }
 }

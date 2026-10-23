@@ -8,6 +8,14 @@ COPY package.json package-lock.json ./
 COPY prisma ./prisma/
 RUN npm ci
 
+# ---- frontend (Angular + PrimeNG) ----
+FROM node:22-alpine AS web
+WORKDIR /web
+COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
+RUN npm ci --no-audit --no-fund
+COPY frontend ./
+RUN npm run build
+
 # ---- build ----
 FROM node:22-alpine AS build
 WORKDIR /app
@@ -45,8 +53,10 @@ COPY --from=build --chown=app:app /app/dist ./dist
 COPY --from=build --chown=app:app /app/node_modules ./node_modules
 COPY --from=build --chown=app:app /app/package.json ./package.json
 COPY --from=build --chown=app:app /app/prisma ./prisma
-# Membership / admin / (dev) HTML pages — served via Nest page controllers
+# Rich-menu images + dev-only HTML pages
 COPY --chown=app:app public ./public
+# Angular app (member LIFF pages + admin), served by Nest
+COPY --from=web --chown=app:app /web/dist/frontend/browser ./web
 
 USER app
 EXPOSE 3000

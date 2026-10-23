@@ -33,4 +33,14 @@ export class DevMembershipPagesController {
     if (!existsSync(full)) return res.status(404).send('Not found');
     return res.sendFile(full);
   }
+
+  /** Shared JS/CSS for the dev pages (dev-only, same guard). */
+  @Get('dev/assets/:file')
+  assets(@Req() req: Request, @Res() res: Response) {
+    const name = String(req.params.file ?? '');
+    if (name !== 'app.js' && name !== 'style.css') {
+      return res.status(404).send('Not found');
+    }
+    return res.sendFile(join(this.root, 'assets', name));
+  }
 }

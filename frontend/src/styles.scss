@@ -1,1 +1,74 @@
-/* You can add global styles to this file, and also import other style files */
+@use 'primeicons/primeicons.css';
+
+:root {
+  --kc-bg: #f4f7f4;
+  --kc-ink: #14281d;
+  --kc-heading: #103823;
+  --kc-muted: #5c6960;
+  --kc-line: #e1e6e2;
+  --kc-green: #195534;
+  --kc-green-soft: #eef7f1;
+  --kc-danger: #c0392b;
+  --kc-warn: #b7791f;
+  --kc-radius: 16px;
+  --kc-font: 'IBM Plex Sans Thai', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--kc-bg);
+  color: var(--kc-ink);
+  font-family: var(--kc-font);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+body, .p-component, .p-inputtext, .p-button, .p-select-label, .p-datatable { font-family: var(--kc-font); }
+h1, h2, h3, h4 { color: var(--kc-heading); margin: 0 0 .5rem; line-height: 1.3; font-weight: 600; }
+h1 { font-size: 1.5rem; }
+h2 { font-size: 1.2rem; }
+h3 { font-size: 1.05rem; }
+a { color: var(--kc-green); }
+p { margin: 0 0 .5rem; }
+
+/* ---- building blocks ---- */
+.kc-card {
+  background: #fff;
+  border: 1px solid var(--kc-line);
+  border-radius: var(--kc-radius);
+  padding: 1.1rem 1.15rem;
+  box-shadow: 0 1px 2px rgba(16, 56, 35, .04);
+}
+.kc-card + .kc-card, .kc-stack > * + * { margin-top: .9rem; }
+.kc-card-title { display: flex; align-items: center; gap: .5rem; margin-bottom: .75rem; }
+.kc-card-title h2, .kc-card-title h3 { margin: 0; }
+.kc-card-title i { color: var(--kc-green); font-size: 1.05rem; }
+.kc-muted { color: var(--kc-muted); }
+.kc-small { font-size: .85rem; }
+.kc-ok { color: var(--kc-green); }
+.kc-err { color: var(--kc-danger); }
+.kc-row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.kc-row > .grow { flex: 1 1 160px; min-width: 0; }
+.kc-grid { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.kc-form { display: grid; gap: .9rem; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+.kc-field { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
+.kc-field > label { font-size: .85rem; color: var(--kc-muted); font-weight: 500; }
+.kc-field .p-inputtext, .kc-field .p-select, .kc-field .p-inputnumber, .kc-field .p-datepicker { width: 100%; }
+.kc-actions { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-top: 1rem; }
+.kc-big { font-size: 1.9rem; font-weight: 700; color: var(--kc-heading); line-height: 1.1; }
+.kc-stat {
+  background: var(--kc-green-soft);
+  border-radius: 12px;
+  padding: .8rem .9rem;
+}
+.kc-stat span { display: block; font-size: .8rem; color: var(--kc-muted); }
+.kc-stat b { display: block; font-size: 1.35rem; color: var(--kc-heading); font-weight: 700; }
+.kc-pre { white-space: pre-wrap; font-size: 12px; background: #f6f8f6; border-radius: 10px; padding: .75rem; overflow: auto; max-height: 360px; }
+.kc-center { text-align: center; }
+.full { width: 100%; }
+code { background: #eef1ee; padding: .05rem .35rem; border-radius: 6px; font-size: .85em; }
+
+.p-datatable .p-datatable-thead > tr > th { font-weight: 600; color: var(--kc-heading); font-size: .85rem; }
+.p-datatable .p-datatable-tbody > tr > td { font-size: .9rem; }
+.p-progressbar { height: .55rem; }

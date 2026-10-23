@@ -1,17 +1,28 @@
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { staticCacheHeaders, webRoot } from './web/web-app';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  });
   app.use(cookieParser());
-  // CSP is off: public/admin & public/membership pages rely on inline <script>
-  // tags. Enabling the default CSP would block them without a nonce/hash
-  // refactor. Other headers (HSTS, X-Frame-Options, nosniff, ...) still apply.
+  // CSP is off: the Angular build inlines critical CSS with an onload handler
+  // and the dev pages use inline scripts. Other headers (HSTS,
+  // X-Frame-Options, nosniff, ...) still apply.
   app.use(helmet({ contentSecurityPolicy: false }));
+  // Angular bundles (main-*.js, chunk-*.js, styles-*.css, favicon). Page
+  // routes themselves are served by the page controllers (index.html).
+  app.useStaticAssets(webRoot(), {
+    index: false,
+    fallthrough: true,
+    setHeaders: staticCacheHeaders,
+  });
   app.enableShutdownHooks();
 
   const configService = app.get(ConfigService);

@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Dev Test Scenarios</title>
-  <link rel="stylesheet" href="/membership/assets/style.css" />
+  <link rel="stylesheet" href="/dev/assets/style.css" />
 </head>
 <body>
   <div class="wrap">
@@ -23,7 +23,7 @@
       Deterministic (must stay 0 AI after quota): วันนี้ · ประวัติ · น้ำหนัก · โปรไฟล์ · กิน 50% · กินครึ่งเดียว
     </div>
   </div>
-  <script src="/membership/assets/app.js"></script>
+  <script src="/dev/assets/app.js"></script>
   <script>
     async function ensureUser() {
       await api('/api/dev/identity', { method: 'POST', body: JSON.stringify({ identity: 'USER_A' }) });

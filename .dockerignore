@@ -19,3 +19,6 @@ test
 **/*.spec.ts
 .cursor
 agent-transcripts
+frontend/node_modules
+frontend/dist
+frontend/.angular

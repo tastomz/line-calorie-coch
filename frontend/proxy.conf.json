@@ -1,0 +1,6 @@
+{
+  "/api": { "target": "http://localhost:3000", "secure": false },
+  "/admin/api": { "target": "http://localhost:3000", "secure": false },
+  "/admin/richmenu": { "target": "http://localhost:3000", "secure": false },
+  "/auth": { "target": "http://localhost:3000", "secure": false }
+}

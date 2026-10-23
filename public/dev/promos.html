@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Dev Promo Generator</title>
-  <link rel="stylesheet" href="/membership/assets/style.css" />
+  <link rel="stylesheet" href="/dev/assets/style.css" />
 </head>
 <body>
   <div class="wrap">
@@ -19,7 +19,7 @@
     <div class="card" id="list">…</div>
     <a href="/dev/membership">← back</a>
   </div>
-  <script src="/membership/assets/app.js"></script>
+  <script src="/dev/assets/app.js"></script>
   <script>
     async function ensureAdmin() {
       await api('/api/dev/identity', { method: 'POST', body: JSON.stringify({ identity: 'ADMIN' }) });
