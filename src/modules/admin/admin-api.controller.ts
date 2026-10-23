@@ -30,6 +30,7 @@ import { AdminAiUsageService } from './admin-ai-usage.service';
 import { AdminDashboardService } from './admin-dashboard.service';
 import { AdminId } from './admin-session.decorator';
 import { AdminSessionGuard } from './admin-session.guard';
+import { CodexService } from '../codex/codex.service';
 
 @Controller('admin/api')
 export class AdminApiController {
@@ -41,7 +42,53 @@ export class AdminApiController {
     private readonly plans: ProPlanService,
     private readonly line: LineService,
     private readonly adminNotify: AdminNotifyService,
+    private readonly codex: CodexService,
   ) {}
+
+  /** Trial package AI: ChatGPT sign-in (Codex). Never returns tokens. */
+  @Get('codex')
+  @UseGuards(AdminSessionGuard)
+  codexStatus() {
+    return this.codex.status();
+  }
+
+  /** Paste ~/.codex/auth.json from `codex login` (Sign in with ChatGPT). */
+  @Post('codex')
+  @UseGuards(AdminSessionGuard)
+  async saveCodex(
+    @AdminId() adminId: string,
+    @Body() body: { authJson?: unknown; model?: unknown },
+  ) {
+    try {
+      if (body.authJson === undefined || body.authJson === '') {
+        await this.codex.setModel(body.model);
+      } else {
+        await this.codex.saveAuth(body.authJson, body.model);
+      }
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'save failed',
+      );
+    }
+    await this.auth.audit(adminId, 'codex_save', 'AiCredential', 'codex', {
+      authUpdated: body.authJson !== undefined && body.authJson !== '',
+    });
+    return this.codex.status();
+  }
+
+  @Post('codex/test')
+  @UseGuards(AdminSessionGuard)
+  testCodex() {
+    return this.codex.test();
+  }
+
+  @Post('codex/remove')
+  @UseGuards(AdminSessionGuard)
+  async removeCodex(@AdminId() adminId: string) {
+    await this.codex.clear();
+    await this.auth.audit(adminId, 'codex_remove', 'AiCredential', 'codex', {});
+    return this.codex.status();
+  }
 
   /** LINE accounts that get a push when someone asks for an admin. */
   @Get('admin-notify')

@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { FoodLog, OnboardingState, User } from '@prisma/client';
-import OpenAI from 'openai';
+import { createOpenAiClient } from '../../common/openai-client';
 import { aiRateLimiter } from '../../common/ai-rate-limiter';
 import { LineOutboundError } from '../line/line-outbound.error';
 import { LineService } from '../line/line.service';
@@ -709,7 +709,7 @@ export class FoodLoggingService {
       return;
     }
     try {
-      const openai = new OpenAI({ apiKey });
+      const openai = createOpenAiClient(apiKey);
       const answer = await this.aiGateway.run(user.id, 'COACH', async () => {
         const completion = await openai.chat.completions.create({
           model: smartModel(),

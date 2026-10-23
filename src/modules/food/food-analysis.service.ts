@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
+import { createOpenAiClient } from '../../common/openai-client';
 import { openAiCircuitBreaker } from '../../common/openai-circuit-breaker';
 import {
   OPENAI_FOOD_TIMEOUT_MS,
@@ -112,7 +113,7 @@ export class FoodAnalysisService {
     // Photos can use a stronger model than text; unset keeps the cheap default.
     this.visionModel = model && /^[\w.-]+$/.test(model) ? model : smartModel();
     this.visionDetail = detail === 'high' || detail === 'auto' ? detail : 'low';
-    this.client = apiKey ? new OpenAI({ apiKey }) : null;
+    this.client = apiKey ? createOpenAiClient(apiKey) : null;
   }
 
   isConfigured(): boolean {

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
+import { createOpenAiClient } from '../../common/openai-client';
 import { openAiCircuitBreaker } from '../../common/openai-circuit-breaker';
 import { OPENAI_CALL_TIMEOUT_MS, withTimeout } from '../../common/with-timeout';
 import { AiGatewayService } from '../membership/ai-gateway.service';
@@ -54,7 +55,7 @@ export class DailyCoachService {
     private readonly aiGateway: AiGatewayService,
   ) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY') ?? '';
-    this.client = apiKey ? new OpenAI({ apiKey }) : null;
+    this.client = apiKey ? createOpenAiClient(apiKey) : null;
   }
 
   isConfigured(): boolean {

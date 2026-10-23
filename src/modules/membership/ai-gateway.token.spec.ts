@@ -1,3 +1,4 @@
+import { SubscriptionEntitlementService } from './subscription-entitlement.service';
 import { AiGatewayService } from './ai-gateway.service';
 import { AiUsageService } from './ai-usage.service';
 import { reportAiTokenUsage } from './ai-token-capture';
@@ -8,7 +9,10 @@ describe('AiGatewayService token recording', () => {
       consumeAiUsage: jest.fn().mockResolvedValue(undefined),
       recordTokenUsage: jest.fn().mockResolvedValue(undefined),
     };
-    const service = new AiGatewayService(aiUsage as unknown as AiUsageService);
+    const service = new AiGatewayService(
+      aiUsage as unknown as AiUsageService,
+      {} as SubscriptionEntitlementService,
+    );
 
     const result = await service.run('user-a', 'FOOD_TEXT', () => {
       reportAiTokenUsage({
@@ -37,7 +41,10 @@ describe('AiGatewayService token recording', () => {
       consumeAiUsage: jest.fn().mockResolvedValue(undefined),
       recordTokenUsage: jest.fn().mockResolvedValue(undefined),
     };
-    const service = new AiGatewayService(aiUsage as unknown as AiUsageService);
+    const service = new AiGatewayService(
+      aiUsage as unknown as AiUsageService,
+      {} as SubscriptionEntitlementService,
+    );
 
     await service.run('user-a', 'FOOD_VISION', () => {
       reportAiTokenUsage({
@@ -74,7 +81,10 @@ describe('AiGatewayService token recording', () => {
       consumeAiUsage: jest.fn().mockResolvedValue(undefined),
       recordTokenUsage: jest.fn().mockResolvedValue(undefined),
     };
-    const service = new AiGatewayService(aiUsage as unknown as AiUsageService);
+    const service = new AiGatewayService(
+      aiUsage as unknown as AiUsageService,
+      {} as SubscriptionEntitlementService,
+    );
     await service.run('user-a', 'CLASSIFY', () => Promise.resolve(1));
     expect(aiUsage.recordTokenUsage).not.toHaveBeenCalled();
   });

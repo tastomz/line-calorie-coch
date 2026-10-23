@@ -620,3 +620,17 @@ model ProPlan {
 
   @@index([active, sortOrder])
 }
+
+/// Encrypted AI sign-ins (id "codex" = ChatGPT sign-in used for the Trial package).
+/// Ciphertext only — the key is the CODEX_VAULT_KEY env var.
+model AiCredential {
+  id         String    @id
+  iv         String
+  tag        String
+  ciphertext String
+  model      String?
+  lastOkAt   DateTime?
+  lastError  String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}

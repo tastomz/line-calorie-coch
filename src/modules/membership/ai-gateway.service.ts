@@ -3,6 +3,9 @@ import { AiQuotaExceededError } from './membership.errors';
 import { AiOperation } from './plan.config';
 import { AiUsageService } from './ai-usage.service';
 import { AiTokenUsageMeta, runWithAiTokenCapture } from './ai-token-capture';
+import { SubscriptionEntitlementService } from './subscription-entitlement.service';
+import { AiRoute, runWithAiRoute } from '../../common/ai-route';
+import { getCodexBackend } from '../../common/codex-bridge';
 
 /**
  * Central AI gateway: entitlement/quota → consume → OpenAI work → token log.
@@ -12,7 +15,24 @@ import { AiTokenUsageMeta, runWithAiTokenCapture } from './ai-token-capture';
 export class AiGatewayService {
   private readonly logger = new Logger(AiGatewayService.name);
 
-  constructor(private readonly aiUsage: AiUsageService) {}
+  constructor(
+    private readonly aiUsage: AiUsageService,
+    private readonly entitlement: SubscriptionEntitlementService,
+  ) {}
+
+  /**
+   * Trial package (PRO + TRIALING) → the owner's ChatGPT sign-in via Codex.
+   * Everyone else → OPENAI_API_KEY. Errors here never block the reply.
+   */
+  async routeFor(userId: string): Promise<AiRoute> {
+    if (!getCodexBackend()?.available()) return 'api';
+    try {
+      const ent = await this.entitlement.getEntitlement(userId);
+      return ent.hasProAccess && ent.status === 'TRIALING' ? 'codex' : 'api';
+    } catch {
+      return 'api';
+    }
+  }
 
   /**
    * Reserve quota then run `work`.
@@ -53,10 +73,14 @@ export class AiGatewayService {
       await this.aiUsage.consumeAiUsage(userId, operation);
     }
     const captured: AiTokenUsageMeta[] = [];
+    const route = await this.routeFor(userId);
     try {
-      const result = await runWithAiTokenCapture((meta) => {
-        captured.push(meta);
-      }, work);
+      const result = await runWithAiTokenCapture(
+        (meta) => {
+          captured.push(meta);
+        },
+        () => runWithAiRoute(route, work),
+      );
       // One row per OpenAI call (a photo may use a cheap check + an analysis).
       for (const meta of captured) {
         await this.aiUsage.recordTokenUsage(userId, operation, meta);

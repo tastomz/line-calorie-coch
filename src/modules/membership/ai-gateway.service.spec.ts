@@ -1,3 +1,4 @@
+import { SubscriptionEntitlementService } from './subscription-entitlement.service';
 import { AiGatewayService } from './ai-gateway.service';
 import { AiUsageService } from './ai-usage.service';
 import { AiQuotaExceededError } from './membership.errors';
@@ -8,7 +9,10 @@ describe('AiGatewayService', () => {
     recordTokenUsage: jest.fn(),
   };
 
-  const service = new AiGatewayService(aiUsage as unknown as AiUsageService);
+  const service = new AiGatewayService(
+    aiUsage as unknown as AiUsageService,
+    {} as SubscriptionEntitlementService,
+  );
 
   beforeEach(() => {
     jest.clearAllMocks();

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ExerciseType, HealthDataSource, User } from '@prisma/client';
 import OpenAI from 'openai';
+import { createOpenAiClient } from '../../common/openai-client';
 import {
   formatZonedTime,
   getZonedDateParts,
@@ -122,7 +123,7 @@ export class HealthRoutingService {
     private readonly config: ConfigService,
   ) {
     const key = (this.config.get<string>('OPENAI_API_KEY') ?? '').trim();
-    this.openai = key ? new OpenAI({ apiKey: key }) : null;
+    this.openai = key ? createOpenAiClient(key) : null;
   }
 
   async tryHandleText(

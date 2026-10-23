@@ -1,4 +1,5 @@
 import { HistoryModule } from './modules/history/history.module';
+import { CodexModule } from './modules/codex/codex.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
@@ -25,6 +26,7 @@ import { PrismaModule } from './prisma/prisma.module';
       validate: () => validateEnv(process.env),
     }),
     PrismaModule,
+    CodexModule,
     MaintenanceModule,
     MembershipModule,
     AdminModule,

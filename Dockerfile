@@ -31,7 +31,15 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 
-RUN addgroup -S app && adduser -S app -G app
+RUN addgroup -S app && adduser -S app -G app -h /home/app
+
+# Official, unmodified Codex CLI — answers AI for the Trial package with the
+# owner's ChatGPT sign-in (static musl binary; needs CA certs for TLS).
+RUN apk add --no-cache ca-certificates \
+  && npm install -g @openai/codex@0.162.1 \
+  && find "$(npm root -g)/@openai" -type d -path '*codex-resources/voice' -prune -exec rm -rf {} + \
+  && npm cache clean --force \
+  && codex --version
 
 COPY --from=build --chown=app:app /app/dist ./dist
 COPY --from=build --chown=app:app /app/node_modules ./node_modules
