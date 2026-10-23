@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
+import { raw } from 'express';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { staticCacheHeaders, webRoot } from './web/web-app';
@@ -12,6 +13,11 @@ async function bootstrap() {
     rawBody: true,
   });
   app.use(cookieParser());
+  // Rich menu image upload: raw JPG/PNG body (LINE caps images at 1 MB).
+  app.use(
+    '/admin/api/rich-menu/image',
+    raw({ type: ['image/jpeg', 'image/png'], limit: '1100kb' }),
+  );
   // CSP is off: the Angular build inlines critical CSS with an onload handler
   // and the dev pages use inline scripts. Other headers (HSTS,
   // X-Frame-Options, nosniff, ...) still apply.

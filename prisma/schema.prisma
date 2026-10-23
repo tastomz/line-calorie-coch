@@ -643,3 +643,14 @@ model AdminCredential {
   changedAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
+
+/// Rich menu images uploaded from /admin (tab = "coach" | "admin").
+/// Missing row = use public/richmenu/<tab>.jpg shipped with the app.
+model RichMenuImage {
+  tab       String   @id
+  mime      String
+  data      Bytes
+  width     Int
+  height    Int
+  updatedAt DateTime @updatedAt
+}

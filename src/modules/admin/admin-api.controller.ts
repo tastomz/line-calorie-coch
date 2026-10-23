@@ -9,13 +9,26 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Response } from 'express';
-import { readFile } from 'fs/promises';
-import { join } from 'path';
+import type { Request, Response } from 'express';
+import {
+  RICH_MENU_SIZE,
+  RichMenuTab,
+  buildRichMenu,
+  richMenuAreaLabel,
+} from '../line/rich-menu';
+import {
+  RICH_MENU_IMAGE_MAX_BYTES,
+  RichMenuImageError,
+} from '../line/rich-menu-image';
+import {
+  RichMenuImageService,
+  isRichMenuTab,
+} from '../line/rich-menu-image.service';
 import { LineService } from '../line/line.service';
 import { AdminNotifyService } from '../users/admin-notify.service';
 import { parsePromoParams } from '../membership/promo-code.generator';
@@ -47,6 +60,7 @@ export class AdminApiController {
     private readonly line: LineService,
     private readonly adminNotify: AdminNotifyService,
     private readonly codex: CodexService,
+    private readonly menuImages: RichMenuImageService,
   ) {}
 
   /** Trial package AI: ChatGPT sign-in (Codex). Never returns tokens. */
@@ -120,17 +134,16 @@ export class AdminApiController {
   }
 
   /**
-   * Install the tabbed rich menu (โค้ช / แอดมิน) from public/richmenu/*.jpg.
-   * Replaces the OA Manager menu as the default for everyone.
+   * Install the tabbed rich menu (โค้ช / แอดมิน) with the current images
+   * (uploaded ones, else public/richmenu/*.jpg). Replaces the OA Manager menu.
    */
   @Post('rich-menu/setup')
   @UseGuards(AdminSessionGuard)
   async setupRichMenu(@AdminId() adminId: string) {
-    const dir = join(process.cwd(), 'public', 'richmenu');
     try {
       const [coach, admin] = await Promise.all([
-        readFile(join(dir, 'coach.jpg')),
-        readFile(join(dir, 'admin.jpg')),
+        this.menuImages.get('coach'),
+        this.menuImages.get('admin'),
       ]);
       const liffId = (this.config.get<string>('LIFF_ID') ?? '').trim() || null;
       const ids = await this.line.setupTabbedRichMenu({
@@ -146,6 +159,71 @@ export class AdminApiController {
         error instanceof Error ? error.message : 'rich menu setup failed',
       );
     }
+  }
+
+  /** Which tabs use an uploaded image, plus the tap areas to draw on previews. */
+  @Get('rich-menu')
+  @UseGuards(AdminSessionGuard)
+  async richMenuStatus() {
+    const liffId = (this.config.get<string>('LIFF_ID') ?? '').trim() || null;
+    const layout = (tab: RichMenuTab) =>
+      (buildRichMenu(tab, liffId).areas ?? []).map((a) => ({
+        ...a.bounds,
+        label: richMenuAreaLabel(a.action),
+      }));
+    return {
+      size: RICH_MENU_SIZE,
+      maxBytes: RICH_MENU_IMAGE_MAX_BYTES,
+      images: await this.menuImages.status(),
+      areas: { coach: layout('coach'), admin: layout('admin') },
+    };
+  }
+
+  /** Upload a new image for one tab (raw JPG/PNG body, 2500×1686, ≤1 MB). */
+  @Post('rich-menu/image/:tab')
+  @UseGuards(AdminSessionGuard)
+  async uploadRichMenuImage(
+    @AdminId() adminId: string,
+    @Param('tab') tab: string,
+    @Req() req: Request,
+  ) {
+    if (!isRichMenuTab(tab)) throw new BadRequestException('unknown tab');
+    const body: unknown = req.body;
+    if (!Buffer.isBuffer(body)) {
+      throw new BadRequestException('ส่งไฟล์ JPG หรือ PNG เท่านั้น');
+    }
+    try {
+      const info = await this.menuImages.save(tab, body);
+      await this.auth.audit(adminId, 'rich_menu_image', 'RichMenu', tab, {
+        ...info,
+        bytes: body.length,
+      });
+    } catch (error) {
+      if (error instanceof RichMenuImageError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+    return this.richMenuStatus();
+  }
+
+  /** Go back to the image shipped with the app. */
+  @Post('rich-menu/image/:tab/reset')
+  @UseGuards(AdminSessionGuard)
+  async resetRichMenuImage(
+    @AdminId() adminId: string,
+    @Param('tab') tab: string,
+  ) {
+    if (!isRichMenuTab(tab)) throw new BadRequestException('unknown tab');
+    await this.menuImages.reset(tab);
+    await this.auth.audit(
+      adminId,
+      'rich_menu_image_reset',
+      'RichMenu',
+      tab,
+      {},
+    );
+    return this.richMenuStatus();
   }
 
   private planError(error: unknown): never {

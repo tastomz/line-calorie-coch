@@ -124,3 +124,17 @@ export function buildRichMenu(
     areas,
   };
 }
+
+/** Human label for an area (admin preview overlay). */
+export function richMenuAreaLabel(
+  action: messagingApi.Action | undefined,
+): string {
+  if (!action) return '';
+  if (action.type === 'richmenuswitch') {
+    const a: messagingApi.RichMenuSwitchAction = action;
+    return a.richMenuAliasId === RICH_MENU_ALIAS.admin
+      ? 'แท็บแอดมิน'
+      : 'แท็บโค้ช / กลับไปโค้ช';
+  }
+  return (action as { label?: string }).label ?? action.type ?? '';
+}

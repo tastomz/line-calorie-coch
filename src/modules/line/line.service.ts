@@ -174,7 +174,7 @@ export class LineService implements OnModuleInit {
    */
   async setupTabbedRichMenu(params: {
     liffId: string | null;
-    images: Record<RichMenuTab, Buffer>;
+    images: Record<RichMenuTab, { data: Buffer; mime: string }>;
   }): Promise<Record<RichMenuTab, string>> {
     if (!this.client || !this.blobClient) {
       throw new Error('LINE_CHANNEL_ACCESS_TOKEN is not configured');
@@ -188,7 +188,9 @@ export class LineService implements OnModuleInit {
       );
       await this.blobClient.setRichMenuImage(
         richMenuId,
-        new Blob([new Uint8Array(params.images[tab])], { type: 'image/jpeg' }),
+        new Blob([new Uint8Array(params.images[tab].data)], {
+          type: params.images[tab].mime,
+        }),
       );
       ids[tab] = richMenuId;
     }

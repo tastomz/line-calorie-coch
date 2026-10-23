@@ -9,6 +9,7 @@ import { MessageModule } from 'primeng/message';
 import { InputTextModule } from 'primeng/inputtext';
 import { TextareaModule } from 'primeng/textarea';
 import { PasswordModule } from 'primeng/password';
+import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { errorMessage } from '../../core/api';
 import { baht, fmtDate, fmtNum } from '../../core/format';
@@ -213,9 +214,18 @@ type CodexStatus = {
   pausedUntil: string | null;
 };
 
+type MenuTab = 'coach' | 'admin';
+type MenuArea = { x: number; y: number; width: number; height: number; label: string };
+type MenuStatus = {
+  size: { width: number; height: number };
+  maxBytes: number;
+  images: Record<MenuTab, { custom: boolean; mime: string; updatedAt: string | null }>;
+  areas: Record<MenuTab, MenuArea[]>;
+};
+
 @Component({
   selector: 'kc-admin-settings',
-  imports: [FormsModule, ButtonModule, InputTextModule, TextareaModule, PasswordModule, MessageModule, TagModule],
+  imports: [FormsModule, ButtonModule, InputTextModule, TextareaModule, PasswordModule, MessageModule, TagModule, ToggleSwitchModule],
   template: `
     <div class="page-head"><h1>ตั้งค่า</h1></div>
 
@@ -283,11 +293,44 @@ type CodexStatus = {
     <!-- rich menu -->
     <section class="kc-card">
       <div class="kc-card-title"><i class="pi pi-th-large"></i><h3>Rich menu (แท็บ โค้ช / แอดมิน)</h3></div>
-      <p class="kc-muted kc-small">ติดตั้งเมนูแบบแท็บให้ผู้ใช้ทุกคน (แทนเมนูใน LINE OA Manager) · กดซ้ำได้ถ้าเปลี่ยนรูป</p>
+      <p class="kc-muted kc-small">
+        อัปโหลดรูปใหม่ได้ทีละแท็บ: JPG/PNG ขนาด <b>2500×1686 px</b> ไม่เกิน 1 MB · ตำแหน่งปุ่มต้องตรงกับกรอบเส้นประ (กด "แสดงจุดกด")
+        · อัปโหลดเสร็จแล้วกด <b>ติดตั้ง Rich menu</b> เพื่อส่งขึ้น LINE
+      </p>
+      <label class="kc-row toggle-areas"><p-toggleswitch [(ngModel)]="showAreas" /> <span class="kc-small">แสดงจุดกด</span></label>
       <div class="menus">
-        <figure><img src="/admin/richmenu/coach.jpg" alt="แท็บโค้ช" /><figcaption>แท็บโค้ช</figcaption></figure>
-        <figure><img src="/admin/richmenu/admin.jpg" alt="แท็บแอดมิน" /><figcaption>แท็บแอดมิน</figcaption></figure>
+        @for (t of menuTabs; track t.tab) {
+          <figure>
+            <div class="menu-img">
+              <img [src]="'/admin/richmenu/' + t.tab + '.jpg?v=' + menuVersion()" [alt]="t.label" />
+              @if (showAreas && menu(); as m) {
+                @for (a of m.areas[t.tab]; track $index) {
+                  <span class="area" [style.left.%]="(a.x / m.size.width) * 100" [style.top.%]="(a.y / m.size.height) * 100"
+                        [style.width.%]="(a.width / m.size.width) * 100" [style.height.%]="(a.height / m.size.height) * 100">
+                    <em>{{ a.label }}</em>
+                  </span>
+                }
+              }
+            </div>
+            <figcaption>
+              <b>{{ t.label }}</b>
+              @if (menu()?.images?.[t.tab]?.custom) {
+                <p-tag value="รูปที่อัปโหลด" severity="success" /> <span class="kc-muted">{{ fmtDate(menu()!.images[t.tab].updatedAt) }}</span>
+              } @else {
+                <p-tag value="รูปเริ่มต้น" severity="secondary" />
+              }
+            </figcaption>
+            <div class="kc-row">
+              <input #file type="file" accept="image/jpeg,image/png" hidden (change)="uploadMenu(t.tab, file)" />
+              <p-button label="อัปโหลดรูปใหม่" icon="pi pi-image" size="small" [outlined]="true" [loading]="busy() === 'up-' + t.tab" (onClick)="file.click()" />
+              @if (menu()?.images?.[t.tab]?.custom) {
+                <p-button label="ใช้รูปเริ่มต้น" size="small" severity="secondary" [text]="true" (onClick)="resetMenu(t.tab)" />
+              }
+            </div>
+          </figure>
+        }
       </div>
+      @if (menuMsg(); as m) { <p-message [severity]="m.ok ? 'success' : 'error'" [text]="m.text" styleClass="mt" /> }
       <div class="kc-actions"><p-button label="ติดตั้ง Rich menu" icon="pi pi-upload" [loading]="busy() === 'menu'" (onClick)="installMenu()" /></div>
     </section>
 
@@ -318,9 +361,14 @@ type CodexStatus = {
     .notify-row { display: flex; justify-content: space-between; align-items: center; padding: .3rem 0; border-bottom: 1px solid var(--kc-line); }
     .pair { margin-top: .9rem; background: var(--kc-green-soft); border-radius: 12px; padding: .9rem 1rem; }
     .pair-code { font-size: 1.6rem; font-weight: 700; letter-spacing: 2px; color: var(--kc-heading); margin: .3rem 0 .5rem; font-family: ui-monospace, Menlo, monospace; }
-    .menus { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-    .menus figure { margin: 0; } .menus img { width: 100%; border-radius: 10px; border: 1px solid var(--kc-line); display: block; }
-    .menus figcaption { font-size: .8rem; color: var(--kc-muted); margin-top: .3rem; text-align: center; }
+    .menus { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .menus figure { margin: 0; display: grid; gap: .5rem; }
+    .menu-img { position: relative; }
+    .menu-img img { width: 100%; border-radius: 10px; border: 1px solid var(--kc-line); display: block; }
+    .area { position: absolute; border: 2px dashed #f59e0b; background: rgba(245,158,11,.12); border-radius: 6px; display: grid; place-items: center; }
+    .area em { font-style: normal; font-size: .68rem; background: rgba(15,42,27,.85); color: #fff; padding: .05rem .35rem; border-radius: 4px; max-width: 95%; text-align: center; }
+    .menus figcaption { font-size: .82rem; display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
+    .toggle-areas { margin: .4rem 0 .8rem; gap: .5rem; }
     .full { width: 100%; }
     .mt2 { margin-top: 1rem; }
     :host ::ng-deep .mt { margin-top: .75rem; }
@@ -342,10 +390,58 @@ export class AdminSettingsPage implements OnInit {
   pw = { current: '', next: '', confirm: '' };
   readonly pwMsg = signal<{ ok: boolean; text: string } | null>(null);
   readonly fmtDate = fmtDate;
+  readonly menuTabs: { tab: MenuTab; label: string }[] = [
+    { tab: 'coach', label: 'แท็บโค้ช' },
+    { tab: 'admin', label: 'แท็บแอดมิน' },
+  ];
+  readonly menu = signal<MenuStatus | null>(null);
+  readonly menuVersion = signal(Date.now());
+  readonly menuMsg = signal<{ ok: boolean; text: string } | null>(null);
+  showAreas = false;
 
   ngOnInit() {
     void this.loadCodex();
     void this.loadNotify();
+    void this.loadMenu();
+  }
+
+  async loadMenu() {
+    this.menu.set(await this.api.get<MenuStatus>('rich-menu'));
+  }
+
+  async uploadMenu(tab: MenuTab, input: HTMLInputElement) {
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    this.menuMsg.set(null);
+    if (file.size > (this.menu()?.maxBytes ?? 1048576)) {
+      this.menuMsg.set({ ok: false, text: `รูปใหญ่เกิน 1 MB (${(file.size / 1048576).toFixed(2)} MB)` });
+      return;
+    }
+    this.busy.set('up-' + tab);
+    try {
+      this.menu.set(await this.api.upload<MenuStatus>('rich-menu/image/' + tab, file));
+      this.menuVersion.set(Date.now());
+      this.menuMsg.set({ ok: true, text: 'อัปโหลดแล้ว — กด "ติดตั้ง Rich menu" เพื่อส่งขึ้น LINE' });
+    } catch (e) {
+      this.menuMsg.set({ ok: false, text: errorMessage(e) });
+    } finally {
+      this.busy.set(null);
+    }
+  }
+
+  resetMenu(tab: MenuTab) {
+    this.confirm.confirm({
+      header: 'กลับไปใช้รูปเริ่มต้น?',
+      message: 'รูปที่อัปโหลดของแท็บนี้จะถูกลบ (ต้องกดติดตั้งใหม่เพื่อส่งขึ้น LINE)',
+      acceptLabel: 'ใช้รูปเริ่มต้น',
+      rejectLabel: 'ยกเลิก',
+      rejectButtonProps: { severity: 'secondary', outlined: true },
+      accept: async () => {
+        this.menu.set(await this.api.post<MenuStatus>('rich-menu/image/' + tab + '/reset'));
+        this.menuVersion.set(Date.now());
+      },
+    });
   }
 
   private setCodex(c: CodexStatus) {

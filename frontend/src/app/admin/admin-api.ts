@@ -28,6 +28,17 @@ export class AdminApi {
   post<T>(path: string, body: unknown = {}) {
     return this.wrap(this.api.post<T>('/admin/api/' + path, body));
   }
+  /** Raw file upload (Content-Type = the file's type). */
+  upload<T>(path: string, file: File) {
+    return this.wrap(
+      this.api.request<T>('/admin/api/' + path, {
+        method: 'POST',
+        body: file,
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      }),
+    );
+  }
+
   patch<T>(path: string, body: unknown) {
     return this.wrap(this.api.patch<T>('/admin/api/' + path, body));
   }

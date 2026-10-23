@@ -9,6 +9,7 @@ import { AdminAuthService } from './admin-auth.service';
 import { AdminDashboardService } from './admin-dashboard.service';
 import { AdminPagesController } from './admin-pages.controller';
 import { AdminSessionGuard } from './admin-session.guard';
+import { RichMenuImageService } from '../line/rich-menu-image.service';
 
 @Module({
   imports: [PrismaModule, MembershipModule, UsersModule, LineModule],
@@ -18,6 +19,7 @@ import { AdminSessionGuard } from './admin-session.guard';
     AdminDashboardService,
     AdminAiUsageService,
     AdminSessionGuard,
+    RichMenuImageService,
   ],
 })
 export class AdminModule {}

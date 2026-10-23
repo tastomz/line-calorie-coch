@@ -1,10 +1,15 @@
 import { Controller, Get, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { join } from 'path';
 import { sendWebApp } from '../../web/web-app';
+import {
+  RichMenuImageService,
+  isRichMenuTab,
+} from '../line/rich-menu-image.service';
 
 @Controller()
 export class AdminPagesController {
+  constructor(private readonly menuImages: RichMenuImageService) {}
+
   /** Admin pages are rendered by the Angular app; APIs enforce auth. */
   @Get([
     'admin',
@@ -20,13 +25,16 @@ export class AdminPagesController {
     sendWebApp(res);
   }
 
-  /** Rich-menu image previews for the dashboard (fixed allow-list). */
+  /** Rich-menu image previews (uploaded image, else the shipped one). */
   @Get('admin/richmenu/:file')
-  richMenuImage(@Req() req: Request, @Res() res: Response) {
+  async richMenuImage(@Req() req: Request, @Res() res: Response) {
     const name = String(req.params.file ?? '');
-    if (name !== 'coach.jpg' && name !== 'admin.jpg') {
+    const tab = name.replace(/\.(jpg|png)$/, '');
+    if (!isRichMenuTab(tab)) {
       return res.status(404).send('Not found');
     }
-    return res.sendFile(join(process.cwd(), 'public', 'richmenu', name));
+    const img = await this.menuImages.get(tab);
+    res.setHeader('Cache-Control', 'no-cache');
+    return res.type(img.mime).send(img.data);
   }
 }

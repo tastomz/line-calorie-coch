@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { PaymentProvider, Plan, SubscriptionStatus } from '@prisma/client';
+import {
+  PaymentProvider,
+  Plan,
+  Prisma,
+  SubscriptionStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PromoRedeemError } from './membership.errors';
 import { SubscriptionEntitlementService } from './subscription-entitlement.service';
@@ -52,6 +57,26 @@ export class PromoCodeService {
       throw new PromoRedeemError('already_pro', 'pro until period end');
     }
 
+    try {
+      return await this.redeemInTx(userId, code, now);
+    } catch (error) {
+      // Two redeems of the same code by one user at the same moment: the
+      // (promoCodeId, userId) unique index lets only one through.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new PromoRedeemError('already_redeemed', 'concurrent redeem');
+      }
+      throw error;
+    }
+  }
+
+  private redeemInTx(
+    userId: string,
+    code: string,
+    now: Date,
+  ): Promise<PromoRedeemResult> {
     return this.prisma.$transaction(async (tx) => {
       const promo = await tx.promoCode.findUnique({ where: { code } });
       if (!promo) {

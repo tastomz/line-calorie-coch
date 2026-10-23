@@ -1,4 +1,9 @@
-import { PaymentProvider, Plan, SubscriptionStatus } from '@prisma/client';
+import {
+  PaymentProvider,
+  Plan,
+  Prisma,
+  SubscriptionStatus,
+} from '@prisma/client';
 import { PromoRedeemError } from './membership.errors';
 import { PromoCodeService } from './promo-code.service';
 import { SubscriptionEntitlementService } from './subscription-entitlement.service';
@@ -135,6 +140,21 @@ describe('PromoCodeService', () => {
     await expect(service.redeem('user-a', 'WELCOME30')).rejects.toMatchObject({
       code: 'already_redeemed',
     });
+  });
+
+  it('maps a concurrent duplicate redeem (unique index) to already_redeemed', async () => {
+    findUniqueRedemption.mockResolvedValue(null);
+    updateMany.mockResolvedValue({ count: 1 });
+    createRedemption.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
+    await expect(service.redeem('user-a', 'WELCOME30')).rejects.toMatchObject({
+      code: 'already_redeemed',
+    });
+    expect(createSubscription).not.toHaveBeenCalled();
   });
 
   it('rejects when max redemptions reached', async () => {
