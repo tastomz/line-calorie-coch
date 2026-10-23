@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { SubscriptionStatus } from '@prisma/client';
+import { Plan, SubscriptionStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   generateTastomPromoCode,
@@ -96,6 +96,46 @@ export class AdminDashboardService {
         displayName: true,
         createdAt: true,
       },
+    });
+  }
+
+  /**
+   * End a user's Trial now (they drop to FREE, or back to a paid Pro they
+   * still have). Returns how many trial rows were closed; 0 = not on Trial.
+   */
+  async endTrial(userId: string, now = new Date()): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.subscription.updateMany({
+        where: {
+          userId,
+          plan: Plan.PRO,
+          status: SubscriptionStatus.TRIALING,
+        },
+        data: {
+          status: SubscriptionStatus.EXPIRED,
+          trialEndsAt: now,
+          currentPeriodEnd: now,
+        },
+      });
+      if (count === 0) return 0;
+      // Entitlement reads the most recently updated row — make sure a paid
+      // Pro that is still running wins over the trial we just closed.
+      const paid = await tx.subscription.findFirst({
+        where: {
+          userId,
+          plan: Plan.PRO,
+          status: SubscriptionStatus.ACTIVE,
+          OR: [{ currentPeriodEnd: null }, { currentPeriodEnd: { gt: now } }],
+        },
+        orderBy: { currentPeriodEnd: 'desc' },
+      });
+      if (paid) {
+        await tx.subscription.update({
+          where: { id: paid.id },
+          data: { updatedAt: new Date(now.getTime() + 1) },
+        });
+      }
+      return count;
     });
   }
 

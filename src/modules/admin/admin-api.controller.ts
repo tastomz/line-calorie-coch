@@ -316,6 +316,18 @@ export class AdminApiController {
     return detail;
   }
 
+  /** Stop a user's Trial now (→ FREE, or their paid Pro if any). */
+  @Post('users/:id/end-trial')
+  @UseGuards(AdminSessionGuard)
+  async endTrial(@AdminId() adminId: string, @Param('id') id: string) {
+    const closed = await this.dashboard.endTrial(id);
+    if (closed === 0) {
+      throw new BadRequestException('ผู้ใช้นี้ไม่ได้อยู่ใน Trial');
+    }
+    await this.auth.audit(adminId, 'end_trial', 'User', id, { closed });
+    return this.dashboard.getUserDetail(id);
+  }
+
   @Get('promos')
   @UseGuards(AdminSessionGuard)
   promos() {

@@ -90,14 +90,27 @@
         <p style="opacity:.7;margin-top:12px">${d.revenueNote}</p>
         <p>AI by op — text ${d.aiUsageTotals.foodText} · vision ${d.aiUsageTotals.vision} · adj ${d.aiUsageTotals.adjustment} · coach ${d.aiUsageTotals.coach} · classify ${d.aiUsageTotals.classify}</p>`;
     }
+    function renderDetail(d) {
+      const el = document.getElementById('detail');
+      const onTrial = d.entitlement && d.entitlement.status === 'TRIALING';
+      el.innerHTML = (onTrial
+        ? `<div style="margin-bottom:8px">🧪 อยู่ใน <b>Trial</b> ถึง ${fmtTime(d.entitlement.periodEnd)} <button class="btn" id="endTrial" style="background:var(--danger)">จบ Trial ตอนนี้</button> <span id="endTrialMsg"></span></div>`
+        : '') + `<pre style="white-space:pre-wrap;font-size:12px">${escHtml(JSON.stringify(d, null, 2))}</pre>`;
+      const b = document.getElementById('endTrial');
+      if (b) b.onclick = async () => {
+        if (!confirm('จบ Trial ของ ' + (d.user.displayName || d.user.id) + ' ตอนนี้? จะกลับเป็น FREE (หรือ Pro ที่จ่ายเงินไว้)')) return;
+        b.disabled = true;
+        try { renderDetail(await codexApi('users/' + encodeURIComponent(d.user.id) + '/end-trial', {})); }
+        catch (e) { document.getElementById('endTrialMsg').textContent = '❌ ' + e.message; b.disabled = false; }
+      };
+    }
     document.getElementById('search').onclick = async () => {
       const list = await api('/admin/api/users?q=' + encodeURIComponent(document.getElementById('q').value));
       document.getElementById('users').innerHTML = `<table class="table"><tr><th>Name</th><th>LINE</th><th></th></tr>
         ${list.map(u => `<tr><td>${u.displayName||'-'}</td><td>${u.lineUserId||'-'}</td>
         <td><button class="btn" data-id="${u.id}">ดู</button></td></tr>`).join('')}</table>`;
       document.querySelectorAll('[data-id]').forEach(btn => btn.onclick = async () => {
-        const d = await api('/admin/api/users/' + btn.dataset.id);
-        document.getElementById('detail').innerHTML = `<pre style="white-space:pre-wrap;font-size:12px">${JSON.stringify(d, null, 2)}</pre>`;
+        renderDetail(await api('/admin/api/users/' + btn.dataset.id));
       });
     };
     document.getElementById('logout').onclick = async (e) => {
