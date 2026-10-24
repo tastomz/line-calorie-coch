@@ -1,22 +1,13 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { RedirectMetadata } from '@nestjs/common/interfaces/router/redirect-metadata.interface';
+import { REDIRECT_METADATA } from '@nestjs/common/constants';
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
 
 describe('AppController', () => {
-  let appController: AppController;
-
-  beforeEach(async () => {
-    const app: TestingModule = await Test.createTestingModule({
-      controllers: [AppController],
-      providers: [AppService],
-    }).compile();
-
-    appController = app.get<AppController>(AppController);
-  });
-
-  describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
-    });
+  it('redirects the site root to the public membership page', () => {
+    const meta = Reflect.getMetadata(
+      REDIRECT_METADATA,
+      AppController.prototype.root,
+    ) as RedirectMetadata;
+    expect(meta).toEqual({ url: '/membership', statusCode: 302 });
   });
 });
