@@ -84,6 +84,30 @@ export class StripePaymentProvider implements PaymentProviderPort {
     return { customerId: customer.id };
   }
 
+  /**
+   * A stored customer id may belong to the other mode (a sandbox cus_ after
+   * switching to live keys) or have been deleted — then start a new customer
+   * instead of failing the checkout.
+   */
+  private async usableCustomerId(
+    id: string | undefined,
+  ): Promise<string | null> {
+    if (!id) return null;
+    try {
+      const c = await this.requireClient().customers.retrieve(id);
+      return 'deleted' in c && c.deleted ? null : c.id;
+    } catch (error) {
+      const code = (error as { code?: string } | null)?.code;
+      if (code === 'resource_missing') {
+        this.logger.warn(
+          'Stored Stripe customer not found in this mode; creating a new one',
+        );
+        return null;
+      }
+      throw error;
+    }
+  }
+
   async createCheckoutSession(
     request: CheckoutSessionRequest,
   ): Promise<CheckoutSessionResult> {
@@ -97,7 +121,7 @@ export class StripePaymentProvider implements PaymentProviderPort {
       throw new Error('Checkout needs a whole-baht price ≥ 10 and days ≥ 1');
     }
 
-    let customerId = request.providerCustomerId;
+    let customerId = await this.usableCustomerId(request.providerCustomerId);
     if (!customerId) {
       const created = await this.createCustomer(request.userId);
       customerId = created.customerId;
