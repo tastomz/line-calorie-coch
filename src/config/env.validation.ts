@@ -133,7 +133,7 @@ export function validateEnv(raw: NodeJS.ProcessEnv = process.env): AppEnv {
   );
   if (stripeMode === 'live_blocked') {
     throw new EnvValidationError(
-      'STRIPE_SECRET_KEY is a live key (sk_live_) — set STRIPE_LIVE_ENABLED=true to accept real payments',
+      'STRIPE_SECRET_KEY is a live key (sk_live_/rk_live_) — set STRIPE_LIVE_ENABLED=true to accept real payments',
     );
   }
   if (stripeMode === 'live' && !STRIPE_WEBHOOK_SECRET) {

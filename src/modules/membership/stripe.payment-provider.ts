@@ -48,7 +48,7 @@ export class StripePaymentProvider implements PaymentProviderPort {
     }
     if (this.mode === 'invalid') {
       this.logger.warn(
-        'STRIPE_SECRET_KEY is not sk_test_/sk_live_; Stripe client disabled',
+        'STRIPE_SECRET_KEY is not a secret/restricted key (sk_/rk_); Stripe client disabled',
       );
       this.client = null;
       return;

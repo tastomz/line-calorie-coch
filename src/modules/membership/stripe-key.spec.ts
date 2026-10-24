@@ -9,6 +9,12 @@ describe('stripeKeyMode', () => {
     expect(stripeKeyMode('sk_live_abc', 'false')).toBe('live_blocked');
     expect(stripeKeyMode('sk_live_abc', 'TRUE')).toBe('live');
   });
+  it('treats restricted keys (rk_) like secret keys', () => {
+    expect(stripeKeyMode('rk_test_abc', undefined)).toBe('test');
+    expect(stripeKeyMode('rk_live_abc', undefined)).toBe('live_blocked');
+    expect(stripeKeyMode('rk_live_abc', 'true')).toBe('live');
+  });
+
   it('handles empty and odd keys', () => {
     expect(stripeKeyMode('', 'true')).toBe('none');
     expect(stripeKeyMode('pk_live_abc', 'true')).toBe('invalid');
