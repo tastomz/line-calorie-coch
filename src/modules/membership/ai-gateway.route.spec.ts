@@ -31,7 +31,8 @@ describe('AiGatewayService Trial routing', () => {
 
   it('routes Trial (PRO + TRIALING) to Codex', async () => {
     ent.getEntitlement.mockResolvedValue({
-      hasProAccess: true,
+      plan: 'TRIAL',
+      hasProAccess: false,
       status: 'TRIALING',
     });
     await expect(routeInside()).resolves.toBe('codex');
@@ -52,7 +53,8 @@ describe('AiGatewayService Trial routing', () => {
 
   it('routes Trial to Codex even when Codex is signed out (no API fallback)', async () => {
     ent.getEntitlement.mockResolvedValue({
-      hasProAccess: true,
+      plan: 'TRIAL',
+      hasProAccess: false,
       status: 'TRIALING',
     });
     await expect(routeInside()).resolves.toBe('codex');
