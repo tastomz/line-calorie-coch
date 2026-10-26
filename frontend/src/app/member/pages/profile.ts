@@ -55,19 +55,19 @@ const USAGE: { key: string; usage: string; label: string; icon: string }[] = [
     } @else if (m(); as m) {
       <div class="kc-stack">
         <!-- membership -->
-        <section class="hero" [class.pro]="m.hasProAccess">
+        <section class="hero" [class.pro]="m.plan === 'PRO'">
           <div class="hero-top">
             <div>
               <div class="hello">สวัสดี</div>
               <div class="name">{{ m.displayName || 'ผู้ใช้ LINE' }}</div>
             </div>
             <span class="plan-chip">
-              @if (m.hasProAccess) { <i class="pi pi-crown"></i> PRO } @else { FREE }
+              @if (m.plan === 'PRO') { <i class="pi pi-crown"></i> PRO } @else if (m.plan === 'TRIAL') { <i class="pi pi-ticket"></i> TRIAL } @else { FREE }
             </span>
           </div>
           <div class="hero-bottom">
             <span>{{ statusLabel(m.status) }}</span>
-            @if (m.hasProAccess && m.periodEnd) { <span>ใช้งานถึง {{ fmtDateShort(m.periodEnd) }}</span> }
+            @if (m.plan !== 'FREE' && m.periodEnd) { <span>ใช้งานถึง {{ fmtDateShort(m.periodEnd) }}</span> }
           </div>
         </section>
 
@@ -111,7 +111,7 @@ const USAGE: { key: string; usage: string; label: string; icon: string }[] = [
         @if (m.checkoutEnabled) {
           @if (!m.autoRenew) {
             <section class="kc-card">
-              <div class="kc-card-title"><i class="pi pi-crown"></i><h3>{{ m.hasProAccess ? 'ต่ออายุ Pro' : 'สมัครสมาชิก Pro' }}</h3></div>
+              <div class="kc-card-title"><i class="pi pi-crown"></i><h3>{{ m.plan === 'PRO' ? 'ต่ออายุ Pro' : 'สมัครสมาชิก Pro' }}</h3></div>
               @if (m.hasProAccess && m.periodEnd) {
                 <p class="kc-muted kc-small">ตอนนี้ใช้ได้ถึง {{ fmtDateShort(m.periodEnd) }} · ซื้อเพิ่มจะบวกวันต่อจากนี้</p>
               }
@@ -139,7 +139,7 @@ const USAGE: { key: string; usage: string; label: string; icon: string }[] = [
             </div>
             @if (promoMsg(); as pm) { <p-message [severity]="pm.ok ? 'success' : 'error'" [text]="pm.text" styleClass="mt" /> }
           } @else {
-            <p class="kc-muted">คุณเป็น PRO แล้ว @if (m.periodEnd) { · ถึง {{ fmtDateShort(m.periodEnd) }} }</p>
+            <p class="kc-muted">คุณมีสิทธิ์ {{ m.plan === 'TRIAL' ? 'Trial' : 'PRO' }} อยู่แล้ว @if (m.periodEnd) { · ถึง {{ fmtDateShort(m.periodEnd) }} }</p>
           }
         </section>
 
@@ -256,7 +256,7 @@ export class ProfilePage implements OnInit {
       const r = await this.api.post<{ trialDays: number; expiresAt: string }>('/api/membership/promo/redeem', {
         code: this.promo,
       });
-      this.promoMsg.set({ ok: true, text: `สำเร็จ! Pro ฟรี ${r.trialDays} วัน · หมดอายุ ${fmtDate(r.expiresAt)}` });
+      this.promoMsg.set({ ok: true, text: `สำเร็จ! Trial ${r.trialDays} วัน · หมดอายุ ${fmtDate(r.expiresAt)}` });
       this.promo = '';
       setTimeout(() => void this.refresh(), 800);
     } catch (e) {
