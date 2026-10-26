@@ -112,7 +112,7 @@ const USAGE: { key: string; usage: string; label: string; icon: string }[] = [
           @if (!m.autoRenew) {
             <section class="kc-card">
               <div class="kc-card-title"><i class="pi pi-crown"></i><h3>{{ m.plan === 'PRO' ? 'ต่ออายุ Pro' : 'สมัครสมาชิก Pro' }}</h3></div>
-              @if (m.hasProAccess && m.periodEnd) {
+              @if (m.plan !== 'FREE' && m.periodEnd) {
                 <p class="kc-muted kc-small">ตอนนี้ใช้ได้ถึง {{ fmtDateShort(m.periodEnd) }} · ซื้อเพิ่มจะบวกวันต่อจากนี้</p>
               }
               <kc-plan-picker />
@@ -132,7 +132,7 @@ const USAGE: { key: string; usage: string; label: string; icon: string }[] = [
         <!-- promo -->
         <section class="kc-card">
           <div class="kc-card-title"><i class="pi pi-gift"></i><h3>ใช้โค้ดโปรโมชั่น</h3></div>
-          @if (!m.hasProAccess) {
+          @if (m.plan === 'FREE') {
             <div class="kc-row">
               <input pInputText class="grow" [(ngModel)]="promo" placeholder="TASTOM-XXXXXX" autocomplete="off" autocapitalize="characters" />
               <p-button label="ใช้โค้ด" [loading]="redeeming()" [disabled]="!promo.trim()" (onClick)="redeem()" />
