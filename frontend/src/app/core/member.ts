@@ -3,7 +3,7 @@ import { Api, ApiError } from './api';
 
 export type Membership = {
   displayName: string | null;
-  plan: 'FREE' | 'PRO';
+  plan: 'FREE' | 'TRIAL' | 'PRO';
   status: string;
   hasProAccess: boolean;
   periodEnd: string | null;
