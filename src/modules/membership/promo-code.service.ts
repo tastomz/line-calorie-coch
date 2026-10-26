@@ -44,7 +44,7 @@ export class PromoCodeService {
     }
 
     if (
-      entitlement.hasProAccess &&
+      entitlement.plan === 'TRIAL' &&
       entitlement.status === SubscriptionStatus.TRIALING
     ) {
       throw new PromoRedeemError('trial_active', 'trial already active');
