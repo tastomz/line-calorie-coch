@@ -171,8 +171,8 @@ export class FoodAnalysisService {
     const imageUrl = `data:${mime};base64,${bytes.toString('base64')}`;
 
     const kind = await this.checkPhotoKind(imageUrl);
-    if (kind === 'other') {
-      return { kind: 'other' };
+    if (kind === 'other' || kind === 'menu' || kind === 'uncertain') {
+      return { kind };
     }
     if (kind === 'workout') {
       const workout = await this.requestStructured(
@@ -232,7 +232,7 @@ export class FoodAnalysisService {
     return { kind: 'food', analysis };
   }
 
-  /** Cheap image-type check. Any failure falls back to the food path. */
+  /** Cheap image-type check. Never estimate calories if classification fails. */
   private async checkPhotoKind(imageUrl: string): Promise<PhotoKind> {
     try {
       return await this.requestStructured(
@@ -256,9 +256,9 @@ export class FoodAnalysisService {
       );
     } catch (error) {
       this.logger.warn(
-        `Photo kind check failed, treating as food: ${error instanceof Error ? error.message : 'unknown'}`,
+        `Photo kind check failed, asking for clarification: ${error instanceof Error ? error.message : 'unknown'}`,
       );
-      return 'food';
+      return 'uncertain';
     }
   }
 
