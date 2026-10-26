@@ -1790,6 +1790,14 @@ export class FoodLoggingService {
           );
           return;
         }
+        if (photo.kind === 'menu') {
+          await this.lineService.replyText(replyToken, '📖 นี่เป็นรูปเมนูอาหารครับ อยากทานเมนูไหน? พิมพ์ชื่อเมนูและปริมาณที่กินมาได้เลย แล้วผมจะช่วยประเมินแคลอรีให้ครับ');
+          return;
+        }
+        if (photo.kind === 'uncertain') {
+          await this.lineService.replyText(replyToken, 'ยังไม่แน่ใจว่ารูปนี้เป็นอาหารที่ทานจริงหรือเมนูร้านอาหารครับ ช่วยบอกหน่อยว่าต้องการบันทึกอาหารจานไหน');
+          return;
+        }
         if (photo.kind === 'other') {
           await this.lineService.replyText(replyToken, NOT_FOOD_PHOTO_TEXT);
           return;
