@@ -74,7 +74,10 @@ Plus optional env operator login: `ADMIN_USERNAME` + `ADMIN_PASSWORD_HASH`.
 
 ## Plans & quotas
 
-FREE ฿0 · PRO **฿50/mo** · limits in `plan.config.ts`  
+An account starts FREE. Only a successful promo-code redemption creates an active TRIAL; no automatic signup trial. Active TRIAL has its own daily AI quotas (10 food text, 5 vision, 8 adjustments, 10 coach, 10 classify, 2 body scans, 5 meal plans, 2 weekly reviews). When the code's trial expires, entitlement returns to FREE. Paid purchases grant PRO, not TRIAL. Existing TRIALING rows are resolved as TRIAL without a database migration.
+
+
+FREE ฿0 · TRIAL (redeem-code only, configurable days) · PRO **฿50/mo** · limits in `plan.config.ts`  
 Promo Free PRO codes (`TASTOM-XXXXXX`): the admin types the **number of days (whole number 1–365)** and **how many people can redeem it (1–1,000)** in `/admin/promos`. Defaults when omitted: 30 days, 1 person. The server validates both values; anything else is rejected with 400.
 
 ## Local QA tools (`/dev/*`)
