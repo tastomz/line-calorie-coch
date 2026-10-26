@@ -319,7 +319,7 @@ export class AdminAiUsageService {
     });
 
     const buckets: Record<
-      'FREE' | 'PRO',
+      'FREE' | 'TRIAL' | 'PRO',
       {
         users: number;
         requests: number;
@@ -331,6 +331,15 @@ export class AdminAiUsageService {
       }
     > = {
       FREE: {
+        users: 0,
+        requests: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        estimatedCostThb: 0,
+        costFullyKnown: true,
+      },
+      TRIAL: {
         users: 0,
         requests: 0,
         inputTokens: 0,
@@ -388,6 +397,12 @@ export class AdminAiUsageService {
         ...buckets.FREE,
         estimatedCostThb: buckets.FREE.costFullyKnown
           ? this.roundMoney(buckets.FREE.estimatedCostThb)
+          : null,
+      },
+      TRIAL: {
+        ...buckets.TRIAL,
+        estimatedCostThb: buckets.TRIAL.costFullyKnown
+          ? this.roundMoney(buckets.TRIAL.estimatedCostThb)
           : null,
       },
       PRO: {
