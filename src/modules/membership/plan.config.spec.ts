@@ -1,6 +1,7 @@
 import {
   FREE_AI_LIMITS,
   PRO_AI_LIMITS,
+  TRIAL_AI_LIMITS,
   PRO_MONTHLY_PRICE_THB,
   TRIAL_DEFAULT_DAYS,
   limitFor,
@@ -34,6 +35,13 @@ describe('plan.config', () => {
     expect(PRO_AI_LIMITS.BODY_SCAN).toBe(5);
     expect(PRO_AI_LIMITS.MEAL_PLAN).toBe(15);
     expect(PRO_AI_LIMITS.WEEKLY_REVIEW).toBe(4);
+  });
+
+  it('assigns a distinct trial quota between free and pro', () => {
+    expect(TRIAL_AI_LIMITS.FOOD_TEXT).toBe(10);
+    expect(TRIAL_AI_LIMITS.FOOD_VISION).toBe(5);
+    expect(TRIAL_AI_LIMITS.COACH).toBe(10);
+    expect(limitsForPlan('TRIAL')).toEqual(TRIAL_AI_LIMITS);
   });
 
   it('resolves limits from plan id', () => {
