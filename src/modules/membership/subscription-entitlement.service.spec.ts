@@ -12,7 +12,7 @@ describe('SubscriptionEntitlementService.resolveEntitlement', () => {
     expect(ent.status).toBe('NONE');
   });
 
-  it('TRIALING with future trialEndsAt has PRO access', () => {
+  it('TRIALING with future trialEndsAt receives distinct TRIAL access', () => {
     const ent = service.resolveEntitlement(
       {
         id: 's1',
@@ -33,8 +33,8 @@ describe('SubscriptionEntitlementService.resolveEntitlement', () => {
       },
       now,
     );
-    expect(ent.hasProAccess).toBe(true);
-    expect(ent.plan).toBe('PRO');
+    expect(ent.hasProAccess).toBe(false);
+    expect(ent.plan).toBe('TRIAL');
     expect(ent.status).toBe(SubscriptionStatus.TRIALING);
   });
 
