@@ -3,7 +3,7 @@ import { AiOperation } from './plan.config';
 export class AiQuotaExceededError extends Error {
   constructor(
     readonly operation: AiOperation,
-    readonly plan: 'FREE' | 'PRO',
+    readonly plan: 'FREE' | 'TRIAL' | 'PRO',
     readonly used: number,
     readonly limit: number,
   ) {
