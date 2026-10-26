@@ -28,6 +28,7 @@ import { MockPaymentProvider } from './mock.payment-provider';
 import {
   FREE_AI_LIMITS,
   PRO_AI_LIMITS,
+  TRIAL_AI_LIMITS,
   PRO_MONTHLY_PRICE_THB,
   limitsForPlan,
 } from './plan.config';
@@ -249,6 +250,7 @@ export class MembershipApiController {
       priceThbMonthly: PRO_MONTHLY_PRICE_THB,
       freeLimits: FREE_AI_LIMITS,
       proLimits: PRO_AI_LIMITS,
+      trialLimits: TRIAL_AI_LIMITS,
       paymentConfigured: this.billing.paymentConfigured(),
       paymentMode: mode,
       /** Explicit opt-in — false by default so users cannot start payment accidentally. */
