@@ -129,19 +129,47 @@ const USAGE: { key: string; usage: string; label: string; icon: string }[] = [
           }
         }
 
-        <!-- promo -->
-        <section class="kc-card">
-          <div class="kc-card-title"><i class="pi pi-gift"></i><h3>ใช้โค้ดโปรโมชั่น</h3></div>
-          @if (m.plan === 'FREE') {
-            <div class="kc-row">
-              <input pInputText class="grow" [(ngModel)]="promo" placeholder="TASTOM-XXXXXX" autocomplete="off" autocapitalize="characters" />
-              <p-button label="ใช้โค้ด" [loading]="redeeming()" [disabled]="!promo.trim()" (onClick)="redeem()" />
-            </div>
-            @if (promoMsg(); as pm) { <p-message [severity]="pm.ok ? 'success' : 'error'" [text]="pm.text" styleClass="mt" /> }
-          } @else {
-            <p class="kc-muted">คุณมีสิทธิ์ {{ m.plan === 'TRIAL' ? 'Trial' : 'PRO' }} อยู่แล้ว @if (m.periodEnd) { · ถึง {{ fmtDateShort(m.periodEnd) }} }</p>
-          }
-        </section>
+        <!-- promo entry: compact card opens a focused redeem screen -->
+        @if (m.plan === 'FREE') {
+          <button class="promo-entry" type="button" (click)="openPromo()">
+            <span class="promo-entry-icon"><i class="pi pi-gift"></i></span>
+            <span class="promo-entry-copy"><b>ใช้โค้ดโปรโมชั่น</b><small>กรอกโค้ดส่วนลดหรือสิทธิพิเศษ เพื่อรับโปรโมชั่นของคุณ</small></span>
+            <i class="pi pi-chevron-right promo-entry-arrow"></i>
+          </button>
+        }
+
+        @if (promoOpen()) {
+          <div class="promo-overlay" role="presentation" (click)="closePromo()">
+            <section class="promo-dialog" role="dialog" aria-modal="true" aria-labelledby="promo-title" (click)="$event.stopPropagation()">
+              <button class="promo-close" type="button" aria-label="ปิด" (click)="closePromo()" [disabled]="redeeming()"><i class="pi pi-times"></i></button>
+              @if (promoSuccess(); as success) {
+                <div class="promo-success-icon"><i class="pi pi-check"></i></div>
+                <h2 id="promo-title">ใช้โค้ดสำเร็จ!</h2>
+                <p>คุณได้รับสิทธิ์ Trial {{ success.trialDays }} วันเรียบร้อยแล้ว</p>
+                <p class="promo-hint">ใช้งานได้ถึง {{ fmtDate(success.expiresAt) }}</p>
+                <p-button label="กลับไปหน้าโปรไฟล์" styleClass="promo-submit" (onClick)="closePromo()" />
+              } @else {
+                <div class="promo-icon"><i class="pi pi-gift"></i></div>
+                <h2 id="promo-title">กรอกโค้ดโปรโมชั่น</h2>
+                <p>กรอกโค้ดส่วนลดหรือสิทธิพิเศษ<br>เพื่อรับโปรโมชั่นของคุณ</p>
+                <form (submit)="$event.preventDefault(); redeem()">
+                  <label class="promo-label" for="promo-code">โค้ดโปรโมชั่น</label>
+                  <div class="promo-input-wrap">
+                    <i class="pi pi-tag"></i>
+                    <input id="promo-code" pInputText name="promo" [(ngModel)]="promo" placeholder="กรอกโค้ดที่นี่" autocomplete="off" autocapitalize="characters" [disabled]="redeeming()" />
+                  </div>
+                  @if (promoMsg(); as pm) {
+                    <p-message severity="error" [text]="pm.text" styleClass="mt" />
+                  }
+                  <button class="promo-submit" type="submit" [disabled]="redeeming() || !promo.trim()">
+                    @if (redeeming()) { กำลังตรวจสอบโค้ด... } @else { ใช้งาน }
+                  </button>
+                </form>
+                <p class="promo-hint">ใช้โค้ดได้เฉพาะสมาชิก Free ที่ยังไม่มี Trial หรือ Pro</p>
+              }
+            </section>
+          </div>
+        }
 
         <!-- reset goal -->
         <section class="kc-card danger-zone">
@@ -164,6 +192,27 @@ const USAGE: { key: string; usage: string; label: string; icon: string }[] = [
     }
   `,
   styles: `
+    .promo-entry { width:100%; display:flex; align-items:center; gap:.9rem; text-align:left; padding:1.05rem; border:1px solid var(--kc-line); border-radius:16px; background:#fff; cursor:pointer; color:var(--kc-heading); font:inherit; }
+    .promo-entry-icon { width:46px; height:46px; background:#e8f6ec; color:#138348; border-radius:14px; display:grid; place-items:center; font-size:1.5rem; flex-shrink:0; }
+    .promo-entry-copy { flex:1; display:flex; flex-direction:column; gap:.25rem; min-width:0; }
+    .promo-entry-copy b { font-size:1.04rem; }
+    .promo-entry-copy small { color:var(--kc-muted); font-size:.82rem; line-height:1.4; }
+    .promo-entry-arrow { color:var(--kc-muted); }
+    .promo-overlay { position:fixed; inset:0; z-index:2000; background:rgba(13,35,26,.55); display:flex; align-items:center; justify-content:center; padding:1rem; }
+    .promo-dialog { position:relative; width:min(100%,430px); max-height:90dvh; overflow-y:auto; border-radius:24px; background:#fff; padding:2.5rem 1.4rem 1.6rem; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,.24); }
+    .promo-close { position:absolute; right:1rem; top:1rem; border:0; background:transparent; font-size:1.15rem; padding:.4rem; cursor:pointer; color:#384a40; }
+    .promo-icon,.promo-success-icon { width:74px; height:74px; margin:0 auto 1.15rem; display:grid; place-items:center; border-radius:50%; background:#e3f6e9; color:#11864c; font-size:2rem; }
+    .promo-success-icon { width:88px; height:88px; font-size:2.4rem; }
+    .promo-dialog h2 { margin:0 0 .55rem; color:#124d30; font-size:1.42rem; }
+    .promo-dialog p { margin:0 auto 1.4rem; color:#59695f; line-height:1.65; font-size:.95rem; }
+    .promo-dialog form { text-align:left; }
+    .promo-label { display:block; margin-bottom:.5rem; font-weight:650; font-size:.9rem; color:#254b36; }
+    .promo-input-wrap { display:flex; align-items:center; gap:.7rem; border:1px solid #bed8c8; padding:0 .9rem; border-radius:14px; height:54px; color:#2d8959; }
+    .promo-input-wrap:focus-within { border-color:#07874a; box-shadow:0 0 0 3px #e1f7e9; }
+    .promo-input-wrap input { border:0; box-shadow:none; outline:none; width:100%; min-width:0; font:inherit; }
+    .promo-submit { margin-top:1rem; width:100%; min-height:52px; border:0; border-radius:13px; background:#07884d; color:#fff; font:inherit; font-weight:700; cursor:pointer; }
+    .promo-submit:disabled { opacity:.55; cursor:not-allowed; }
+    .promo-dialog .promo-hint { margin:1rem auto 0; font-size:.82rem; color:#7c8a81; }
     .hero { border-radius: 20px; padding: 1.1rem 1.2rem 1rem; color: #fff;
             background: linear-gradient(135deg, #2f8453 0%, #14442a 100%); box-shadow: 0 8px 24px rgba(20,68,42,.25); }
     .hero.pro { background: linear-gradient(135deg, #195534 0%, #082014 100%); }
@@ -207,6 +256,19 @@ export class ProfilePage implements OnInit {
   });
 
   promo = '';
+  readonly promoOpen = signal(false);
+  readonly promoSuccess = signal<{ trialDays: number; expiresAt: string } | null>(null);
+  openPromo() {
+    this.promo = '';
+    this.promoMsg.set(null);
+    this.promoSuccess.set(null);
+    this.promoOpen.set(true);
+  }
+  closePromo() {
+    if (this.redeeming()) return;
+    this.promoOpen.set(false);
+    this.promoMsg.set(null);
+  }
   readonly redeeming = signal(false);
   readonly promoMsg = signal<{ ok: boolean; text: string } | null>(null);
   readonly resetOpen = signal(false);
@@ -256,9 +318,9 @@ export class ProfilePage implements OnInit {
       const r = await this.api.post<{ trialDays: number; expiresAt: string }>('/api/membership/promo/redeem', {
         code: this.promo,
       });
-      this.promoMsg.set({ ok: true, text: `สำเร็จ! Trial ${r.trialDays} วัน · หมดอายุ ${fmtDate(r.expiresAt)}` });
+      this.promoSuccess.set(r);
       this.promo = '';
-      setTimeout(() => void this.refresh(), 800);
+      await this.refresh();
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
         void this.load();
