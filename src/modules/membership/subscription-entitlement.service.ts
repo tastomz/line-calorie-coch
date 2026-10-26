@@ -12,6 +12,7 @@ import {
   AiOperation,
   FREE_PLAN,
   PRO_PLAN,
+  TRIAL_PLAN,
   limitFor,
   limitsForPlan,
   PlanId,
@@ -78,9 +79,9 @@ export class SubscriptionEntitlementService {
     if (sub.plan === Plan.PRO && sub.status === SubscriptionStatus.TRIALING) {
       if (sub.trialEndsAt && sub.trialEndsAt.getTime() > now.getTime()) {
         return {
-          plan: 'PRO',
+          plan: 'TRIAL',
           status: SubscriptionStatus.TRIALING,
-          hasProAccess: true,
+          hasProAccess: false,
           subscription: sub,
           periodEnd: sub.trialEndsAt,
         };
@@ -261,7 +262,7 @@ export class SubscriptionEntitlementService {
   }
 
   planLabel(plan: PlanId): string {
-    return plan === 'PRO' ? PRO_PLAN.labelTh : FREE_PLAN.labelTh;
+    return plan === 'PRO' ? PRO_PLAN.labelTh : plan === 'TRIAL' ? TRIAL_PLAN.labelTh : FREE_PLAN.labelTh;
   }
 
   limits(plan: PlanId) {
