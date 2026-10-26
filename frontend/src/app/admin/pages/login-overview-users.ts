@@ -261,7 +261,7 @@ const USAGE_LABELS: Record<string, string> = {
       @if (detail(); as d) {
         <div class="kc-stack">
           <div class="ent">
-            <p-tag [value]="d.entitlement.hasProAccess ? 'PRO' : 'FREE'" [severity]="d.entitlement.hasProAccess ? 'success' : 'secondary'" />
+            <p-tag [value]="d.entitlement.plan" [severity]="d.entitlement.plan === 'PRO' ? 'success' : d.entitlement.plan === 'TRIAL' ? 'info' : 'secondary'" />
             <span>{{ statusLabel(d.entitlement.status) }}</span>
             @if (d.entitlement.periodEnd) { <span class="kc-muted">ถึง {{ fmtDate(d.entitlement.periodEnd) }}</span> }
           </div>
