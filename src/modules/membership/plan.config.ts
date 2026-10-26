@@ -7,7 +7,7 @@ export const PRO_MONTHLY_PRICE_THB = 50;
 
 export const TRIAL_DEFAULT_DAYS = 7;
 
-export type PlanId = 'FREE' | 'PRO';
+export type PlanId = 'FREE' | 'TRIAL' | 'PRO';
 
 export type AiOperation =
   | 'FOOD_TEXT'
@@ -41,6 +41,17 @@ export const FREE_AI_LIMITS: AiDailyLimits = {
   WEEKLY_REVIEW: 1,
 };
 
+export const TRIAL_AI_LIMITS: AiDailyLimits = {
+  FOOD_TEXT: 10,
+  FOOD_VISION: 5,
+  COMPOSITION_ADJUSTMENT: 8,
+  COACH: 10,
+  CLASSIFY: 10,
+  BODY_SCAN: 2,
+  MEAL_PLAN: 5,
+  WEEKLY_REVIEW: 2,
+};
+
 export const PRO_AI_LIMITS: AiDailyLimits = {
   FOOD_TEXT: 30,
   FOOD_VISION: 15,
@@ -60,6 +71,14 @@ export const FREE_PLAN = {
   marketingBlurbTh: 'Core tracking ใช้งานได้ฟรี',
 };
 
+export const TRIAL_PLAN = {
+  id: 'TRIAL' as const,
+  labelTh: 'Trial',
+  priceThbMonthly: 0,
+  aiLimits: TRIAL_AI_LIMITS,
+  marketingBlurbTh: 'เฉพาะผู้ใช้โค้ดทดลองที่ยังไม่หมดอายุ',
+};
+
 export const PRO_PLAN = {
   id: 'PRO' as const,
   labelTh: 'Pro',
@@ -70,7 +89,7 @@ export const PRO_PLAN = {
 };
 
 export function limitsForPlan(plan: PlanId): AiDailyLimits {
-  return plan === 'PRO' ? PRO_AI_LIMITS : FREE_AI_LIMITS;
+  return plan === 'PRO' ? PRO_AI_LIMITS : plan === 'TRIAL' ? TRIAL_AI_LIMITS : FREE_AI_LIMITS;
 }
 
 export function limitFor(plan: PlanId, operation: AiOperation): number {
