@@ -188,6 +188,8 @@ export function parseFoodAnalysisJson(content: string): FoodAnalysisResult {
 export type PhotoAnalysisResult =
   | { kind: 'food'; analysis: FoodAnalysisResult }
   | { kind: 'workout'; workout: WorkoutScreenshot }
+  | { kind: 'menu' }
+  | { kind: 'uncertain' }
   | { kind: 'other' };
 
 function finiteOrNull(value: unknown, min: number, max: number): number | null {
@@ -221,13 +223,15 @@ function parseWorkout(raw: unknown): WorkoutScreenshot | null {
   };
 }
 
-/** Photo-kind answer; anything unexpected counts as food (the safe default). */
+/** Only an explicit AI food classification may enter calorie estimation. */
 export function parsePhotoKindJson(content: string): PhotoKind {
   try {
     const kind = (JSON.parse(content) as { kind?: unknown }).kind;
-    return kind === 'workout' || kind === 'other' ? kind : 'food';
+    return kind === 'food' || kind === 'menu' || kind === 'workout' || kind === 'other' || kind === 'uncertain'
+      ? kind
+      : 'uncertain';
   } catch {
-    return 'food';
+    return 'uncertain';
   }
 }
 
