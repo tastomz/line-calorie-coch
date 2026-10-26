@@ -1,4 +1,4 @@
-import { AiOperation, FREE_AI_LIMITS, PRO_AI_LIMITS } from './plan.config';
+import { AiOperation, limitsForPlan } from './plan.config';
 import {
   DailyUsageSnapshot,
   EffectiveEntitlement,
@@ -64,7 +64,7 @@ export function buildMembershipStatusMessage(
   usage: DailyUsageSnapshot,
   opts?: { upgradeUrl?: string | null; paymentConfigured?: boolean },
 ): string {
-  const limits = entitlement.plan === 'PRO' ? PRO_AI_LIMITS : FREE_AI_LIMITS;
+  const limits = limitsForPlan(entitlement.plan);
 
   const usageBlock = `AI วันนี้:
 🍚 อาหารข้อความ ${opUsed(usage, 'FOOD_TEXT')}/${limits.FOOD_TEXT}
@@ -74,6 +74,10 @@ export function buildMembershipStatusMessage(
 🔧 แก้ไขอาหาร ${opUsed(usage, 'COMPOSITION_ADJUSTMENT')}/${limits.COMPOSITION_ADJUSTMENT}
 🤖 AI Coach ${opUsed(usage, 'COACH')}/${limits.COACH}
 📈 Weekly ${opUsed(usage, 'WEEKLY_REVIEW')}/${limits.WEEKLY_REVIEW}`;
+
+  if (entitlement.plan === 'TRIAL') {
+    return `🎟️ Tastom Trial\n\nสถานะ: ทดลองใช้ผ่านโค้ด\n\n${usageBlock}\n\nหมดอายุ: ${formatDateTh(entitlement.periodEnd)}\n\nเมื่อหมดอายุจะกลับเป็น Free`;
+  }
 
   if (entitlement.hasProAccess) {
     const statusLabel =
@@ -153,7 +157,7 @@ export function buildPromoSuccessMessage(params: {
 }): string {
   return `🎉 ใช้โค้ดสำเร็จ!
 
-คุณได้รับ Pro ฟรี ${params.trialDays} วัน
+คุณได้รับ Trial ${params.trialDays} วัน
 
 หมดอายุ: ${formatDateTh(params.expiresAt)}`;
 }
@@ -176,7 +180,7 @@ export function buildPromoErrorMessage(
     case 'already_pro':
       return 'คุณมี Pro อยู่แล้วครับ\nไม่สามารถใช้โค้ดนี้เพื่อแทนที่สมาชิกปัจจุบันได้';
     case 'trial_active':
-      return 'คุณกำลังใช้ Pro ทดลองอยู่แล้วครับ\nยังไม่สามารถซ้อนโค้ดเพิ่มได้';
+      return 'คุณกำลังใช้ Trial อยู่แล้วครับ\nยังไม่สามารถซ้อนโค้ดเพิ่มได้';
     case 'expired':
     case 'inactive':
     case 'invalid':
