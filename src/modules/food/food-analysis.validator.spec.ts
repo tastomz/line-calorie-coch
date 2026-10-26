@@ -127,10 +127,12 @@ describe('food-analysis.validator', () => {
   });
 
   describe('photo kind and workout parsers', () => {
-    it('defaults to food for anything unexpected', () => {
+    it('accepts explicit food or menu and does not default to food', () => {
       expect(parsePhotoKindJson('{"kind":"food"}')).toBe('food');
-      expect(parsePhotoKindJson('{"kind":"banana"}')).toBe('food');
-      expect(parsePhotoKindJson('not json')).toBe('food');
+      expect(parsePhotoKindJson('{"kind":"menu"}')).toBe('menu');
+      expect(parsePhotoKindJson('{"kind":"uncertain"}')).toBe('uncertain');
+      expect(parsePhotoKindJson('{"kind":"banana"}')).toBe('uncertain');
+      expect(parsePhotoKindJson('not json')).toBe('uncertain');
     });
 
     it('recognises workout and other', () => {
