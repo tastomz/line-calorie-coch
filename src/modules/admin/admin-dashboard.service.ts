@@ -46,9 +46,10 @@ export class AdminDashboardService {
       if (seen.has(sub.userId)) continue;
       seen.add(sub.userId);
       const ent = this.entitlement.resolveEntitlement(sub);
-      if (ent.hasProAccess) {
+      if (ent.plan === 'TRIAL') {
+        trial += 1;
+      } else if (ent.plan === 'PRO') {
         pro += 1;
-        if (ent.status === SubscriptionStatus.TRIALING) trial += 1;
         if (ent.status === SubscriptionStatus.ACTIVE) active += 1;
         if (ent.status === SubscriptionStatus.CANCELED) canceled += 1;
       } else {
