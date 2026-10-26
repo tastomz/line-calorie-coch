@@ -155,7 +155,7 @@ export class AdminUsagePage implements OnInit {
   readonly model = signal<(CostRow & Record<string, unknown>)[]>([]);
   readonly daily = signal<(CostRow & Record<string, unknown>)[]>([]);
   readonly users = signal<Record<string, unknown>[]>([]);
-  readonly membership = signal<{ note?: string; FREE?: MemberRow; PRO?: MemberRow } | null>(null);
+  readonly membership = signal<{ note?: string; FREE?: MemberRow; TRIAL?: MemberRow; PRO?: MemberRow } | null>(null);
   readonly memberRows = signal<(MemberRow & { label: string })[]>([]);
   readonly fmtNum = fmtNum;
 
@@ -181,7 +181,7 @@ export class AdminUsagePage implements OnInit {
       this.api.get<Summary>('ai-usage/summary' + q),
       this.api.get<Rows<CostRow & Record<string, unknown>>>('ai-usage/by-feature' + q),
       this.api.get<Rows<CostRow & Record<string, unknown>>>('ai-usage/by-model' + q),
-      this.api.get<{ note?: string; FREE?: MemberRow; PRO?: MemberRow }>('ai-usage/by-membership' + q),
+      this.api.get<{ note?: string; FREE?: MemberRow; TRIAL?: MemberRow; PRO?: MemberRow }>('ai-usage/by-membership' + q),
       this.api.get<Rows<CostRow & Record<string, unknown>>>('ai-usage/by-day' + q),
       this.api.get<Rows<Record<string, unknown>>>('ai-usage/by-user' + q + '&limit=30'),
     ]);
@@ -192,6 +192,7 @@ export class AdminUsagePage implements OnInit {
     const empty: MemberRow = { users: 0, requests: 0, totalTokens: 0, estimatedCostThb: null };
     this.memberRows.set([
       { label: 'FREE', ...(mem.FREE ?? empty) },
+      { label: 'TRIAL', ...(mem.TRIAL ?? empty) },
       { label: 'PRO', ...(mem.PRO ?? empty) },
     ]);
     this.daily.set(d.rows ?? []);
