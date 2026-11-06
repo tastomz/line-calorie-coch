@@ -2,7 +2,8 @@
  * Offline, pure evaluation metrics for an explicitly labeled food-photo dataset.
  * This module does not call AI, store images or invent nutrition ground truth.
  */
-export type GoldenPhotoKind = 'food' | 'menu' | 'workout' | 'other' | 'uncertain';
+export type GoldenPhotoKind =
+  'food' | 'menu' | 'workout' | 'other' | 'uncertain';
 
 export type NutritionMeasure =
   'edibleGrams' | 'calories' | 'proteinG' | 'carbsG' | 'fatG';
