@@ -86,10 +86,11 @@ describe('MembershipBillingService PromptPay pass', () => {
     const end = data.currentPeriodEnd.getTime();
     expect(end).toBeGreaterThanOrEqual(before + 30 * DAY);
     expect(end).toBeLessThan(before + 30 * DAY + 5000);
-    expect(tx.paymentEvent.create.mock.calls.map((call) => call[0].data.providerEventId)).toEqual([
-      'evt_1',
-      'pass:cs_test_123456789',
-    ]);
+    expect(
+      tx.paymentEvent.create.mock.calls.map(
+        (call) => call[0].data.providerEventId,
+      ),
+    ).toEqual(['evt_1', 'pass:cs_test_123456789']);
   });
 
   it('stacks on top of remaining PRO (renew early)', async () => {
