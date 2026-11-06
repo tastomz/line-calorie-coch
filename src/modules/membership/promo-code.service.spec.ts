@@ -188,9 +188,9 @@ describe('PromoCodeService', () => {
 
   it('does not stack over active trial', async () => {
     entitlement.resolveEntitlement.mockReturnValue({
-      plan: 'PRO',
+      plan: 'TRIAL',
       status: SubscriptionStatus.TRIALING,
-      hasProAccess: true,
+      hasProAccess: false,
       subscription: {},
       periodEnd: new Date(),
     });
