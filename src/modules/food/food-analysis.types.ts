@@ -171,7 +171,10 @@ export const PHOTO_KIND_JSON_SCHEMA = {
     additionalProperties: false,
     required: ['kind'],
     properties: {
-      kind: { type: 'string', enum: ['food', 'menu', 'workout', 'other', 'uncertain'] },
+      kind: {
+        type: 'string',
+        enum: ['food', 'menu', 'workout', 'other', 'uncertain'],
+      },
     },
   },
 } as const;
