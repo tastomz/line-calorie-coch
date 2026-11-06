@@ -229,8 +229,10 @@ export class LineWebhookService implements OnModuleInit, OnModuleDestroy {
       }
 
       // Do not race the underlying mutation with a Promise timeout wrapper.
-      await withLineEventContext(row.lineEventId, () =>
-        this.dispatchEvent(event),
+      await withLineEventContext(
+        row.lineEventId,
+        () => this.dispatchEvent(event),
+        event.source?.userId,
       );
       const result =
         event.type === 'follow' ||
