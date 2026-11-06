@@ -166,8 +166,19 @@ describe('MembershipBillingService PromptPay pass', () => {
         },
       },
     ],
-  ])('does not grant for %s', async (_label, overrides) => {
-    await event(paidSession(overrides));
+  ])('does not grant for %s', async (label, overrides) => {
+    const processing = event(paidSession(overrides));
+    if (
+      label === 'wrong amount' ||
+      label === 'wrong currency' ||
+      label === 'amount differs from the priced metadata'
+    ) {
+      await expect(processing).rejects.toThrow(
+        'Paid PromptPay pass amount or plan mismatch',
+      );
+    } else {
+      await expect(processing).resolves.toBe('processed');
+    }
     expect(tx.subscription.create).not.toHaveBeenCalled();
   });
 
