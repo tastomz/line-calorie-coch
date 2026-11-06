@@ -1,4 +1,4 @@
-# Stabilization audit — review-only findings and release gates
+# Stabilization audit — implementation findings and release gates
 
 Base: `main` at `66163bf963b19d8496cee209c78c6fa844c5eefd`. Working branch: `improvement/kcal-coach-stabilization`. No production changes or Codex authentication changes authorized.
 
@@ -11,7 +11,7 @@ Base: `main` at `66163bf963b19d8496cee209c78c6fa844c5eefd`. Working branch: `imp
 | Promo tests | Old trial fixture uses `plan: PRO` and `hasProAccess: true` | Updated mock to current effective `TRIAL` entitlement |
 | PromptPay | When redeeming a paid pass during active Trial, `hasProAccess` is false so remaining trial period was not added to purchased pass | Corrected stacking predicate, preserving trial time |
 | Payment webhook | `PaymentEvent` was inserted before entitlement changes, risking lost grants on failed handlers | **Implemented on branch (P1)**: event receipt and entitlement changes are now inside a Serializable Prisma transaction, with PromptPay checkout-session dedupe; verified processing failure returns retryable HTTP 5xx. Disposable PostgreSQL concurrent-payment testing and production rollout remain unverified |
-| LINE webhook | `handleWebhookBody` waits for all event processing before returning HTTP 200; timeout releases claim even if async work is still running | **Unresolved P1**. Needs persistent payload, lease/claim state, restart recovery, per-user ordering and end-to-end idempotency; do not patch by blind fire-and-forget |
+| LINE webhook | Previously processed AI synchronously before HTTP 200 and released the event claim after Promise timeout | **Implemented on branch (P1):** persistent queue, worker leases/retries and event-scoped FoodLog/WeightLog unique keys. Staging concurrency and cross-replica safety remain unverified |
 | LINE observability | HTTP 499s and Codex AI failures were observed in Railway logs on 2026-11-06 | Operational observations; preserve existing Codex authentication per scope exclusion |
 | Database backups | Backup guide explicitly says production managed backups not configured by repo | Expanded owner-operated isolated restore checklist and RPO/RTO proposals; actual provider status unverified |
 | Branch protection | GitHub main currently reports `protected: false` | Manual owner approval required to configure protection/rulesets |
@@ -33,9 +33,9 @@ Base: `main` at `66163bf963b19d8496cee209c78c6fa844c5eefd`. Working branch: `imp
 
 The current branch applies the provider event and entitlement changes inside one database transaction. A failure before commit rolls both back and Stripe can retry. PromptPay pass grant retains the unique `pass:<checkout-session>` marker in that same transaction; trial-to-Pro stacking has a regression test. A verified webhook that fails during processing now returns HTTP 5xx instead of incorrectly returning HTTP 401. Do not treat this as production-verified: concurrency, PostgreSQL SERIALIZABLE conflicts, slow Stripe API calls inside the transaction, missing provider snapshots, and out-of-order events require integration tests against a disposable PostgreSQL database and an approved SIT/UAT rollout. Historical events previously marked processed but not granted may need **manual payment reconciliation**; this patch does not retroactively repair them.
 
-## LINE remediation design requiring review
+## LINE reliability validation remaining
 
-Persist a verified webhook event with sanitized payload and status before acknowledging LINE. Implement a database-backed lease/worker with explicit lifecycle, per-user serialization where needed, bounded attempts and recovery after restart. Never release an event claim just because a Promise timeout elapsed; the original work may continue. Treat payment/food writes as idempotent transactions. Distinguish outbound reply failure (potentially expired token) from business mutation failure. No new infrastructure is needed if a carefully designed PostgreSQL-backed worker meets throughput requirements.
+Before a production rollout, run the prepared additive migrations in isolated SIT/UAT environments, test duplicate/redelivered LINE events and crash/restart recovery against disposable PostgreSQL, and confirm worker lease behavior under prolonged AI requests. Review non-food/weight side effects for replay safety. Do not increase Railway replicas above one without a database-backed cross-replica per-user serialization strategy. Monitor DEAD events and require deliberate reconciliation instead of indiscriminate replays.
 
 ## Dependency audit — verified failure (2026-11-06)
 
