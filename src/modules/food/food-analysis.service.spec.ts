@@ -86,6 +86,7 @@ describe('FoodAnalysisService', () => {
         {
           message: {
             content: JSON.stringify({
+              kind: 'food',
               foodName: 'สลัด',
               estimatedCalories: 250,
               proteinG: 10,
@@ -141,6 +142,7 @@ describe('FoodAnalysisService', () => {
         {
           message: {
             content: JSON.stringify({
+              kind: 'food',
               foodName: 'x',
               estimatedCalories: 1,
               proteinG: 1,
@@ -214,6 +216,7 @@ describe('FoodAnalysisService', () => {
           {
             message: {
               content: JSON.stringify({
+                kind: 'food',
                 foodName,
                 estimatedCalories: 600,
                 proteinG: 30,
@@ -444,7 +447,7 @@ describe('FoodAnalysisService', () => {
       expect(result).toEqual({ kind: 'other' });
     });
 
-    it('falls back to the food analysis when the cheap check fails', async () => {
+    it('does not attempt nutrition analysis when classification fails', async () => {
       const create = jest
         .fn()
         .mockRejectedValueOnce(new Error('boom'))
@@ -452,7 +455,8 @@ describe('FoodAnalysisService', () => {
       const result = await serviceWith(create).analyzePhoto({
         imageBytes: Buffer.from([1, 2, 3]),
       });
-      expect(result.kind).toBe('food');
+      expect(result.kind).toBe('uncertain');
+      expect(create).toHaveBeenCalledTimes(1);
     });
 
     it('text analysis never runs the photo check', async () => {
