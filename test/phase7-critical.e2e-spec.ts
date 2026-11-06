@@ -286,6 +286,7 @@ describe('Phase 7 critical flows (e2e)', () => {
     const logs = await prisma.foodLog.findMany({ where: { userId: user.id } });
     expect(logs).toHaveLength(1);
     expect(logs[0].calories).toBe(550);
+    expect(logs[0].sourceLineEventId).toBe('e2e-confirm-1');
 
     await postWebhook({
       events: [
@@ -398,6 +399,7 @@ describe('Phase 7 critical flows (e2e)', () => {
     });
     expect(logs).toHaveLength(1);
     expect(logs[0].weightKg).toBe(84.2);
+    expect(logs[0].sourceLineEventId).toBe('e2e-weight-1');
     const profile = await prisma.nutritionProfile.findUnique({
       where: { userId: user.id },
     });
