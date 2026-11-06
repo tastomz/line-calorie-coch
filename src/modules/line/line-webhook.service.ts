@@ -1,39 +1,68 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { hashLineUserId, logEvent } from '../../common/structured-log';
+import { randomUUID } from 'node:crypto';
 import {
-  LINE_LOADING_SECONDS,
-  WEBHOOK_EVENT_BUDGET_MS,
-  withTimeout,
-} from '../../common/with-timeout';
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+  Optional,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { withLineEventContext } from '../../common/line-event-context';
+import { hashLineUserId, logEvent } from '../../common/structured-log';
+import { LINE_LOADING_SECONDS } from '../../common/with-timeout';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OnboardingService } from '../onboarding/onboarding.service';
 import { LineOutboundError } from './line-outbound.error';
 import { LineService } from './line.service';
 import { LineWebhookBody, LineWebhookEvent } from './line.types';
 
-/**
- * Webhook reliability (Phase 7):
- *
- * 1. Verify signature (controller) → parse body → claim each event durably.
- * 2. HTTP 200 is returned only after durable claims (controller awaits claim phase).
- * 3. Business processing runs in-process with a per-event time budget.
- * 4. Once mutation work completes, LineEvent claim is NEVER released merely
- *    because LINE reply failed (LineOutboundError).
- * 5. Duplicate webhookEventId deliveries skip processing (idempotent).
- *
- * V1 does not use an external queue — in-process background work is enough
- * provided claims are durable and OpenAI calls are timed out.
- */
+type QueueRow = {
+  id: string;
+  lineEventId: string;
+  eventType: string;
+  payload: string | null;
+  userKey: string | null;
+  status: string;
+  attemptCount: number;
+  createdAt: Date;
+  leasedUntil: Date | null;
+};
+
+const PROCESSING_LEASE_MS = 180_000;
+const MAX_ATTEMPTS = 6;
+const MAX_CONCURRENT_USERS = 4;
+const PENDING_STATUSES = ['PENDING', 'PROCESSING', 'FAILED'];
+
 @Injectable()
-export class LineWebhookService {
+export class LineWebhookService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(LineWebhookService.name);
+  private readonly workerId = randomUUID();
+  private readonly activeUsers = new Set<string>();
+  private pollTimer: ReturnType<typeof setInterval> | undefined;
+  private polling = false;
+  private stopped = false;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly onboardingService: OnboardingService,
     @Optional() private readonly lineService?: LineService,
   ) {}
+
+  onModuleInit(): void {
+    this.stopped = false;
+    this.pollTimer = setInterval(() => {
+      void this.poll();
+    }, 1000);
+    this.pollTimer.unref();
+    void this.poll();
+  }
+
+  onModuleDestroy(): void {
+    this.stopped = true;
+    if (this.pollTimer) clearInterval(this.pollTimer);
+    this.pollTimer = undefined;
+    // In-progress rows retain their leases for restart recovery.
+  }
 
   private async isAdminChatActive(lineUserId: string): Promise<boolean> {
     try {
@@ -43,7 +72,6 @@ export class LineWebhookService {
     }
   }
 
-  /** Fire-and-forget "typing…" indicator for messages that may hit the AI. */
   private startLoading(event: LineWebhookEvent): void {
     const userId = event.source?.userId;
     if (!this.lineService || !userId || event.source?.type !== 'user') return;
@@ -51,64 +79,160 @@ export class LineWebhookService {
   }
 
   /**
-   * Claim all events durably, then process them under budget.
-   * Caller (controller) should await this so HTTP 200 follows claims.
+   * Persist verified LINE events before acknowledging HTTP 200. Processing
+   * happens independently of the request so AI latency cannot hold the webhook.
    */
   async handleWebhookBody(body: LineWebhookBody): Promise<void> {
     const events = Array.isArray(body?.events) ? body.events : [];
     this.logger.log(
-      `Webhook accepted events=${events.length} destinationPresent=${Boolean(body?.destination)}`,
+      'Webhook accepted events=' +
+        events.length +
+        ' destinationPresent=' +
+        Boolean(body?.destination),
     );
-
-    const claimed: LineWebhookEvent[] = [];
     for (const event of events) {
-      const lineEventId = this.resolveEventId(event);
-      const eventType = event.type ?? 'unknown';
-      const ok = await this.claimEvent(lineEventId, eventType);
-      if (!ok) {
-        this.logger.warn(
-          `Skipping duplicate LINE event type=${eventType} eventId=${lineEventId}`,
-        );
-        continue;
+      const claimed = await this.claimEvent(event);
+      if (!claimed) {
+        this.logger.log('Skipping duplicate LINE event');
       }
-      claimed.push(event);
     }
-
-    // Process after durable claims. Failures are logged per-event.
-    await Promise.allSettled(
-      claimed.map((event) => this.processClaimedEvent(event)),
-    );
+    // Do not await the worker inside a webhook HTTP request.
+    void this.poll();
   }
 
+  /** Direct test/maintenance entry point, using the same durable claim path. */
   async handleEvent(
     event: LineWebhookEvent,
   ): Promise<'processed' | 'duplicate' | 'ignored'> {
-    const lineEventId = this.resolveEventId(event);
-    const eventType = event.type ?? 'unknown';
-
-    const claimed = await this.claimEvent(lineEventId, eventType);
-    if (!claimed) {
-      this.logger.warn(
-        `Skipping duplicate LINE event type=${eventType} eventId=${lineEventId}`,
-      );
-      return 'duplicate';
-    }
-
-    return this.processClaimedEvent(event);
+    const claimed = await this.claimEvent(event);
+    if (!claimed) return 'duplicate';
+    const row = await this.prisma.lineEvent.findUnique({
+      where: { lineEventId: this.resolveEventId(event) },
+    });
+    if (!row) throw new Error('Persisted LINE event not found');
+    return this.processQueuedEvent(row, event);
   }
 
-  private async processClaimedEvent(
-    event: LineWebhookEvent,
-  ): Promise<'processed' | 'ignored'> {
-    const lineEventId = this.resolveEventId(event);
-    const eventType = event.type ?? 'unknown';
-    const started = Date.now();
+  /** Public for isolated worker tests and manual recovery in development. */
+  async drainOnce(): Promise<void> {
+    await this.poll();
+  }
 
+  private async poll(): Promise<void> {
+    if (
+      this.stopped ||
+      this.polling ||
+      this.activeUsers.size >= MAX_CONCURRENT_USERS
+    ) {
+      return;
+    }
+    this.polling = true;
     try {
-      await withTimeout(
-        this.dispatchEvent(event),
-        WEBHOOK_EVENT_BUDGET_MS,
-        `webhook event ${eventType}`,
+      const now = new Date();
+      const candidates = await this.prisma.lineEvent.findMany({
+        where: {
+          OR: [
+            { status: 'PENDING' },
+            { status: 'FAILED', nextAttemptAt: { lte: now } },
+            { status: 'PROCESSING', leasedUntil: { lt: now } },
+          ],
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: 40,
+      });
+      for (const row of candidates) {
+        if (this.stopped || this.activeUsers.size >= MAX_CONCURRENT_USERS) {
+          break;
+        }
+        const key = row.userKey ?? row.lineEventId;
+        if (this.activeUsers.has(key)) continue;
+        if (row.userKey) {
+          const earlier = await this.prisma.lineEvent.count({
+            where: {
+              userKey: row.userKey,
+              createdAt: { lt: row.createdAt },
+              status: { in: PENDING_STATUSES },
+            },
+          });
+          if (earlier > 0) continue;
+        }
+        this.activeUsers.add(key);
+        void this.processQueuedEvent(row)
+          .catch((error: unknown) => {
+            this.logger.error(
+              'LINE worker failed outside handler: ' +
+                (error instanceof Error ? error.name : 'unknown'),
+            );
+          })
+          .finally(() => {
+            this.activeUsers.delete(key);
+            if (!this.stopped) void this.poll();
+          });
+      }
+    } catch (error) {
+      this.logger.error(
+        'LINE queue polling failed: ' +
+          (error instanceof Error ? error.name : 'unknown'),
+      );
+    } finally {
+      this.polling = false;
+    }
+  }
+
+  private async processQueuedEvent(
+    row: QueueRow,
+    originalEvent?: LineWebhookEvent,
+  ): Promise<'processed' | 'ignored'> {
+    const now = new Date();
+    const claim = await this.prisma.lineEvent.updateMany({
+      where: {
+        id: row.id,
+        status: row.status,
+        ...(row.status === 'PROCESSING'
+          ? { leasedUntil: { lt: now } }
+          : row.status === 'FAILED'
+            ? { nextAttemptAt: { lte: now } }
+            : {}),
+      },
+      data: {
+        status: 'PROCESSING',
+        attemptCount: { increment: 1 },
+        workerId: this.workerId,
+        leasedUntil: new Date(now.getTime() + PROCESSING_LEASE_MS),
+        lastError: null,
+      },
+    });
+    if (claim.count !== 1) return 'ignored';
+
+    const heartbeat = setInterval(() => {
+      void this.prisma.lineEvent
+        .updateMany({
+          where: {
+            id: row.id,
+            status: 'PROCESSING',
+            workerId: this.workerId,
+          },
+          data: {
+            leasedUntil: new Date(Date.now() + PROCESSING_LEASE_MS),
+          },
+        })
+        .catch(() => this.logger.warn('LINE worker lease renewal failed'));
+    }, 15_000);
+    heartbeat.unref();
+    const started = Date.now();
+    try {
+      const event =
+        originalEvent ??
+        (JSON.parse(row.payload ?? 'null') as LineWebhookEvent | null);
+      if (!event || typeof event.type !== 'string') {
+        throw new Error('Invalid queued LINE event payload');
+      }
+
+      // Do not race the underlying mutation with a Promise timeout wrapper.
+      await withLineEventContext(
+        row.lineEventId,
+        () => this.dispatchEvent(event),
+        event.source?.userId,
       );
       const result =
         event.type === 'follow' ||
@@ -116,9 +240,10 @@ export class LineWebhookService {
         event.type === 'postback'
           ? 'processed'
           : 'ignored';
+      await this.markCompleted(row.id);
       logEvent(this.logger, 'log', {
         event: 'webhook_event_done',
-        lineEventId,
+        lineEventId: row.lineEventId,
         lineUserKey: event.source?.userId
           ? hashLineUserId(event.source.userId)
           : undefined,
@@ -128,23 +253,60 @@ export class LineWebhookService {
       return result;
     } catch (error) {
       if (error instanceof LineOutboundError) {
+        // A reply failure must never trigger a second business mutation.
+        await this.markCompleted(row.id);
         logEvent(this.logger, 'warn', {
           event: 'webhook_outbound_failed',
-          lineEventId,
+          lineEventId: row.lineEventId,
           errorCategory: 'line_outbound',
           durationMs: Date.now() - started,
         });
         return 'processed';
       }
 
+      const attempts = row.attemptCount + 1;
+      const terminal = attempts >= MAX_ATTEMPTS;
+      const backoffMs = Math.min(300_000, 2000 * 2 ** (attempts - 1));
+      await this.prisma.lineEvent.updateMany({
+        where: {
+          id: row.id,
+          status: 'PROCESSING',
+          workerId: this.workerId,
+        },
+        data: {
+          status: terminal ? 'DEAD' : 'FAILED',
+          leasedUntil: null,
+          workerId: null,
+          nextAttemptAt: terminal ? null : new Date(Date.now() + backoffMs),
+          lastError: error instanceof Error ? error.name : 'unknown',
+        },
+      });
       logEvent(this.logger, 'error', {
-        event: 'webhook_event_failed',
-        lineEventId,
+        event: terminal ? 'webhook_event_dead' : 'webhook_event_retry',
+        lineEventId: row.lineEventId,
         errorCategory: 'processing',
         durationMs: Date.now() - started,
       });
-      await this.releaseEvent(lineEventId);
       return 'ignored';
+    } finally {
+      clearInterval(heartbeat);
+    }
+  }
+
+  private async markCompleted(id: string): Promise<void> {
+    const completed = await this.prisma.lineEvent.updateMany({
+      where: { id, status: 'PROCESSING', workerId: this.workerId },
+      data: {
+        status: 'COMPLETED',
+        leasedUntil: null,
+        workerId: null,
+        nextAttemptAt: null,
+        lastError: null,
+        processedAt: new Date(),
+      },
+    });
+    if (completed.count !== 1) {
+      throw new Error('LINE event lease ownership lost');
     }
   }
 
@@ -176,13 +338,17 @@ export class LineWebhookService {
     return `${event.type}:${event.timestamp ?? 0}:${userId}:${messageId}`;
   }
 
-  private async claimEvent(
-    lineEventId: string,
-    eventType: string,
-  ): Promise<boolean> {
+  private async claimEvent(event: LineWebhookEvent): Promise<boolean> {
     try {
       await this.prisma.lineEvent.create({
-        data: { lineEventId, eventType },
+        data: {
+          lineEventId: this.resolveEventId(event),
+          eventType: event.type ?? 'unknown',
+          payload: JSON.stringify(event),
+          userKey: event.source?.userId ?? null,
+          status: 'PENDING',
+          nextAttemptAt: new Date(),
+        },
       });
       return true;
     } catch (error) {
@@ -193,17 +359,6 @@ export class LineWebhookService {
         return false;
       }
       throw error;
-    }
-  }
-
-  private async releaseEvent(lineEventId: string): Promise<void> {
-    try {
-      await this.prisma.lineEvent.delete({ where: { lineEventId } });
-      this.logger.warn(`Released LineEvent claim eventId=${lineEventId}`);
-    } catch (error) {
-      this.logger.warn(
-        `Failed to release LineEvent claim eventId=${lineEventId}: ${error instanceof Error ? error.message : 'unknown error'}`,
-      );
     }
   }
 

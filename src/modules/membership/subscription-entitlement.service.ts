@@ -262,7 +262,11 @@ export class SubscriptionEntitlementService {
   }
 
   planLabel(plan: PlanId): string {
-    return plan === 'PRO' ? PRO_PLAN.labelTh : plan === 'TRIAL' ? TRIAL_PLAN.labelTh : FREE_PLAN.labelTh;
+    return plan === 'PRO'
+      ? PRO_PLAN.labelTh
+      : plan === 'TRIAL'
+        ? TRIAL_PLAN.labelTh
+        : FREE_PLAN.labelTh;
   }
 
   limits(plan: PlanId) {

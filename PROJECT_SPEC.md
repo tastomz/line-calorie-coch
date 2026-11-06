@@ -23,12 +23,13 @@ Local QA: `/dev/*` when `ENABLE_DEV_MEMBERSHIP_TOOLS=true`. Payment default `MOC
 | Plan | Price | Positioning |
 | --- | --- | --- |
 | FREE | 0 | Core tracking free |
+| TRIAL | Redeem code only | Temporary access with its own AI quotas |
 | PRO | **50 THB/month** | ใช้งาน AI ได้มากขึ้น (not unlimited) |
 
 FREE quotas/day: text 5 · vision 2 · composition 3 · coach 3 · classify 5 · body scan 1 · meal ideas 2 · weekly 1  
 PRO quotas/day: text 30 · vision 15 · composition 20 · coach 30 · classify 30 · body scan 5 · meal ideas 15 · weekly 4  
 
-Trial default: **7 days**. Promo codes grant temporary PRO.
+Trial default: **7 days**, with a code-configurable duration. Promo codes grant the distinct effective TRIAL entitlement (stored as PRO/TRIALING), not paid PRO. TRIAL quotas/day: text 10 · vision 5 · composition 8 · coach 10 · classify 10 · body scan 2 · meal ideas 5 · weekly 2.
 
 External membership web (`/membership/*`) + Stripe **TEST** checkout.  
 Webhooks update DB. Success page does **not** grant PRO.  

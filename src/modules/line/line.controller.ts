@@ -1,10 +1,12 @@
 import {
+  BadRequestException,
   Controller,
   Headers,
   HttpCode,
   Logger,
   Post,
   RawBody,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { LineWebhookService } from './line-webhook.service';
@@ -44,16 +46,27 @@ export class LineController {
       `LINE webhook signature ok bytes=${rawBody.length} signaturePresent=${Boolean(signature)}`,
     );
 
+    let body: LineWebhookBody;
     try {
-      const body = JSON.parse(rawBody.toString('utf8')) as LineWebhookBody;
-      await this.lineWebhookService.handleWebhookBody(body);
-    } catch (error) {
-      // Signature was valid — acknowledge to avoid endless LINE retries on poison events.
-      this.logger.error(
-        `Webhook processing error: ${error instanceof Error ? error.message : 'unknown error'}`,
-      );
+      body = JSON.parse(rawBody.toString('utf8')) as LineWebhookBody;
+      if (!Array.isArray(body?.events)) {
+        throw new Error('Missing events array');
+      }
+    } catch {
+      throw new BadRequestException('Invalid LINE payload');
     }
 
+    try {
+      await this.lineWebhookService.handleWebhookBody(body);
+    } catch (error) {
+      // The durable claim did not complete: return a retryable 503, not 200.
+      // A replay is harmless because lineEventId has a DB unique constraint.
+      this.logger.error(
+        'LINE event acceptance failed: ' +
+          (error instanceof Error ? error.name : 'unknown'),
+      );
+      throw new ServiceUnavailableException('LINE event was not accepted');
+    }
     return { ok: true };
   }
 }

@@ -89,7 +89,11 @@ export const PRO_PLAN = {
 };
 
 export function limitsForPlan(plan: PlanId): AiDailyLimits {
-  return plan === 'PRO' ? PRO_AI_LIMITS : plan === 'TRIAL' ? TRIAL_AI_LIMITS : FREE_AI_LIMITS;
+  return plan === 'PRO'
+    ? PRO_AI_LIMITS
+    : plan === 'TRIAL'
+      ? TRIAL_AI_LIMITS
+      : FREE_AI_LIMITS;
 }
 
 export function limitFor(plan: PlanId, operation: AiOperation): number {

@@ -1,6 +1,6 @@
 # แพ็คเกจ Trial → AI ผ่าน ChatGPT sign-in (Codex)
 
-Trial = PRO ที่ได้จากโค้ดโปรโม (Subscription `PRO` + `TRIALING`) — สิทธิ์และโควตาเหมือน PRO ทุกอย่าง
+Trial เป็นแพ็กเกจสิทธิ์แยกเฉพาะจากโค้ดโปรโม (เก็บใน DB เป็น Subscription `PRO` + `TRIALING`) — ใช้โควตา AI แยกจาก PRO: text 10, vision 5, adjustment 8, coach 10, classify 10, body scan 2, meal plan 5, weekly review 2 ต่อวัน
 ต่างกันแค่ AI: เรียกผ่าน **Codex CLI** (`codex exec`) ด้วยบัญชี ChatGPT ของเจ้าของ แทน `OPENAI_API_KEY`
 (ท่าเดียวกับ "เทพเย่" ใน simply-brands)
 
@@ -8,7 +8,7 @@ Trial = PRO ที่ได้จากโค้ดโปรโม (Subscription
 - `AiGatewayService.routeFor()` → ผู้ใช้ Trial ได้ route `codex`, คนอื่น `api`
 - `createOpenAiClient()` (แทน `new OpenAI`) ดู route แล้วส่ง **ทุก** `chat.completions.create` ของ Trial ไป Codex
   (รวมตัวแยกประเภทข้อความและเช็คชนิดรูป) — **ไม่มี fallback ไป API**; ถ้า Codex ล้ม ใช้ fallback ของแต่ละฟีเจอร์
-  (เช่น classify → กฎสำรอง, เช็คชนิดรูป → ถือเป็นอาหาร, วิเคราะห์ → ขอให้ส่งใหม่)
+  (เช่น classify → กฎสำรอง, เช็คชนิดรูป → ระบุไม่แน่ใจและถามผู้ใช้, วิเคราะห์ → ขอให้ส่งใหม่)
 - เวลา Codex ต่อครั้ง: fast 13 วิ · ข้อความ 25 วิ · รูป 36 วิ (`CODEX_FAST_TIMEOUT_SECONDS`, `CODEX_TIMEOUT_SECONDS`, `CODEX_IMAGE_TIMEOUT_SECONDS`)
   งบต่อข้อความ LINE ขยายเป็น 58 วิ (เกิน 1 นาทีจะส่งด้วย push แทน reply)
 - ล้ม 3 ครั้งติด → พัก 2 นาที (Trial ใช้ AI ไม่ได้ช่วงนั้น); รอคิวเกิน 12 วิ → ยกเลิก
