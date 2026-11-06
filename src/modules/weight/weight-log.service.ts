@@ -1,4 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { currentLineEventId } from '../../common/line-event-context';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import {
@@ -48,12 +50,15 @@ export class WeightLogService {
 
     // WeightLog is historical; also sync NutritionProfile.currentWeightKg.
     // Do NOT recalculate calorie targets here (product: targets stay until profile edit).
-    return this.prisma.$transaction(async (tx) => {
+    const sourceLineEventId = currentLineEventId();
+    try {
+      return await this.prisma.$transaction(async (tx) => {
       const log = await tx.weightLog.create({
         data: {
           userId,
           weightKg,
           recordedAt,
+          sourceLineEventId,
         },
       });
 
@@ -63,7 +68,20 @@ export class WeightLogService {
       });
 
       return log;
-    });
+      });
+    } catch (error) {
+      if (
+        sourceLineEventId &&
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const existing = await this.prisma.weightLog.findUnique({
+          where: { sourceLineEventId },
+        });
+        if (existing?.userId === userId) return existing;
+      }
+      throw error;
+    }
   }
 
   async listForUserOnDate(userId: string, day: Date = new Date()) {
