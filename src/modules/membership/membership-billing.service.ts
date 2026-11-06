@@ -154,13 +154,42 @@ export class MembershipBillingService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        this.logger.log(
-          JSON.stringify({
-            event: 'payment_webhook_duplicate',
-            providerEventId: params.providerEventId,
-          }),
-        );
-        return 'duplicate';
+        // A unique collision in Subscription must NOT be mistaken for
+        // a previously processed provider event. Verify the ledger key.
+        const knownEvent = await this.prisma.paymentEvent.findUnique({
+          where: {
+            provider_providerEventId: {
+              provider: PaymentProvider.STRIPE,
+              providerEventId: params.providerEventId,
+            },
+          },
+        });
+        const obj = params.data as Record<string, unknown> | null;
+        const sessionId =
+          params.type === 'checkout_completed' &&
+          obj?.mode === 'payment' &&
+          typeof obj.id === 'string'
+            ? obj.id
+            : null;
+        const grantedPass = sessionId
+          ? await this.prisma.paymentEvent.findUnique({
+              where: {
+                provider_providerEventId: {
+                  provider: PaymentProvider.STRIPE,
+                  providerEventId: 'pass:' + sessionId,
+                },
+              },
+            })
+          : null;
+        if (knownEvent || grantedPass) {
+          this.logger.log(
+            JSON.stringify({
+              event: 'payment_webhook_duplicate',
+              providerEventId: params.providerEventId,
+            }),
+          );
+          return 'duplicate';
+        }
       }
       throw error;
     }
