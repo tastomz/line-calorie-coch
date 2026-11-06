@@ -214,7 +214,8 @@ export class LineWebhookService implements OnModuleInit, OnModuleDestroy {
     heartbeat.unref();
     const started = Date.now();
     try {
-      const event = originalEvent ??
+      const event =
+        originalEvent ??
         (JSON.parse(row.payload ?? 'null') as LineWebhookEvent | null);
       if (!event || typeof event.type !== 'string') {
         throw new Error('Invalid queued LINE event payload');
@@ -267,9 +268,7 @@ export class LineWebhookService implements OnModuleInit, OnModuleDestroy {
           status: terminal ? 'DEAD' : 'FAILED',
           leasedUntil: null,
           workerId: null,
-          nextAttemptAt: terminal
-            ? null
-            : new Date(Date.now() + backoffMs),
+          nextAttemptAt: terminal ? null : new Date(Date.now() + backoffMs),
           lastError: error instanceof Error ? error.name : 'unknown',
         },
       });
