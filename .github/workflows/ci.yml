@@ -35,6 +35,12 @@ jobs:
 
       - run: npm run build
 
+      - name: Initialize disposable SQLite test database
+        run: npx prisma migrate deploy
+
+      - name: Run backend E2E tests against disposable SQLite
+        run: npm run test:e2e -- --runInBand
+
       - name: Check backend working tree unchanged
         run: git diff --exit-code
 
