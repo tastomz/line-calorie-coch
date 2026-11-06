@@ -83,10 +83,6 @@ export class AiGatewayService {
         },
         () => runWithAiRoute(route, work),
       );
-      // One row per OpenAI call (a photo may use a cheap check + an analysis).
-      for (const meta of captured) {
-        await this.aiUsage.recordTokenUsage(userId, operation, meta);
-      }
       return result;
     } catch (error) {
       if (error instanceof AiQuotaExceededError) {
@@ -96,6 +92,18 @@ export class AiGatewayService {
         `AI gateway work failed op=${operation} userPrefix=${userId.slice(0, 8)}: ${error instanceof Error ? error.message : 'unknown'}`,
       );
       throw error;
+    } finally {
+      // A provider call can bill tokens even if downstream validation throws.
+      // Retain usage accounting on both successful and failed workflows.
+      for (const meta of captured) {
+        try {
+          await this.aiUsage.recordTokenUsage(userId, operation, meta);
+        } catch (logError) {
+          this.logger.error(
+            `AI token ledger write failed op=${operation} userPrefix=${userId.slice(0, 8)}: ${logError instanceof Error ? logError.message : 'unknown'}`,
+          );
+        }
+      }
     }
   }
 }
