@@ -40,7 +40,9 @@ export class StripeWebhookController {
       throw new UnauthorizedException('raw body required');
     }
 
-    let parsed: Awaited<ReturnType<PaymentProviderPort['verifyAndParseWebhook']>>;
+    let parsed: Awaited<
+      ReturnType<PaymentProviderPort['verifyAndParseWebhook']>
+    >;
     try {
       parsed = await this.payments.verifyAndParseWebhook(rawBody, signature);
     } catch {
