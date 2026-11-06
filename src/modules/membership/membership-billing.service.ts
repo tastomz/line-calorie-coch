@@ -210,18 +210,10 @@ export class MembershipBillingService {
 
       const snap = await this.payments.getSubscription(subscriptionId);
       if (!snap) {
-        await this.upsertPaidSubscription(
-          userId,
-          {
-            providerCustomerId: customerId,
-            providerSubscriptionId: subscriptionId,
-            status: SubscriptionStatus.ACTIVE,
-            currentPeriodStart: new Date(),
-            currentPeriodEnd: null,
-          },
-          tx,
-        );
-        return;
+        // A signed checkout event does not justify inventing an ACTIVE
+        // subscription when the provider cannot confirm its actual state.
+        // Roll back the event marker and let Stripe retry this webhook.
+        throw new Error('Stripe subscription snapshot unavailable');
       }
       await this.applyProviderSnapshot(
         userId,
