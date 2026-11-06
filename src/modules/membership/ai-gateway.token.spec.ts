@@ -76,6 +76,48 @@ describe('AiGatewayService token recording', () => {
     );
   });
 
+  it('records tokens from a paid provider call even if later validation rejects', async () => {
+    const aiUsage = {
+      consumeAiUsage: jest.fn().mockResolvedValue(undefined),
+      recordTokenUsage: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new AiGatewayService(
+      aiUsage as unknown as AiUsageService,
+      {} as SubscriptionEntitlementService,
+    );
+    await expect(
+      service.run('user-a', 'FOOD_VISION', async () => {
+        reportAiTokenUsage({
+          model: 'gpt-6.1-sol',
+          inputTokens: 1800,
+          outputTokens: 200,
+        });
+        throw new Error('invalid structured output');
+      }),
+    ).rejects.toThrow('invalid structured output');
+    expect(aiUsage.recordTokenUsage).toHaveBeenCalledWith(
+      'user-a',
+      'FOOD_VISION',
+      expect.objectContaining({ inputTokens: 1800, outputTokens: 200 }),
+    );
+  });
+
+  it('does not fail an otherwise successful AI operation if token ledger is unavailable', async () => {
+    const aiUsage = {
+      consumeAiUsage: jest.fn().mockResolvedValue(undefined),
+      recordTokenUsage: jest.fn().mockRejectedValue(new Error('db unavailable')),
+    };
+    const service = new AiGatewayService(
+      aiUsage as unknown as AiUsageService,
+      {} as SubscriptionEntitlementService,
+    );
+    await expect(service.run('user-a', 'FOOD_TEXT', async () => {
+      reportAiTokenUsage({ model: 'gpt-6.1-sol', inputTokens: 200, outputTokens: 40 });
+      return 'ok';
+    })).resolves.toBe('ok');
+    expect(aiUsage.recordTokenUsage).toHaveBeenCalledTimes(1);
+  });
+
   it('skips token log when work does not report usage', async () => {
     const aiUsage = {
       consumeAiUsage: jest.fn().mockResolvedValue(undefined),
