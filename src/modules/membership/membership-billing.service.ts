@@ -341,7 +341,7 @@ export class MembershipBillingService {
         });
         const ent = this.entitlement.resolveEntitlement(latest, now);
         const start =
-          ent.hasProAccess &&
+          (ent.plan === 'PRO' || ent.plan === 'TRIAL') &&
           ent.periodEnd &&
           ent.periodEnd.getTime() > now.getTime()
             ? ent.periodEnd
