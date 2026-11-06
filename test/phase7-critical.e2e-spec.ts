@@ -28,6 +28,7 @@ describe('Phase 7 critical flows (e2e)', () => {
     replyTextOrPush: jest.fn().mockResolvedValue(undefined),
     replyButtonsOrPush: jest.fn().mockResolvedValue(undefined),
     pushText: jest.fn().mockResolvedValue(undefined),
+    showLoadingAnimation: jest.fn().mockResolvedValue(undefined),
     getUserProfile: jest.fn().mockResolvedValue({ displayName: 'E2E' }),
     getMessageContentPreviewBytes: jest.fn(),
     getMessageContentBytes: jest.fn(),
