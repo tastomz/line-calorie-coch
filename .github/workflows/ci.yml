@@ -22,6 +22,11 @@ jobs:
 
       - run: npx prisma validate
 
+      - name: Validate PostgreSQL schema (no DB connection)
+        run: npx prisma validate --schema prisma/postgres/schema.prisma
+        env:
+          DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/kcal_coach_ci
+
       - run: npx prisma generate
 
       - run: npm run lint
@@ -49,3 +54,16 @@ jobs:
       - run: npm run build
       - name: Check frontend working tree unchanged
         run: git diff --exit-code
+
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Audit production backend dependencies (high and critical)
+        run: npm audit --omit=dev --audit-level=high
+      - name: Audit production frontend dependencies (high and critical)
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: frontend
