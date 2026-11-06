@@ -123,18 +123,32 @@ export class MembershipBillingService {
     providerEventId: string;
     stripeType: string;
   }): Promise<'processed' | 'duplicate' | 'ignored'> {
+    // One atomic commit: a provider event is considered processed only when
+    // its entitlement mutation (if any) commits in the same transaction.
+    // Failed processing rolls back the event claim so Stripe can retry.
     try {
-      await this.prisma.paymentEvent.create({
-        data: {
-          provider: PaymentProvider.STRIPE,
-          providerEventId: params.providerEventId,
-          eventType: params.stripeType,
-          payloadSummary: JSON.stringify({
-            type: params.type,
-            stripeType: params.stripeType,
-          }),
+      await this.prisma.$transaction(
+        async (tx) => {
+          await tx.paymentEvent.create({
+            data: {
+              provider: PaymentProvider.STRIPE,
+              providerEventId: params.providerEventId,
+              eventType: params.stripeType,
+              payloadSummary: JSON.stringify({
+                type: params.type,
+                stripeType: params.stripeType,
+              }),
+            },
+          });
+          if (params.type !== 'ignored') {
+            await this.applyWebhookEvent(params.type, params.data, tx);
+          }
         },
-      });
+        {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          timeout: 30_000,
+        },
+      );
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -151,12 +165,7 @@ export class MembershipBillingService {
       throw error;
     }
 
-    if (params.type === 'ignored') {
-      return 'ignored';
-    }
-
-    await this.applyWebhookEvent(params.type, params.data);
-
+    if (params.type === 'ignored') return 'ignored';
     this.logger.log(
       JSON.stringify({
         event: 'payment_webhook_processed',
@@ -170,11 +179,12 @@ export class MembershipBillingService {
   private async applyWebhookEvent(
     type: FuturePaymentWebhookEvent,
     data: unknown,
+    tx: Prisma.TransactionClient,
   ): Promise<void> {
     const obj = data as Record<string, unknown>;
 
     if (type === 'checkout_completed' && obj.mode === 'payment') {
-      await this.grantPromptPayPass(obj);
+      await this.grantPromptPayPass(obj, tx);
       return;
     }
 
@@ -206,10 +216,10 @@ export class MembershipBillingService {
           status: SubscriptionStatus.ACTIVE,
           currentPeriodStart: new Date(),
           currentPeriodEnd: null,
-        });
+        }, tx);
         return;
       }
-      await this.applyProviderSnapshot(userId, snap, snap.cancelAtPeriodEnd);
+      await this.applyProviderSnapshot(userId, snap, snap.cancelAtPeriodEnd, tx);
       return;
     }
 
@@ -227,6 +237,7 @@ export class MembershipBillingService {
         (await this.findUserIdByProviderIds(
           snap.providerCustomerId,
           subscriptionId,
+          tx,
         ));
       if (!userId) {
         this.logger.warn(
@@ -236,7 +247,7 @@ export class MembershipBillingService {
       }
       const forceCancel =
         type === 'subscription_canceled' || snap.cancelAtPeriodEnd;
-      await this.applyProviderSnapshot(userId, snap, forceCancel);
+      await this.applyProviderSnapshot(userId, snap, forceCancel, tx);
       return;
     }
 
@@ -262,10 +273,10 @@ export class MembershipBillingService {
           status: SubscriptionStatus.PAST_DUE,
           currentPeriodStart: snap.currentPeriodStart,
           currentPeriodEnd: snap.currentPeriodEnd,
-        });
+        }, tx);
         return;
       }
-      await this.applyProviderSnapshot(userId, snap, snap.cancelAtPeriodEnd);
+      await this.applyProviderSnapshot(userId, snap, snap.cancelAtPeriodEnd, tx);
     }
   }
 
@@ -277,6 +288,7 @@ export class MembershipBillingService {
    */
   private async grantPromptPayPass(
     obj: Record<string, unknown>,
+    tx: Prisma.TransactionClient,
   ): Promise<void> {
     const sessionId = obj.id as string | undefined;
     const metadata = (obj.metadata ?? {}) as Record<string, string | undefined>;
@@ -321,54 +333,42 @@ export class MembershipBillingService {
         : ((obj.customer as { id?: string } | null)?.id ?? null);
 
     const now = new Date();
-    try {
-      await this.prisma.$transaction(async (tx) => {
-        await tx.paymentEvent.create({
-          data: {
-            provider: PaymentProvider.STRIPE,
-            providerEventId: `pass:${sessionId}`,
-            eventType: 'promptpay_pass_granted',
-            payloadSummary: JSON.stringify({
-              planCode: metadata.planCode ?? null,
-              days,
-              amountTotal: expectedAmount,
-            }),
-          },
-        });
-        const latest = await tx.subscription.findFirst({
-          where: { userId },
-          orderBy: { updatedAt: 'desc' },
-        });
-        const ent = this.entitlement.resolveEntitlement(latest, now);
-        const start =
-          (ent.plan === 'PRO' || ent.plan === 'TRIAL') &&
-          ent.periodEnd &&
-          ent.periodEnd.getTime() > now.getTime()
-            ? ent.periodEnd
-            : now;
-        const end = new Date(start.getTime() + days * 24 * 60 * 60 * 1000);
-        await tx.subscription.create({
-          data: {
-            userId,
-            plan: Plan.PRO,
-            status: SubscriptionStatus.ACTIVE,
-            provider: PaymentProvider.STRIPE,
-            providerCustomerId: customerId,
-            startedAt: now,
-            currentPeriodStart: now,
-            currentPeriodEnd: end,
-          },
-        });
-      });
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
-      ) {
-        return; // already granted for this session
-      }
-      throw error;
-    }
+    await tx.paymentEvent.create({
+      data: {
+        provider: PaymentProvider.STRIPE,
+        providerEventId: `pass:${sessionId}`,
+        eventType: 'promptpay_pass_granted',
+        payloadSummary: JSON.stringify({
+          planCode: metadata.planCode ?? null,
+          days,
+          amountTotal: expectedAmount,
+        }),
+      },
+    });
+    const latest = await tx.subscription.findFirst({
+      where: { userId },
+      orderBy: { updatedAt: 'desc' },
+    });
+    const ent = this.entitlement.resolveEntitlement(latest, now);
+    const start =
+      (ent.plan === 'PRO' || ent.plan === 'TRIAL') &&
+      ent.periodEnd &&
+      ent.periodEnd.getTime() > now.getTime()
+        ? ent.periodEnd
+        : now;
+    const end = new Date(start.getTime() + days * 24 * 60 * 60 * 1000);
+    await tx.subscription.create({
+      data: {
+        userId,
+        plan: Plan.PRO,
+        status: SubscriptionStatus.ACTIVE,
+        provider: PaymentProvider.STRIPE,
+        providerCustomerId: customerId,
+        startedAt: now,
+        currentPeriodStart: now,
+        currentPeriodEnd: end,
+      },
+    });
     this.logger.log(
       JSON.stringify({
         event: 'promptpay_pass_granted',
@@ -391,6 +391,7 @@ export class MembershipBillingService {
       cancelAtPeriodEnd: boolean;
     },
     cancelAtPeriodEnd: boolean,
+    tx?: Prisma.TransactionClient,
   ): Promise<void> {
     let status = mapStripeSubscriptionStatus(snap.status);
     if (cancelAtPeriodEnd && status === SubscriptionStatus.ACTIVE) {
@@ -406,7 +407,7 @@ export class MembershipBillingService {
         status === SubscriptionStatus.CANCELED || cancelAtPeriodEnd
           ? new Date()
           : null,
-    });
+    }, tx);
   }
 
   private async upsertPaidSubscription(
@@ -419,8 +420,9 @@ export class MembershipBillingService {
       currentPeriodEnd: Date | null;
       canceledAt?: Date | null;
     },
+    db?: Prisma.TransactionClient,
   ): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
+    const apply = async (tx: Prisma.TransactionClient) => {
       const existing = await tx.subscription.findFirst({
         where: {
           OR: [
@@ -475,7 +477,12 @@ export class MembershipBillingService {
           canceledAt: data.canceledAt ?? null,
         },
       });
-    });
+    };
+    if (db) {
+      await apply(db);
+    } else {
+      await this.prisma.$transaction(apply);
+    }
   }
 
   private async ensureStripeCustomerRow(
@@ -499,13 +506,15 @@ export class MembershipBillingService {
   private async findUserIdByProviderIds(
     customerId: string,
     subscriptionId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<string | null> {
-    const bySub = await this.prisma.subscription.findFirst({
+    const store = tx ?? this.prisma;
+    const bySub = await store.subscription.findFirst({
       where: { providerSubscriptionId: subscriptionId },
     });
     if (bySub) return bySub.userId;
     if (!customerId) return null;
-    const byCustomer = await this.prisma.subscription.findFirst({
+    const byCustomer = await store.subscription.findFirst({
       where: { providerCustomerId: customerId },
       orderBy: { updatedAt: 'desc' },
     });
