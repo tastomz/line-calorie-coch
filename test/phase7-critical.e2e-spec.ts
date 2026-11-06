@@ -89,6 +89,17 @@ describe('Phase 7 critical flows (e2e)', () => {
       .send(payload);
   }
 
+  async function waitForQueueIdle(): Promise<void> {
+    for (let attempt = 0; attempt < 150; attempt += 1) {
+      const remaining = await prisma.lineEvent.count({
+        where: { status: { in: ['PENDING', 'PROCESSING', 'FAILED'] } },
+      });
+      if (remaining === 0) return;
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    }
+    throw new Error('LINE queue did not drain during E2E test');
+  }
+
   beforeAll(async () => {
     process.env.NODE_ENV = 'development';
     process.env.DATABASE_URL = process.env.DATABASE_URL || 'file:./e2e-test.db';
@@ -199,12 +210,14 @@ describe('Phase 7 critical flows (e2e)', () => {
     };
 
     await postWebhook({ events: [event] }).expect(200);
+    await waitForQueueIdle();
     const user = await prisma.user.findUnique({
       where: { lineUserId: 'U-e2e-1' },
     });
     expect(user).toBeTruthy();
 
     await postWebhook({ events: [event] }).expect(200);
+    await waitForQueueIdle();
     const events = await prisma.lineEvent.findMany({
       where: { lineEventId: 'e2e-follow-1' },
     });
@@ -247,6 +260,7 @@ describe('Phase 7 critical flows (e2e)', () => {
         },
       ],
     }).expect(200);
+    await waitForQueueIdle();
 
     expect(foodAnalysisMock.analyzeText).toHaveBeenCalled();
     const pending = await prisma.pendingFoodAnalysis.findUnique({
@@ -266,6 +280,7 @@ describe('Phase 7 critical flows (e2e)', () => {
         },
       ],
     }).expect(200);
+    await waitForQueueIdle();
 
     const logs = await prisma.foodLog.findMany({ where: { userId: user.id } });
     expect(logs).toHaveLength(1);
@@ -283,6 +298,7 @@ describe('Phase 7 critical flows (e2e)', () => {
         },
       ],
     }).expect(200);
+    await waitForQueueIdle();
 
     const logsAfter = await prisma.foodLog.findMany({
       where: { userId: user.id },
@@ -329,6 +345,7 @@ describe('Phase 7 critical flows (e2e)', () => {
         },
       ],
     }).expect(200);
+    await waitForQueueIdle();
 
     expect(await prisma.foodLog.count()).toBe(0);
     expect(
@@ -373,6 +390,7 @@ describe('Phase 7 critical flows (e2e)', () => {
         },
       ],
     }).expect(200);
+    await waitForQueueIdle();
 
     const logs = await prisma.weightLog.findMany({
       where: { userId: user.id },
@@ -431,6 +449,7 @@ describe('Phase 7 critical flows (e2e)', () => {
         },
       ],
     }).expect(200);
+    await waitForQueueIdle();
 
     expect(lineServiceMock.replyText).toHaveBeenCalled();
     const replyArgs = lineServiceMock.replyText.mock.calls[0] as unknown as [
@@ -478,6 +497,7 @@ describe('Phase 7 critical flows (e2e)', () => {
         },
       ],
     }).expect(200);
+    await waitForQueueIdle();
 
     await postWebhook({
       events: [
@@ -491,6 +511,7 @@ describe('Phase 7 critical flows (e2e)', () => {
         },
       ],
     }).expect(200);
+    await waitForQueueIdle();
 
     expect(await prisma.foodLog.count({ where: { userId: user.id } })).toBe(1);
     expect(sheetsMock.appendFoodLog).toHaveBeenCalled();
