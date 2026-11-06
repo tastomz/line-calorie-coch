@@ -157,10 +157,17 @@ export class LineWebhookService implements OnModuleInit, OnModuleDestroy {
           if (earlier > 0) continue;
         }
         this.activeUsers.add(key);
-        void this.processQueuedEvent(row).finally(() => {
-          this.activeUsers.delete(key);
-          if (!this.stopped) void this.poll();
-        });
+        void this.processQueuedEvent(row)
+          .catch((error: unknown) => {
+            this.logger.error(
+              'LINE worker failed outside handler: ' +
+                (error instanceof Error ? error.name : 'unknown'),
+            );
+          })
+          .finally(() => {
+            this.activeUsers.delete(key);
+            if (!this.stopped) void this.poll();
+          });
       }
     } catch (error) {
       this.logger.error(
@@ -285,7 +292,7 @@ export class LineWebhookService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async markCompleted(id: string): Promise<void> {
-    await this.prisma.lineEvent.updateMany({
+    const completed = await this.prisma.lineEvent.updateMany({
       where: { id, status: 'PROCESSING', workerId: this.workerId },
       data: {
         status: 'COMPLETED',
@@ -296,6 +303,9 @@ export class LineWebhookService implements OnModuleInit, OnModuleDestroy {
         processedAt: new Date(),
       },
     });
+    if (completed.count !== 1) {
+      throw new Error('LINE event lease ownership lost');
+    }
   }
 
   private async dispatchEvent(event: LineWebhookEvent): Promise<void> {
