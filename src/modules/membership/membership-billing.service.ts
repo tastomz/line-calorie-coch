@@ -334,6 +334,9 @@ export class MembershipBillingService {
       null;
     if (!sessionId || !userId || metadata.kind !== PRO_PASS_KIND) {
       this.logger.warn('promptpay pass: missing session/user/kind');
+      if (metadata.kind === PRO_PASS_KIND && obj.payment_status === 'paid') {
+        throw new Error('Paid PromptPay pass missing ownership metadata');
+      }
       return;
     }
     if (obj.payment_status !== 'paid') {
@@ -361,7 +364,8 @@ export class MembershipBillingService {
           amountTotal: obj.amount_total,
         }),
       );
-      return;
+      // Keep the verified paid webhook retryable until it can be reconciled.
+      throw new Error('Paid PromptPay pass amount or plan mismatch');
     }
     const customerId =
       typeof obj.customer === 'string'
