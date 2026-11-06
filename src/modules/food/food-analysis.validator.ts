@@ -227,7 +227,11 @@ function parseWorkout(raw: unknown): WorkoutScreenshot | null {
 export function parsePhotoKindJson(content: string): PhotoKind {
   try {
     const kind = (JSON.parse(content) as { kind?: unknown }).kind;
-    return kind === 'food' || kind === 'menu' || kind === 'workout' || kind === 'other' || kind === 'uncertain'
+    return kind === 'food' ||
+      kind === 'menu' ||
+      kind === 'workout' ||
+      kind === 'other' ||
+      kind === 'uncertain'
       ? kind
       : 'uncertain';
   } catch {
