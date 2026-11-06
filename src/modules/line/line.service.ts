@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { currentLineEventUserId } from '../../common/line-event-context';
 import {
   HTTPFetchError,
   messagingApi,
@@ -452,9 +453,21 @@ export class LineService implements OnModuleInit {
       });
       this.logger.log('LINE replyMessage succeeded');
     } catch (error) {
-      this.logger.error(
-        `LINE replyMessage failed status=${this.extractHttpStatus(error)}: ${error instanceof Error ? error.message : 'unknown error'}`,
-      );
+      const status = this.extractHttpStatus(error);
+      const userId = currentLineEventUserId();
+      // LINE returns 400 for an expired/invalid reply token. Only a verified
+      // webhook context can provide the recipient for a push fallback.
+      if (status === '400' && userId) {
+        try {
+          this.logger.warn('LINE reply token rejected; attempting push fallback');
+          await this.client.pushMessage({ to: userId, messages });
+          return;
+        } catch (pushError) {
+          this.logger.warn('LINE push fallback failed');
+          throw new LineOutboundError('LINE reply and push failed', pushError);
+        }
+      }
+      this.logger.error('LINE replyMessage failed status=' + status);
       throw new LineOutboundError('LINE replyMessage failed', error);
     }
   }
