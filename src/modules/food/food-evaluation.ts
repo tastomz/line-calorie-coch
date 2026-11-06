@@ -2,19 +2,10 @@
  * Offline, pure evaluation metrics for an explicitly labeled food-photo dataset.
  * This module does not call AI, store images or invent nutrition ground truth.
  */
-export type GoldenPhotoKind =
-  | 'food'
-  | 'menu'
-  | 'workout'
-  | 'other'
-  | 'uncertain';
+export type GoldenPhotoKind = 'food' | 'menu' | 'workout' | 'other' | 'uncertain';
 
 export type NutritionMeasure =
-  | 'edibleGrams'
-  | 'calories'
-  | 'proteinG'
-  | 'carbsG'
-  | 'fatG';
+  'edibleGrams' | 'calories' | 'proteinG' | 'carbsG' | 'fatG';
 
 export type GoldenPhotoCase = {
   id: string;
@@ -107,7 +98,9 @@ export function evaluateFoodGoldenDataset(
     ({ prediction }) => prediction.userCorrected !== undefined,
   );
   const successes = matched.filter(({ prediction }) => prediction.success);
-  const priced = successes.filter(({ prediction }) => validNumber(prediction.costThb));
+  const priced = successes.filter(({ prediction }) =>
+    validNumber(prediction.costThb),
+  );
 
   return {
     cases: cases.length,
