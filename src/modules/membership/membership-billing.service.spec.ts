@@ -11,8 +11,8 @@ describe('MembershipBillingService webhook idempotency', () => {
   const tx = { paymentEvent: { create }, subscription };
   const prisma = {
     paymentEvent: { create, findUnique: jest.fn() },
-    $transaction: jest.fn(
-      (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+    $transaction: jest.fn((callback: (client: typeof tx) => Promise<unknown>) =>
+      callback(tx),
     ),
     subscription,
   };
@@ -119,16 +119,14 @@ describe('MembershipBillingService webhook idempotency', () => {
 
   it('retries a checkout when the provider snapshot becomes available', async () => {
     create.mockResolvedValue({});
-    payments.getSubscription
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({
-        providerSubscriptionId: 'sub_1',
-        providerCustomerId: 'cus_1',
-        status: 'active',
-        currentPeriodStart: new Date(),
-        currentPeriodEnd: new Date(Date.now() + 30 * 86_400_000),
-        cancelAtPeriodEnd: false,
-      });
+    payments.getSubscription.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      providerSubscriptionId: 'sub_1',
+      providerCustomerId: 'cus_1',
+      status: 'active',
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date(Date.now() + 30 * 86_400_000),
+      cancelAtPeriodEnd: false,
+    });
     const params = {
       type: 'checkout_completed' as const,
       data: {
