@@ -484,8 +484,12 @@ describe('FoodAnalysisService', () => {
       });
       const prompt = systemPrompt(create);
       expect(prompt).toContain('Packaged foods: read nutrition labels first');
-      expect(prompt).toContain('per 100 g, scale to the visible/declared portion');
-      expect(prompt).toContain('Never produce 0 kcal for identifiable actual food');
+      expect(prompt).toContain(
+        'per 100 g, scale to the visible/declared portion',
+      );
+      expect(prompt).toContain(
+        'Never produce 0 kcal for identifiable actual food',
+      );
       expect(prompt).not.toContain('labelKcal');
     });
 
