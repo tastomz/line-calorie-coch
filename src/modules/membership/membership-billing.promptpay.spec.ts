@@ -42,7 +42,10 @@ describe('MembershipBillingService PromptPay pass', () => {
     },
   };
   const prisma = {
-    paymentEvent: { create: jest.fn().mockResolvedValue({}) },
+    paymentEvent: {
+      create: jest.fn().mockResolvedValue({}),
+      findUnique: jest.fn(),
+    },
     $transaction: jest.fn((fn: (t: typeof tx) => Promise<unknown>) => fn(tx)),
   };
   const entitlement = new SubscriptionEntitlementService({} as never);
@@ -66,6 +69,7 @@ describe('MembershipBillingService PromptPay pass', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     tx.paymentEvent.create.mockResolvedValue({});
+    prisma.paymentEvent.findUnique.mockResolvedValue(null);
     tx.subscription.findFirst.mockResolvedValue(null);
     tx.subscription.create.mockResolvedValue({});
   });
@@ -124,6 +128,14 @@ describe('MembershipBillingService PromptPay pass', () => {
 
   it('grants only once per session (completed + async_payment_succeeded)', async () => {
     await event(paidSession(), 'evt_completed');
+    prisma.paymentEvent.findUnique.mockImplementation(
+      ({ where }: { where: { provider_providerEventId: { providerEventId: string } } }) =>
+        Promise.resolve(
+          where.provider_providerEventId.providerEventId.startsWith('pass:')
+            ? { id: 'already-granted' }
+            : null,
+        ),
+    );
     tx.paymentEvent.create.mockResolvedValueOnce({}).mockRejectedValueOnce(
       new Prisma.PrismaClientKnownRequestError('dup', {
         code: 'P2002',
