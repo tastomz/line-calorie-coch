@@ -28,7 +28,9 @@ export class AiGatewayService {
     if (!getCodexBackend()?.routesTrial()) return 'api';
     try {
       const ent = await this.entitlement.getEntitlement(userId);
-      return ent.plan === 'TRIAL' && ent.status === 'TRIALING' ? 'codex' : 'api';
+      return ent.plan === 'TRIAL' && ent.status === 'TRIALING'
+        ? 'codex'
+        : 'api';
     } catch {
       return 'api';
     }
