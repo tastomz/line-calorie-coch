@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { FoodLog, MealType } from '@prisma/client';
+import { FoodLog, MealType, Prisma } from '@prisma/client';
+import { currentLineEventId } from '../../common/line-event-context';
 import { PrismaService } from '../../prisma/prisma.service';
 import { dayBounds } from './day-bounds';
 import { FoodAnalysisResult } from './food-analysis.types';
@@ -31,9 +32,12 @@ export class FoodLogService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createForUser(userId: string, input: CreateFoodLogInput) {
-    return this.prisma.foodLog.create({
-      data: {
-        userId,
+    const sourceLineEventId = currentLineEventId();
+    try {
+      return await this.prisma.foodLog.create({
+        data: {
+          userId,
+          sourceLineEventId,
         eatenAt: input.eatenAt ?? new Date(),
         mealType: input.mealType ?? MealType.UNKNOWN,
         foodName: input.foodName,
@@ -43,9 +47,22 @@ export class FoodLogService {
         fatG: input.fatG,
         aiConfidence: input.aiConfidence,
         notes: input.notes,
-        imageUrl: input.imageUrl,
-      },
-    });
+          imageUrl: input.imageUrl,
+        },
+      });
+    } catch (error) {
+      if (
+        sourceLineEventId &&
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const existing = await this.prisma.foodLog.findUnique({
+          where: { sourceLineEventId },
+        });
+        if (existing?.userId === userId) return existing;
+      }
+      throw error;
+    }
   }
 
   async createFromAnalysis(
