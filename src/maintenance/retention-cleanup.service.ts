@@ -46,7 +46,10 @@ export class RetentionCleanupService {
       now.getTime() - retentionDays * 24 * 60 * 60 * 1000,
     );
     const result = await this.prisma.lineEvent.deleteMany({
-      where: { processedAt: { lt: cutoff } },
+      where: {
+        status: 'COMPLETED',
+        processedAt: { lt: cutoff },
+      },
     });
     return result.count;
   }
