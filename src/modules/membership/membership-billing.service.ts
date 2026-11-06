@@ -194,10 +194,6 @@ export class MembershipBillingService {
         ((obj.metadata as { internalUserId?: string } | undefined)
           ?.internalUserId ??
           null);
-      const customerId =
-        typeof obj.customer === 'string'
-          ? obj.customer
-          : ((obj.customer as { id?: string } | null)?.id ?? null);
       const subscriptionId =
         typeof obj.subscription === 'string'
           ? obj.subscription
