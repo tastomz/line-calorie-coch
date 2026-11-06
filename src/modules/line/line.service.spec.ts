@@ -67,9 +67,7 @@ describe('LineService', () => {
       replyMessage: jest.fn().mockRejectedValue({ status: 400 }),
       pushMessage: jest.fn().mockResolvedValue({}),
     };
-    (
-      service as unknown as { client: typeof client }
-    ).client = client;
+    (service as unknown as { client: typeof client }).client = client;
     await expect(
       withLineEventContext(
         'evt-1',
@@ -89,9 +87,7 @@ describe('LineService', () => {
       replyMessage: jest.fn().mockRejectedValue({ status: 400 }),
       pushMessage: jest.fn().mockResolvedValue({}),
     };
-    (
-      service as unknown as { client: typeof client }
-    ).client = client;
+    (service as unknown as { client: typeof client }).client = client;
     await expect(service.replyText('expired-reply', 'hello')).rejects.toThrow(
       'LINE replyMessage failed',
     );
