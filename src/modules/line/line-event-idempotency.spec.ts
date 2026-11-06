@@ -15,9 +15,10 @@ describe('LINE event-scoped business mutation idempotency', () => {
   it('tags a FoodLog with its verified event and returns the existing row on replay', async () => {
     const existing = { id: 'food-1', userId: 'user-1' };
     const foodLog = {
-      create: jest.fn().mockResolvedValueOnce(existing).mockRejectedValueOnce(
-        duplicate(),
-      ),
+      create: jest
+        .fn()
+        .mockResolvedValueOnce(existing)
+        .mockRejectedValueOnce(duplicate()),
       findUnique: jest.fn().mockResolvedValue(existing),
     };
     const service = new FoodLogService({
@@ -56,8 +57,8 @@ describe('LINE event-scoped business mutation idempotency', () => {
     };
     const prisma = {
       weightLog: { findUnique: jest.fn().mockResolvedValue(existing) },
-      $transaction: jest.fn(
-        (work: (client: typeof tx) => Promise<unknown>) => work(tx),
+      $transaction: jest.fn((work: (client: typeof tx) => Promise<unknown>) =>
+        work(tx),
       ),
     };
     const users = {
