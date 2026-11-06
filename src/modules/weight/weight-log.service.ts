@@ -53,21 +53,21 @@ export class WeightLogService {
     const sourceLineEventId = currentLineEventId();
     try {
       return await this.prisma.$transaction(async (tx) => {
-      const log = await tx.weightLog.create({
-        data: {
-          userId,
-          weightKg,
-          recordedAt,
-          sourceLineEventId,
-        },
-      });
+        const log = await tx.weightLog.create({
+          data: {
+            userId,
+            weightKg,
+            recordedAt,
+            sourceLineEventId,
+          },
+        });
 
-      await tx.nutritionProfile.updateMany({
-        where: { userId },
-        data: { currentWeightKg: weightKg },
-      });
+        await tx.nutritionProfile.updateMany({
+          where: { userId },
+          data: { currentWeightKg: weightKg },
+        });
 
-      return log;
+        return log;
       });
     } catch (error) {
       if (
