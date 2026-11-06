@@ -129,7 +129,11 @@ describe('MembershipBillingService PromptPay pass', () => {
   it('grants only once per session (completed + async_payment_succeeded)', async () => {
     await event(paidSession(), 'evt_completed');
     prisma.paymentEvent.findUnique.mockImplementation(
-      ({ where }: { where: { provider_providerEventId: { providerEventId: string } } }) =>
+      ({
+        where,
+      }: {
+        where: { provider_providerEventId: { providerEventId: string } };
+      }) =>
         Promise.resolve(
           where.provider_providerEventId.providerEventId.startsWith('pass:')
             ? { id: 'already-granted' }
