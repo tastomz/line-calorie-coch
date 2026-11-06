@@ -210,16 +210,25 @@ export class MembershipBillingService {
 
       const snap = await this.payments.getSubscription(subscriptionId);
       if (!snap) {
-        await this.upsertPaidSubscription(userId, {
-          providerCustomerId: customerId,
-          providerSubscriptionId: subscriptionId,
-          status: SubscriptionStatus.ACTIVE,
-          currentPeriodStart: new Date(),
-          currentPeriodEnd: null,
-        }, tx);
+        await this.upsertPaidSubscription(
+          userId,
+          {
+            providerCustomerId: customerId,
+            providerSubscriptionId: subscriptionId,
+            status: SubscriptionStatus.ACTIVE,
+            currentPeriodStart: new Date(),
+            currentPeriodEnd: null,
+          },
+          tx,
+        );
         return;
       }
-      await this.applyProviderSnapshot(userId, snap, snap.cancelAtPeriodEnd, tx);
+      await this.applyProviderSnapshot(
+        userId,
+        snap,
+        snap.cancelAtPeriodEnd,
+        tx,
+      );
       return;
     }
 
@@ -268,16 +277,25 @@ export class MembershipBillingService {
         ));
       if (!userId) return;
       if (type === 'invoice_payment_failed') {
-        await this.upsertPaidSubscription(userId, {
-          providerCustomerId: snap.providerCustomerId,
-          providerSubscriptionId: subscriptionId,
-          status: SubscriptionStatus.PAST_DUE,
-          currentPeriodStart: snap.currentPeriodStart,
-          currentPeriodEnd: snap.currentPeriodEnd,
-        }, tx);
+        await this.upsertPaidSubscription(
+          userId,
+          {
+            providerCustomerId: snap.providerCustomerId,
+            providerSubscriptionId: subscriptionId,
+            status: SubscriptionStatus.PAST_DUE,
+            currentPeriodStart: snap.currentPeriodStart,
+            currentPeriodEnd: snap.currentPeriodEnd,
+          },
+          tx,
+        );
         return;
       }
-      await this.applyProviderSnapshot(userId, snap, snap.cancelAtPeriodEnd, tx);
+      await this.applyProviderSnapshot(
+        userId,
+        snap,
+        snap.cancelAtPeriodEnd,
+        tx,
+      );
     }
   }
 
@@ -370,7 +388,6 @@ export class MembershipBillingService {
         currentPeriodEnd: end,
       },
     });
-
   }
 
   private async applyProviderSnapshot(
@@ -390,17 +407,21 @@ export class MembershipBillingService {
     if (cancelAtPeriodEnd && status === SubscriptionStatus.ACTIVE) {
       status = SubscriptionStatus.CANCELED;
     }
-    await this.upsertPaidSubscription(userId, {
-      providerCustomerId: snap.providerCustomerId || null,
-      providerSubscriptionId: snap.providerSubscriptionId,
-      status,
-      currentPeriodStart: snap.currentPeriodStart,
-      currentPeriodEnd: snap.currentPeriodEnd,
-      canceledAt:
-        status === SubscriptionStatus.CANCELED || cancelAtPeriodEnd
-          ? new Date()
-          : null,
-    }, tx);
+    await this.upsertPaidSubscription(
+      userId,
+      {
+        providerCustomerId: snap.providerCustomerId || null,
+        providerSubscriptionId: snap.providerSubscriptionId,
+        status,
+        currentPeriodStart: snap.currentPeriodStart,
+        currentPeriodEnd: snap.currentPeriodEnd,
+        canceledAt:
+          status === SubscriptionStatus.CANCELED || cancelAtPeriodEnd
+            ? new Date()
+            : null,
+      },
+      tx,
+    );
   }
 
   private async upsertPaidSubscription(
