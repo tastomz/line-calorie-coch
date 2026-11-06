@@ -179,8 +179,8 @@ describe('LineWebhookService', () => {
     expect(prisma.lineEvent.delete).not.toHaveBeenCalled();
     expect(prisma.lineEvent.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ status: 'FAILED' }),
-      }),
+        data: expect.objectContaining({ status: 'FAILED' }) as unknown,
+      }) as unknown,
     );
   });
 
@@ -251,7 +251,7 @@ describe('LineWebhookService', () => {
         lineEventId: 'evt-body-1',
         eventType: 'follow',
         status: 'PENDING',
-      }),
+      }) as unknown,
     });
   });
 
