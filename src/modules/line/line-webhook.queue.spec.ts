@@ -22,9 +22,7 @@ function queued(id: string, status = 'PENDING') {
     status,
     attemptCount: 0,
     createdAt: new Date(),
-    leasedUntil: status === 'PROCESSING'
-      ? new Date(Date.now() - 10_000)
-      : null,
+    leasedUntil: status === 'PROCESSING' ? new Date(Date.now() - 10_000) : null,
   };
 }
 
@@ -79,14 +77,12 @@ describe('LINE durable webhook queue', () => {
   });
 
   it('deduplicates repeated deliveries using the database constraint', async () => {
-    lineEvent.create
-      .mockResolvedValueOnce({})
-      .mockRejectedValueOnce(
-        new Prisma.PrismaClientKnownRequestError('duplicate', {
-          code: 'P2002',
-          clientVersion: 'test',
-        }),
-      );
+    lineEvent.create.mockResolvedValueOnce({}).mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('duplicate', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
     await service.handleWebhookBody({ events: [event('same'), event('same')] });
     expect(lineEvent.create).toHaveBeenCalledTimes(2);
   });
