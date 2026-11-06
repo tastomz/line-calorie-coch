@@ -86,9 +86,10 @@ describe('MembershipBillingService PromptPay pass', () => {
     const end = data.currentPeriodEnd.getTime();
     expect(end).toBeGreaterThanOrEqual(before + 30 * DAY);
     expect(end).toBeLessThan(before + 30 * DAY + 5000);
-    expect(tx.paymentEvent.create.mock.calls[0][0].data.providerEventId).toBe(
+    expect(tx.paymentEvent.create.mock.calls.map((call) => call[0].data.providerEventId)).toEqual([
+      'evt_1',
       'pass:cs_test_123456789',
-    );
+    ]);
   });
 
   it('stacks on top of remaining PRO (renew early)', async () => {
@@ -122,13 +123,13 @@ describe('MembershipBillingService PromptPay pass', () => {
 
   it('grants only once per session (completed + async_payment_succeeded)', async () => {
     await event(paidSession(), 'evt_completed');
-    tx.paymentEvent.create.mockRejectedValueOnce(
+    tx.paymentEvent.create.mockResolvedValueOnce({}).mockRejectedValueOnce(
       new Prisma.PrismaClientKnownRequestError('dup', {
         code: 'P2002',
         clientVersion: 'test',
       }),
     );
-    await expect(event(paidSession(), 'evt_async')).resolves.toBe('processed');
+    await expect(event(paidSession(), 'evt_async')).resolves.toBe('duplicate');
     expect(tx.subscription.create).toHaveBeenCalledTimes(1);
   });
 
