@@ -64,6 +64,14 @@ jobs:
           node-version: 22
       - name: Audit production backend dependencies (high and critical)
         run: npm audit --omit=dev --audit-level=high
+
+  frontend-dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Audit production frontend dependencies (high and critical)
         run: npm audit --omit=dev --audit-level=high
         working-directory: frontend
