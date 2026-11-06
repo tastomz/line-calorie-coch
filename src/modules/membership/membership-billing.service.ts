@@ -264,6 +264,7 @@ export class MembershipBillingService {
         (await this.findUserIdByProviderIds(
           snap.providerCustomerId,
           subscriptionId,
+          tx,
         ));
       if (!userId) return;
       if (type === 'invoice_payment_failed') {
@@ -369,15 +370,7 @@ export class MembershipBillingService {
         currentPeriodEnd: end,
       },
     });
-    this.logger.log(
-      JSON.stringify({
-        event: 'promptpay_pass_granted',
-        userIdPrefix: userId.slice(0, 8),
-        sessionIdPrefix: sessionId.slice(0, 12),
-        planCode: metadata.planCode ?? null,
-        days,
-      }),
-    );
+
   }
 
   private async applyProviderSnapshot(
