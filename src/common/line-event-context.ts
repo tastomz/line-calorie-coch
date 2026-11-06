@@ -1,16 +1,25 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-// Propagates verified webhook identity across NestJS service calls without
-// changing public methods or trusting a client-supplied event identifier.
-const lineEventScope = new AsyncLocalStorage<string>();
+type LineEventScope = {
+  eventId: string;
+  userId?: string;
+};
+
+// Only a verified LINE webhook worker may populate this context.
+const lineEventScope = new AsyncLocalStorage<LineEventScope>();
 
 export function withLineEventContext<T>(
   lineEventId: string,
   work: () => Promise<T>,
+  userId?: string,
 ): Promise<T> {
-  return lineEventScope.run(lineEventId, work);
+  return lineEventScope.run({ eventId: lineEventId, userId }, work);
 }
 
 export function currentLineEventId(): string | undefined {
-  return lineEventScope.getStore();
+  return lineEventScope.getStore()?.eventId;
+}
+
+export function currentLineEventUserId(): string | undefined {
+  return lineEventScope.getStore()?.userId;
 }
