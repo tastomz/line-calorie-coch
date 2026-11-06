@@ -56,7 +56,10 @@ function average(values: readonly number[]): number | null {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
-function percentile(values: readonly number[], fraction: number): number | null {
+function percentile(
+  values: readonly number[],
+  fraction: number,
+): number | null {
   if (!values.length) return null;
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.ceil(sorted.length * fraction) - 1] ?? null;
@@ -74,7 +77,9 @@ export function evaluateFoodGoldenDataset(
   cases: readonly GoldenPhotoCase[],
   predictions: readonly GoldenPhotoPrediction[],
 ): FoodEvaluationMetrics {
-  const byId = new Map(predictions.map((prediction) => [prediction.id, prediction]));
+  const byId = new Map(
+    predictions.map((prediction) => [prediction.id, prediction]),
+  );
   const matched = cases
     .map((item) => ({ item, prediction: byId.get(item.id) }))
     .filter(
@@ -95,7 +100,6 @@ export function evaluateFoodGoldenDataset(
       }),
     );
 
-  const classified = matched.filter(({ prediction }) => prediction.kind !== 'uncertain');
   const validated = matched.filter(
     ({ prediction }) => prediction.structuredOutputValid !== undefined,
   );
