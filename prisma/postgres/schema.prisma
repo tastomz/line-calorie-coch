@@ -125,6 +125,7 @@ model WeightLog {
   recordedAt DateTime
   source     HealthDataSource @default(MANUAL)
   bodyScanId String?
+  sourceLineEventId String? @unique
   createdAt  DateTime         @default(now())
 
   @@index([userId, recordedAt])
@@ -165,6 +166,7 @@ model FoodLog {
   imageUrl     String?
   aiConfidence Float?
   notes        String?
+  sourceLineEventId String? @unique
   createdAt    DateTime @default(now())
 
   @@index([userId, eatenAt])
