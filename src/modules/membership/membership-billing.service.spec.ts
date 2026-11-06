@@ -3,29 +3,18 @@ import { MembershipBillingService } from './membership-billing.service';
 
 describe('MembershipBillingService webhook idempotency', () => {
   const create = jest.fn();
+  const subscription = {
+    findFirst: jest.fn(),
+    update: jest.fn(),
+    create: jest.fn(),
+  };
+  const tx = { paymentEvent: { create }, subscription };
   const prisma = {
     paymentEvent: { create, findUnique: jest.fn() },
     $transaction: jest.fn(
-      (
-        callback: (tx: {
-          paymentEvent: { create: typeof create };
-          subscription: {
-            findFirst: jest.Mock;
-            create: jest.Mock;
-            update: jest.Mock;
-          };
-        }) => Promise<unknown>,
-      ) =>
-        callback({
-          paymentEvent: { create },
-          subscription: prisma.subscription,
-        }),
+      (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
     ),
-    subscription: {
-      findFirst: jest.fn(),
-      update: jest.fn(),
-      create: jest.fn(),
-    },
+    subscription,
   };
   const entitlement = {
     getLatestSubscription: jest.fn(),
@@ -92,6 +81,7 @@ describe('MembershipBillingService webhook idempotency', () => {
       }),
     ).resolves.toBe('duplicate');
   });
+
   it('returns a retryable error when Stripe cannot confirm a subscription', async () => {
     create.mockResolvedValue({});
     payments.getSubscription.mockResolvedValue(null);
@@ -158,5 +148,4 @@ describe('MembershipBillingService webhook idempotency', () => {
     expect(create).toHaveBeenCalledTimes(2);
     expect(prisma.subscription.create).toHaveBeenCalledTimes(1);
   });
-
 });
