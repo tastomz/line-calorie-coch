@@ -1,5 +1,6 @@
 import * as crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
+import { withLineEventContext } from '../../common/line-event-context';
 import { validateSignature } from '@line/bot-sdk';
 import { LineService } from './line.service';
 
@@ -58,6 +59,43 @@ describe('LineService', () => {
     const service = createService('');
     const body = Buffer.from('{"events":[]}');
     expect(service.verifySignature(body, sign(body))).toBe(false);
+  });
+
+  it('uses push fallback for a 400 reply error only within a verified LINE event', async () => {
+    const service = createService();
+    const client = {
+      replyMessage: jest.fn().mockRejectedValue({ status: 400 }),
+      pushMessage: jest.fn().mockResolvedValue({}),
+    };
+    (
+      service as unknown as { client: typeof client }
+    ).client = client;
+    await expect(
+      withLineEventContext(
+        'evt-1',
+        () => service.replyText('expired-reply', 'hello'),
+        'U1',
+      ),
+    ).resolves.toBeUndefined();
+    expect(client.pushMessage).toHaveBeenCalledWith({
+      to: 'U1',
+      messages: [{ type: 'text', text: 'hello' }],
+    });
+  });
+
+  it('does not push without verified LINE webhook recipient context', async () => {
+    const service = createService();
+    const client = {
+      replyMessage: jest.fn().mockRejectedValue({ status: 400 }),
+      pushMessage: jest.fn().mockResolvedValue({}),
+    };
+    (
+      service as unknown as { client: typeof client }
+    ).client = client;
+    await expect(service.replyText('expired-reply', 'hello')).rejects.toThrow(
+      'LINE replyMessage failed',
+    );
+    expect(client.pushMessage).not.toHaveBeenCalled();
   });
 
   it('throws when replying without LINE_CHANNEL_ACCESS_TOKEN', async () => {
