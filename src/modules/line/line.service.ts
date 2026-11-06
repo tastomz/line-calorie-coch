@@ -459,7 +459,9 @@ export class LineService implements OnModuleInit {
       // webhook context can provide the recipient for a push fallback.
       if (status === '400' && userId) {
         try {
-          this.logger.warn('LINE reply token rejected; attempting push fallback');
+          this.logger.warn(
+            'LINE reply token rejected; attempting push fallback',
+          );
           await this.client.pushMessage({ to: userId, messages });
           return;
         } catch (pushError) {
