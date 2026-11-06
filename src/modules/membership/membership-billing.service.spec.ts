@@ -5,7 +5,7 @@ describe('MembershipBillingService webhook idempotency', () => {
   const create = jest.fn();
   const prisma = {
     paymentEvent: { create },
-    $transaction: jest.fn(),
+    $transaction: jest.fn((callback: (tx: { paymentEvent: { create: typeof create } }) => Promise<unknown>) => callback({ paymentEvent: { create } })),
     subscription: {
       findFirst: jest.fn(),
       update: jest.fn(),
