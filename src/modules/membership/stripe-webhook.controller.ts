@@ -2,6 +2,7 @@ import {
   Controller,
   Headers,
   HttpCode,
+  InternalServerErrorException,
   Logger,
   Post,
   Req,
@@ -39,28 +40,40 @@ export class StripeWebhookController {
       throw new UnauthorizedException('raw body required');
     }
 
+    let parsed: Awaited<
+      ReturnType<PaymentProviderPort['verifyAndParseWebhook']>
+    >;
     try {
-      const parsed = await this.payments.verifyAndParseWebhook(
-        rawBody,
-        signature,
-      );
-      this.logger.log(
-        JSON.stringify({
-          event: 'payment_webhook_received',
-          stripeType: parsed.stripeType,
-          providerEventId: parsed.providerEventId,
-        }),
-      );
-      const result = await this.billing.handleVerifiedWebhook(parsed);
-      return { received: true, result };
-    } catch (error) {
+      parsed = await this.payments.verifyAndParseWebhook(rawBody, signature);
+    } catch {
       this.logger.warn(
         JSON.stringify({
           event: 'payment_webhook_rejected',
-          reason: error instanceof Error ? error.message : 'unknown',
+          reason: 'invalid_signature_or_payload',
         }),
       );
       throw new UnauthorizedException('invalid webhook');
+    }
+    this.logger.log(
+      JSON.stringify({
+        event: 'payment_webhook_received',
+        stripeType: parsed.stripeType,
+        providerEventId: parsed.providerEventId,
+      }),
+    );
+    try {
+      const result = await this.billing.handleVerifiedWebhook(parsed);
+      return { received: true, result };
+    } catch (error) {
+      this.logger.error(
+        JSON.stringify({
+          event: 'payment_webhook_processing_failed',
+          providerEventId: parsed.providerEventId,
+          errorCategory: error instanceof Error ? error.name : 'unknown',
+        }),
+      );
+      // Return 5xx for verified events that failed to apply; Stripe will retry.
+      throw new InternalServerErrorException('webhook processing failed');
     }
   }
 }

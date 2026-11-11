@@ -125,6 +125,7 @@ model WeightLog {
   recordedAt DateTime
   source     HealthDataSource @default(MANUAL)
   bodyScanId String?
+  sourceLineEventId String? @unique
   createdAt  DateTime         @default(now())
 
   @@index([userId, recordedAt])
@@ -165,6 +166,7 @@ model FoodLog {
   imageUrl     String?
   aiConfidence Float?
   notes        String?
+  sourceLineEventId String? @unique
   createdAt    DateTime @default(now())
 
   @@index([userId, eatenAt])
@@ -198,14 +200,24 @@ model PendingFoodAnalysis {
 }
 
 model LineEvent {
-  id          String   @id @default(cuid())
-  // LINE webhookEventId — unique claim key for idempotency
-  lineEventId String   @unique
-  eventType   String
-  processedAt DateTime @default(now())
-  createdAt   DateTime @default(now())
+  id            String    @id @default(cuid())
+  // Old rows are completed, new rows are durable PENDING deliveries.
+  lineEventId   String    @unique
+  eventType     String
+  status        String    @default("COMPLETED")
+  payload       String?
+  userKey       String?
+  attemptCount  Int       @default(0)
+  nextAttemptAt DateTime?
+  leasedUntil   DateTime?
+  workerId      String?
+  lastError     String?
+  processedAt   DateTime  @default(now())
+  createdAt     DateTime  @default(now())
 
   @@index([processedAt])
+  @@index([status, nextAttemptAt, createdAt])
+  @@index([userKey, status, createdAt])
 }
 
 enum Plan {

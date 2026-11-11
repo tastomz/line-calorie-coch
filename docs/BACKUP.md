@@ -68,3 +68,33 @@ Without a configured backup, recovery = **re-onboard users and re-log data**.
 
 Copy `prisma/dev.db` (or the file referenced by `DATABASE_URL`) while the app is stopped.
 SQLite file copies are for developer convenience only — not a production strategy.
+
+---
+
+## Recovery readiness checklist (owner-operated, never automatic)
+
+**Targets proposed for initial operations:** RPO <= 24 hours, RTO <= 4 hours *after* a verified usable backup is available. These are objectives, not guarantees and are **not currently verified**.
+
+- [ ] Confirm which Railway PostgreSQL backup capability is enabled and who owns it; screenshots or billing claims are not proof that backups exist.
+- [ ] Configure daily backups or provider snapshots and record the retention policy (target 14-30 days).
+- [ ] Make a backup before any production schema migration.
+- [ ] Store the backup location, encryption method and recovery permissions in the private operations vault, never in Git.
+- [ ] Run a restore drill at least quarterly into an **isolated, empty** environment with no real LINE webhook, outgoing notifications, payments, or production service credentials.
+- [ ] Record snapshot timestamp, recovery start/end, table counts, migration history, representative read-only queries, and application readiness result.
+- [ ] Document the rollback decision and keep the original production database untouched until the owner approves a cutover.
+
+### Isolated restore drill (illustrative, do not execute against production)
+
+1. Provision a new PostgreSQL database dedicated to the restore drill.
+2. Retrieve an encrypted backup via the provider's documented workflow. Never paste database credentials into tickets, chat, or CI.
+3. Restore only into the isolated instance using the tool and format appropriate for the backup (e.g. `pg_restore --no-owner --no-privileges --dbname "$RESTORE_DATABASE_URL" backup.dump` for a custom-format `pg_dump` archive).
+4. Run read-only integrity checks (table presence, expected migration history, row counts, date ranges, and a known-good sample of non-sensitive application data).
+5. Start an isolated app instance with *all outbound webhooks, messaging, and payment processing disabled*. Verify `/health/ready`, onboarding reads, and existing data views without writing or sending events.
+6. Compare actual recovery time and restore point against the proposed RTO/RPO; record any shortfalls.
+7. Destroy only the isolated drill resources after approval. Do not repoint Production automatically.
+
+### During an actual incident
+
+Capture current status and alerts; notify the owner; determine the incident time and latest validated backup; make the recovery decision explicitly. Prefer restoring into a **new** database and verifying it before any approved Production cutover. Keep the original instance and backup until the owner signs off. Restoring old data can replay payment and LINE events: reconcile external payment state and idempotency records before reopening write traffic.
+
+**Manual actions requiring separate authorization:** enable backups, configure retention, fetch production backup data, create live infrastructure, perform restores, run migrations, change database URLs, or switch production traffic.

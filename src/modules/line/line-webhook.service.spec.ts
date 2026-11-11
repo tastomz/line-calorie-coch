@@ -9,6 +9,10 @@ describe('LineWebhookService', () => {
     lineEvent: {
       create: jest.fn(),
       delete: jest.fn(),
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      count: jest.fn(),
+      updateMany: jest.fn(),
     },
   };
   const onboarding = {
@@ -26,6 +30,23 @@ describe('LineWebhookService', () => {
     jest.clearAllMocks();
     prisma.lineEvent.create.mockResolvedValue({ id: '1' });
     prisma.lineEvent.delete.mockResolvedValue({ id: '1' });
+    prisma.lineEvent.findUnique.mockImplementation(
+      ({ where }: { where: { lineEventId: string } }) =>
+        Promise.resolve({
+          id: '1',
+          lineEventId: where.lineEventId,
+          eventType: 'message',
+          payload: null,
+          userKey: 'U123',
+          status: 'PENDING',
+          attemptCount: 0,
+          createdAt: new Date(),
+          leasedUntil: null,
+        }),
+    );
+    prisma.lineEvent.findMany.mockResolvedValue([]);
+    prisma.lineEvent.count.mockResolvedValue(0);
+    prisma.lineEvent.updateMany.mockResolvedValue({ count: 1 });
   });
 
   it('ignores unsupported event types safely', async () => {
@@ -142,7 +163,7 @@ describe('LineWebhookService', () => {
     );
   });
 
-  it('releases event claim when mutation/onboarding fails (non-outbound)', async () => {
+  it('marks failed event for safe retry instead of deleting the claim', async () => {
     onboarding.handleFollow.mockRejectedValueOnce(
       new Error('unexpected mutation failure'),
     );
@@ -155,9 +176,12 @@ describe('LineWebhookService', () => {
     });
 
     expect(result).toBe('ignored');
-    expect(prisma.lineEvent.delete).toHaveBeenCalledWith({
-      where: { lineEventId: 'evt-fail' },
-    });
+    expect(prisma.lineEvent.delete).not.toHaveBeenCalled();
+    expect(prisma.lineEvent.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'FAILED' }) as unknown,
+      }) as unknown,
+    );
   });
 
   it('keeps claim when LINE reply fails after successful mutation', async () => {
@@ -223,9 +247,12 @@ describe('LineWebhookService', () => {
     });
 
     expect(prisma.lineEvent.create).toHaveBeenCalledWith({
-      data: { lineEventId: 'evt-body-1', eventType: 'follow' },
+      data: expect.objectContaining({
+        lineEventId: 'evt-body-1',
+        eventType: 'follow',
+        status: 'PENDING',
+      }) as unknown,
     });
-    expect(onboarding.handleFollow).toHaveBeenCalled();
   });
 
   describe('loading indicator', () => {

@@ -1,0 +1,14 @@
+ALTER TABLE "LineEvent" ADD COLUMN "status" TEXT NOT NULL DEFAULT 'COMPLETED';
+ALTER TABLE "LineEvent" ADD COLUMN "payload" TEXT;
+ALTER TABLE "LineEvent" ADD COLUMN "userKey" TEXT;
+ALTER TABLE "LineEvent" ADD COLUMN "attemptCount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "LineEvent" ADD COLUMN "nextAttemptAt" TIMESTAMP(3);
+ALTER TABLE "LineEvent" ADD COLUMN "leasedUntil" TIMESTAMP(3);
+ALTER TABLE "LineEvent" ADD COLUMN "workerId" TEXT;
+ALTER TABLE "LineEvent" ADD COLUMN "lastError" TEXT;
+ALTER TABLE "FoodLog" ADD COLUMN "sourceLineEventId" TEXT;
+ALTER TABLE "WeightLog" ADD COLUMN "sourceLineEventId" TEXT;
+CREATE UNIQUE INDEX "FoodLog_sourceLineEventId_key" ON "FoodLog"("sourceLineEventId");
+CREATE UNIQUE INDEX "WeightLog_sourceLineEventId_key" ON "WeightLog"("sourceLineEventId");
+CREATE INDEX "LineEvent_status_nextAttemptAt_createdAt_idx" ON "LineEvent"("status", "nextAttemptAt", "createdAt");
+CREATE INDEX "LineEvent_userKey_status_createdAt_idx" ON "LineEvent"("userKey", "status", "createdAt");

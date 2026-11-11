@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { FoodLog, PendingFoodAnalysis } from '@prisma/client';
+import { currentLineEventId } from '../../common/line-event-context';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   FOOD_QUANTITY_UNITS,
@@ -281,6 +282,7 @@ export class PendingFoodService {
       const foodLog = await tx.foodLog.create({
         data: {
           userId,
+          sourceLineEventId: currentLineEventId(),
           eatenAt: pending.eatenAt ?? new Date(),
           foodName: analysis.foodName,
           calories: analysis.estimatedCalories,
